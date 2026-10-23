@@ -1,5 +1,30 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Project structure
+
+The application uses a feature-oriented structure so the public landing page can grow without turning `app/page.tsx` into a monolith:
+
+```text
+app/                  Route entry points and global styles
+components/           Reusable presentational components
+components/landing/   Landing-page composition and sections
+lib/                  Typed product configuration and shared domain values
+public/               Static assets
+```
+
+Keep route files thin. Put reusable UI in `components/`, domain constants and types in `lib/`, and feature-specific composition under `components/<feature>/`. Prefer server components by default; introduce a client component only when a feature needs browser state, event handlers, or an interactive API.
+
+## Development checks
+
+```bash
+pnpm dev
+pnpm lint
+pnpm typecheck
+pnpm build
+```
+
+The project uses strict TypeScript settings, including unchecked-index protection. New domain values should be added to typed constants with `satisfies` or `as const` rather than duplicated across route components.
+
 ## Getting Started
 
 First, run the development server:
