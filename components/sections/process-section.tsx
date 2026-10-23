@@ -8,7 +8,7 @@ const actions = [
   ["Review evidence of a fix", "Keep progress grounded in what is known.", "/how-it-works"],
 ] as const;
 
-export function ActionStrip() {
+export function ProcessSection() {
   return (
     <section className="action-strip" id="how-it-works">
       <p className="section-label">One observation can move further</p>

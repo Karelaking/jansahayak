@@ -1,17 +1,19 @@
-import { ActionStrip } from "@/components/landing/action-strip";
-import { HazardSection } from "@/components/landing/hazard-section";
-import { Hero } from "@/components/landing/hero";
-import { SiteFooter } from "@/components/landing/site-footer";
-import { SiteNav } from "@/components/landing/site-nav";
+import {
+  HazardSection,
+  HeroSection,
+  ProcessSection,
+  SiteFooter,
+  SiteNav,
+} from "@/components/sections";
 
 export default function Home() {
   return (
     <main>
       <section className="hero-shell">
         <SiteNav />
-        <Hero />
+        <HeroSection />
       </section>
-      <ActionStrip />
+      <ProcessSection />
       <HazardSection />
       <SiteFooter />
     </main>

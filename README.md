@@ -7,7 +7,7 @@ The application uses a feature-oriented structure so the public landing page can
 ```text
 app/                  Route entry points and global styles
 components/           Reusable presentational components
-components/landing/   Landing-page composition and sections
+components/sections/  Reusable section-level UI composition
 lib/                  Typed product configuration and shared domain values
 public/               Static assets
 ```

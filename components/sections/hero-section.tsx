@@ -3,7 +3,7 @@ import { ArrowRight, ArrowUpRight } from "@/components/icons";
 import { siteConfig } from "@/lib/site";
 import { MapIllustration } from "./map-illustration";
 
-export function Hero() {
+export function HeroSection() {
   return (
     <div className="hero-grid">
       <div className="hero-copy">
