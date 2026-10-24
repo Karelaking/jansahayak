@@ -19,7 +19,6 @@ colors:
   sage-hover: "#e9efe8"
   sage-tint: "#eef1e9"
   sage-card-bg: "#f4f7f1"
-  sage-card-hover: "#fa9f5"
   line-strong: "#cbd5cb"
   line: "#d2d9d0"
   line-soft: "#eef1e9"
@@ -142,17 +141,17 @@ components:
 
 JanSahayak SafeStreets looks like a well-kept neighbourhood noticeboard translated into a modern public service. Everything sits on warm **Paper** rather than white, information is grouped the way notices are pinned — thin ruled borders that tile into a single continuous grid — and the structure is drawn in **forest green ink**. It is calm, warm, and evidence-minded: a civic record, not an alarm system, not a charity campaign, not a SaaS dashboard. Depth is flat by default; hierarchy comes from ink darkness, ruled lines, and generous paper space.
 
-The system has two surfaces that share one world. The **public portal** (landing, report flow, public map) speaks inNoticeboard language: paper surfaces, serif editorial headings for landmarks, oversized sans display for the hero voice, pill-shaped touch targets, and the safety-map as the signature illustration. The **operations dashboard** uses the same palette, the same status semantics, and the same type ladder inside conventional shadcn primitives so operators can work at density — but it never invents colours the portal doesn't have.
+The system has two surfaces that share one world. The **public portal** (landing, report flow, public map) speaks in Noticeboard language: paper surfaces, serif editorial headings for landmarks, oversized sans display for the hero voice, pill-shaped touch targets, and the safety-map as the signature illustration. The **operations dashboard** uses the same palette, the same status semantics, and the same type ladder inside conventional shadcn primitives so operators can work at density — but it never invents colours the portal doesn't have.
 
-Trust is the举止 product's core asset, and the design system enforces it visually: citizen evidence, community verification, and official action each look different, and the interface never dresses itself in government authority.
+Trust is the product's core asset, and the design system enforces it visually: citizen evidence, community verification, and official action each look different, and the interface never dresses itself in government authority.
 
 **Key Characteristics:**
 
 - Warm paper ground (`#f5f3ed`), never pure white as a page surface; white appears only as translucent glass layers (≤60%) and marker fills.
 - Forest-ink hierarchy: depth is expressed as ink temperature, not drop shadows — dark ink for landmarks, muted green-grays for support, ruled hairlines for structure.
 - Noticeboard boxes: 1px low-contrast borders (`#cbd5cb`) that collapse shared edges into one continuous ruled surface.
-- One coral voice: coral/amber/green carry *severity and status only*, never decoration; the primary action color is deep forest.
-- Editorial draped serif (Georgia) reserved for landmark headings — the moment of human voice — with sharp oversized sans Geist for the display voice and all UI roles.
+- One coral voice: coral/amber/green carry _severity and status only_, never decoration; the primary action color is deep forest.
+- Editorial serif (Georgia) reserved for landmark headings — the moment of human voice — with sharp oversized sans Geist for the display voice and all UI roles.
 - Status language is fixed and universal: the same chip colors and dot colors mean the same thing on the map, the cards, the tables, and the dashboard.
 - Rich motion is reserved for the Report CTA (the one signature animation) and map pin life; everything else moves quietly at 150–250ms.
 
@@ -171,7 +170,7 @@ The palette is a set of green-forest inks printed on warm paper, with three smal
 
 - **Coral** (`#e4876f`) / **Coral Ink** (`#8c2e1b`) / **Coral Tint** (`#f3d9cf`): critical severity exclusively. Coral means "urgent hazard", nothing else. Coral never carries text below `#8c2e1b` (7.5:1 on paper).
 - **Amber** (`#e7b64f`) / **Amber Ink** (`#7a540b`) / **Amber Tint** (`#f4e8be`): moderate severity, "in progress / pending review" waiting states, and the pilot-location dot.
-- **Green** (`#78a37d`) / **Green Ink** (`#234a29`) / **Green Tint** (`#d6e5d2`): verified, resolved, and healthy. Green is *earned* — it says a human or an authority acted. 6px verification dots, resolved chips, live-status "measured now" pulses.
+- **Green** (`#78a37d`) / **Green Ink** (`#234a29`) / **Green Tint** (`#d6e5d2`): verified, resolved, and healthy. Green is _earned_ — it says a human or an authority acted. 6px verification dots, resolved chips, live-status "measured now" pulses.
 
 ### Neutral
 
@@ -183,9 +182,9 @@ The palette is a set of green-forest inks printed on warm paper, with three smal
 - **Line Strong** (`#cbd5cb`), **Line** (`#d2d9d0`), **Line Hairline** (`#eef1e9` / `#e2eae0`): the noticeboard ruling — strongest for enclosing boxes, softest for internal row dividers.
 - **Text Secondary** (`#486057`, 6.1:1): supporting copy, icons in text contexts.
 - **Text Quiet** (`#5c6f66`, 4.8:1): captions on paper, ≥12px only.
-- **Text Faint** (`#718077`, 3.7:1): *large text and decorative micro-labels only*; never below 4.5:1 — use Text Quiet instead below 14px (see The Ink Ladder).
+- **Text Faint** (`#718077`, 3.7:1): _large text and decorative micro-labels only_; never below 4.5:1 — use Text Quiet instead below 14px (see The Ink Ladder).
 - **On-Glass roles** (`#dce8d9` body / `#9cb4a5` muted / `#c9dfc7` icons): the glass navbar's own text ladder, all ≥6.8:1 on deep forest.
-- **Selection** (`#b6cfb7` with Deep Forest text), **Focus Ochre** (`#bd7b3b`, 3px outline, 4px offset), **Destructive** (`oklch(0.577 0.245 27.325)`): destructive actions and errors in dashboard primitives; red is reserved for genuine errors and *never* used for ordinary "open" workflow states.
+- **Selection** (`#b6cfb7` with Deep Forest text), **Focus Ochre** (`#bd7b3b`, 3px outline, 4px offset), **Destructive** (`oklch(0.577 0.245 27.325)`): destructive actions and errors in dashboard primitives; red is reserved for genuine errors and _never_ used for ordinary "open" workflow states.
 
 ### Map ground tinting (data-driven, not decorative)
 
@@ -195,7 +194,7 @@ MapLibre layers are re-skinned at load: water `#d2dfd1`, waterways `#c0d4bf`, pa
 
 **The One Voice Rule.** Coral, amber, and green together cover ≤10% of any screen. If a view reads warmly colored, it is lying about severity. Severity chips, status dots, and 6px map dots are the only carriers; these accents never color headings, links, or large fills.
 
-**The Ink Ladder Rule.** Text contrast is enforced by role, not by eye. Any text below 14px must be at least `#5c6f66` (4.5:1 on paper). `#718077` and lighter are *display-size* colors: allowed only at ≥14px or for non-essential decorative captions. No text may sit on Paper below 11px, ever.
+**The Ink Ladder Rule.** Text contrast is enforced by role, not by eye. Any text below 14px must be at least `#5c6f66` (4.5:1 on paper). `#718077` and lighter are _display-size_ colors: allowed only at ≥14px or for non-essential decorative captions. No text may sit on Paper below 11px, ever.
 
 **The Paper Rule.** Page canvases are Paper, not white. White appears only as translucent layers (form fills 58%, glass cards 90–95%), pin centers, and button fills on dark surfaces. A full-white page section means someone imported a component without restating its ground.
 
@@ -223,7 +222,7 @@ MapLibre layers are re-skinned at load: water `#d2dfd1`, waterways `#c0d4bf`, pa
 
 ### Named Rules
 
-**The Serif Signature Rule.** Georgia appears only where a section *lands*: portal section headings and the hazard list names. It never appears on buttons, chips, dashboards, or body copy. If the serif appears more than three times per page, it stops being a signature.
+**The Serif Signature Rule.** Georgia appears only where a section _lands_: portal section headings and the hazard list names. It never appears on buttons, chips, dashboards, or body copy. If the serif appears more than three times per page, it stops being a signature.
 
 **The Two-Ink Rule.** Emphasis inside a headline is a weight/ink change (`#17382f` → muted `#78807d` italic or 460-weight color span) at display sizes where 3:1 is legal — never a status accent color. Status colors do not typeset.
 
@@ -286,7 +285,7 @@ Depth is **tonal and ruled, not shadowed**. Nested surfaces lighten (Paper → B
 
 ### Cards / Containers
 
-- **Standing section box:** transparent, 1px Line Strong border, shared edges collapsed; rainfall of white ≤18% rarely tints it.
+- **Standing section box:** transparent, 1px Line Strong border, shared edges collapsed; a rare ≤18% white wash may tint it.
 - **Panel card:** Bright Card background, radius `lg (20px)`, 1px Line Strong, Panel padding, no shadow at rest.
 - **Floating card (map drawer/popover):** `bg-white/95 backdrop-blur`, 1px Line Strong, `shadow-xl`, radius md, 10–16px padding; footer strip in `#f8faf7` with hairline divider.
 - **Dashboard card (shadcn):** white ground, hairline border, ruled header/footers (border-b/border-t), muted-tinted footer band `bg-muted/20`; KPI values 30px Geist 700 with mono-adjacent tracking; 12px descriptors.
@@ -306,7 +305,7 @@ Depth is **tonal and ruled, not shadowed**. Nested surfaces lighten (Paper → B
 ### Live Map & Pins
 
 - **Ground:** MapLibre re-skinned to the paper/sage land layer set (see Colors); Paper background while loading with a 32px forest spinner.
-- **Pins:** 32×36 teardrop, 1.5px stroke in the accent's ink, white ×47% center wafer with accent dot; Critical pins pulse (2s ring, `rgba(228,135,111,0.4)`); selected pin scales 1.2 with `cubic-bezier(…) 200ms` (see Motion for allowed easing). Pin labels: 9–10px Paper/90 tooltips — informational garnish only, never sole carriers.
+- **Pins:** 32×36 teardrop, 1.5px stroke in the accent's ink, white center disc with a smaller accent dot; Critical pins pulse (2s ring, `rgba(228,135,111,0.4)`); selected pin scales 1.2 in 200ms (see Motion for allowed easing). Pin labels: 9–10px Paper/90 tooltips — informational garnish only, never sole carriers.
 - **Legend:** white/90 pill card, 10px labels, 8px accent dots (Critical/Moderate/Verified), `#cbd5cb` border, hidden under 640px.
 - **Overlay text:** map-topped copy uses `hero-overlay-shadow` white multi-layer blur (text is `#0e2b24`/`#14352b`, shadows are white halos) so it stays ≥ AA over any land tint.
 
@@ -333,7 +332,7 @@ The only place motion tells the story: hover slides the label right, a second ar
 - **Don't** use red/destructive for ordinary workflow states: red = error, escalation, or moderation danger only. `#e4876f` (Coral) is severity-critical, not "open".
 - **Don't** set type below 11px, or any informational text below 12px; and never use `#718077`/lighter smaller than 14px (The Ink Ladder).
 - **Don't** use the Georgia serif for UI, buttons, chips, dashboards, or body — it is the editorial signature only.
-- **Don't** imply government authority in visual language (no_state crests, official-sounding badges, uniforms of state design); the footer's "Not a government portal" is the voice to honor.
+- **Don't** imply government authority in visual language (no state crests, official-sounding badges, uniforms of state design); the footer's "Not a government portal" is the voice to honor.
 - **Don't** use fear imagery, alarm-red washes, or inflated stats; stakes are communicated via severity chips and honest status language.
 - **Don't** bounce or elastic-ease (no overshooting `cubic-bezier` with y > 1); things land with deceleration, via `cubic-bezier(0.16,1,0.3,1)` or `ease-out`.
 - **Don't** leave two visual vocabularies fighting in `globals.css`: when one style supersedes another (noticeboard vs. glass nav), delete the dead rules rather than piling later overrides.

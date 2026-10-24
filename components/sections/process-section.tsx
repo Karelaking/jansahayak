@@ -1,11 +1,5 @@
 import Link from "next/link";
-import {
-  MapPin,
-  Users2,
-  Building2,
-  ShieldCheck,
-  ArrowRight,
-} from "lucide-react";
+import { MapPin, Users2, Building2, ShieldCheck, ArrowRight } from "lucide-react";
 import Section from "./section";
 
 const STEPS = [
@@ -58,7 +52,8 @@ export function ProcessSection() {
               How civic reporting works
             </h2>
             <p className="mt-1 text-xs sm:text-sm text-[#486057]">
-              Four structured steps from everyday road hazard to verified community repair across Greater Noida.
+              Four structured steps from everyday road hazard to verified community repair across
+              Greater Noida.
             </p>
           </div>
 

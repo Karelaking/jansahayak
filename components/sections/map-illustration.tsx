@@ -4,15 +4,25 @@ import { ArrowUpRight } from "@/components/icons";
 type PinColor = "green" | "coral" | "amber";
 
 function Pin({ color }: { color: PinColor }) {
-  return <span className={`map-pin map-pin-${color}`} aria-hidden="true"><span /></span>;
+  return (
+    <span className={`map-pin map-pin-${color}`} aria-hidden="true">
+      <span />
+    </span>
+  );
 }
 
 export function MapIllustration() {
   return (
-    <div className="map-card" id="map" aria-label="Illustration of reported road hazards in Greater Noida">
+    <div
+      className="map-card"
+      id="map"
+      aria-label="Illustration of reported road hazards in Greater Noida"
+    >
       <div className="map-card-top">
         <span className="map-label">SAFETY MAP</span>
-        <span className="map-status"><i /> Illustrative view</span>
+        <span className="map-status">
+          <i /> Illustrative view
+        </span>
       </div>
       <div className="map-art">
         <div className="map-road road-one" />
@@ -34,7 +44,9 @@ export function MapIllustration() {
       </div>
       <div className="map-card-bottom">
         <span>Explore reports near you</span>
-        <Link href="/map" aria-label="Open the public safety map"><ArrowUpRight /></Link>
+        <Link href="/map" aria-label="Open the public safety map">
+          <ArrowUpRight />
+        </Link>
       </div>
     </div>
   );

@@ -1,21 +1,9 @@
-import {
-  HazardSection,
-  HeroSection,
-  ProcessSection,
-  SiteFooter,
-  SiteNav,
-} from "@/components/sections";
+import { SiteShell } from "@/components/layout/site-shell";
 
 export default function Home() {
   return (
     <main>
-      <section className="hero-shell">
-        <SiteNav />
-        <HeroSection />
-      </section>
-      <ProcessSection />
-      <HazardSection />
-      <SiteFooter />
+      <SiteShell />
     </main>
   );
 }
