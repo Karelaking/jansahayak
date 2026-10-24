@@ -17,10 +17,18 @@ export function SiteFooter() {
           </p>
         </div>
         <div className="footer-links">
-          <Link href="/about">About the pilot</Link>
-          <Link href="/privacy">Privacy</Link>
-          <Link href="/accessibility">Accessibility</Link>
-          <Link href="/help">Help</Link>
+          <Link href="/about" className="min-h-[44px] inline-flex items-center">
+            About the pilot
+          </Link>
+          <Link href="/privacy" className="min-h-[44px] inline-flex items-center">
+            Privacy
+          </Link>
+          <Link href="/accessibility" className="min-h-[44px] inline-flex items-center">
+            Accessibility
+          </Link>
+          <Link href="/help" className="min-h-[44px] inline-flex items-center">
+            Help
+          </Link>
         </div>
         <p className="footer-note">
           Not a government portal. Official routes remain the source of formal complaints.

@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,6 +14,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: "#faf9f5",
+};
+
 export const metadata: Metadata = {
   title: "JanSahayak SafeStreets | Safer streets start with us",
   description:
@@ -22,8 +31,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">
-        <TooltipProvider>{children}</TooltipProvider>
+      <body className="min-h-full flex flex-col pb-16 md:pb-0 bg-[#f5f3ed] text-[#17382f]">
+        <TooltipProvider>
+          {children}
+          <MobileBottomNav />
+        </TooltipProvider>
       </body>
     </html>
   );

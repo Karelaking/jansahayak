@@ -142,8 +142,8 @@ export function SiteNav() {
             )}
           </div>
 
-          {/* Report CTA — original animation & markup preserved completely */}
-          <Link className="nav-cta" href="/reports/new">
+          {/* Report CTA — desktop and tablet only (mobile uses dedicated bottom dock) */}
+          <Link className="nav-cta hidden sm:inline-flex" href="/reports/new">
             <span className="nav-cta-label">Report a hazard</span>
             <span className="nav-cta-icon-track" aria-hidden="true">
               <span className="nav-cta-icon">
@@ -172,15 +172,51 @@ export function SiteNav() {
         {/* ── Mobile menu drawer ──────────────────────────────────── */}
         {mobileOpen && (
           <div className="nav-mobile-drawer" role="dialog" aria-label="Mobile navigation">
-            <ul className="nav-mobile-links">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#cbd5cb]/60">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-[#5c6f66]">
+                Navigation Menu
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                <span className="size-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                Greater Noida Pilot
+              </span>
+            </div>
+
+            <ul className="nav-mobile-links space-y-1">
               {siteConfig.navigation.map((item) => (
                 <li key={item.href}>
-                  <Link href={item.href} onClick={() => setMobileOpen(false)}>
-                    {item.label}
+                  <Link
+                    href={item.href}
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center justify-between py-2.5 px-3 rounded-lg text-sm font-medium text-[#0e2b24] hover:bg-[#eef1e9] transition-colors"
+                  >
+                    <span>{item.label}</span>
+                    <ArrowRight className="size-4 text-[#5c6f66]" />
                   </Link>
                 </li>
               ))}
+              <li>
+                <Link
+                  href="/dashboard"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center justify-between py-2.5 px-3 rounded-lg text-sm font-medium text-[#0e2b24] hover:bg-[#eef1e9] transition-colors"
+                >
+                  <span>Operations Dashboard</span>
+                  <ArrowRight className="size-4 text-[#5c6f66]" />
+                </Link>
+              </li>
             </ul>
+
+            <div className="mt-4 pt-3 border-t border-[#cbd5cb]/60">
+              <Link
+                href="/reports/new"
+                onClick={() => setMobileOpen(false)}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#0e2b24] text-[#faf9f5] font-semibold text-xs uppercase tracking-wider shadow-sm hover:bg-[#1c4b3e] transition-colors active:scale-98"
+              >
+                <span>Report Road Safety Hazard</span>
+                <ArrowRight className="size-4" />
+              </Link>
+            </div>
           </div>
         )}
       </nav>

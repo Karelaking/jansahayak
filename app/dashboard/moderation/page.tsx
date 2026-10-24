@@ -75,45 +75,54 @@ export default function ModerationPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+            <h1 className="font-heading text-xl font-bold tracking-tight text-foreground sm:text-2xl md:text-3xl">
               Moderation &amp; Verification
             </h1>
             <Badge variant="destructive" className="text-xs">
               {pendingItems.length} Pending
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
             Audit citizen submissions for accuracy, deduplication, and appropriate civic
             jurisdiction.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {items.length > 0 ? (
-            <Button variant="outline" size="xs" className="gap-1" onClick={handleClear}>
+            <Button variant="outline" size="sm" className="gap-1 h-9 sm:h-8" onClick={handleClear}>
               <RotateCcw className="size-3" />
-              <span>Clear to Empty</span>
+              <span>Clear</span>
             </Button>
           ) : (
-            <Button variant="outline" size="xs" className="gap-1" onClick={handleLoadDemo}>
-              <span>Load Centralized Demo Queue</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 h-9 sm:h-8"
+              onClick={handleLoadDemo}
+            >
+              <span>Load Demo Queue</span>
             </Button>
           )}
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="h-8">
-              <TabsTrigger value="all">All ({pendingItems.length})</TabsTrigger>
-              <TabsTrigger value="duplicate">
-                Duplicates ({pendingItems.filter((i) => i.type === "duplicate").length})
-              </TabsTrigger>
-              <TabsTrigger value="location">
-                Location ({pendingItems.filter((i) => i.type === "location").length})
-              </TabsTrigger>
-              <TabsTrigger value="scope">
-                Scope ({pendingItems.filter((i) => i.type === "scope").length})
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="w-full overflow-x-auto no-scrollbar -mx-1 px-1 sm:w-auto">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="h-9 sm:h-8 w-max min-w-full justify-start sm:w-auto">
+                <TabsTrigger value="all" className="text-xs px-2.5">
+                  All ({pendingItems.length})
+                </TabsTrigger>
+                <TabsTrigger value="duplicate" className="text-xs px-2.5">
+                  Duplicates ({pendingItems.filter((i) => i.type === "duplicate").length})
+                </TabsTrigger>
+                <TabsTrigger value="location" className="text-xs px-2.5">
+                  Location ({pendingItems.filter((i) => i.type === "location").length})
+                </TabsTrigger>
+                <TabsTrigger value="scope" className="text-xs px-2.5">
+                  Scope ({pendingItems.filter((i) => i.type === "scope").length})
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
       </div>
 
@@ -187,47 +196,47 @@ export default function ModerationPage() {
               </CardHeader>
 
               <CardFooter className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span>Filed by:</span>
                   <strong className="text-foreground">{item.reporter}</strong>
                   <span>·</span>
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 text-foreground underline underline-offset-2 hover:opacity-80"
+                    className="inline-flex items-center gap-1 text-foreground underline underline-offset-2 hover:opacity-80 py-1"
                   >
                     <span>View photo evidence</span>
                     <ExternalLink className="size-2.5" />
                   </button>
                 </div>
 
-                {/* Triage Action Buttons using shadcn Buttons */}
-                <div className="flex items-center gap-2">
+                {/* Triage Action Buttons - Responsive thumb-friendly grid on mobile */}
+                <div className="grid grid-cols-1 sm:flex sm:items-center gap-2 w-full sm:w-auto">
                   <Button
                     variant="outline"
-                    size="xs"
-                    className="gap-1 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    size="sm"
+                    className="h-10 sm:h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive justify-center"
                     onClick={() => handleAction(item.id, "rejected")}
                   >
-                    <X className="size-3" />
+                    <X className="size-3.5 mr-1" />
                     <span>Reject Out-of-Scope</span>
                   </Button>
 
                   <Button
                     variant="outline"
-                    size="xs"
-                    className="gap-1 text-xs"
+                    size="sm"
+                    className="h-10 sm:h-7 text-xs justify-center"
                     onClick={() => handleAction(item.id, "merged")}
                   >
-                    <Copy className="size-3" />
+                    <Copy className="size-3.5 mr-1" />
                     <span>Merge Duplicate</span>
                   </Button>
 
                   <Button
-                    size="xs"
-                    className="gap-1 text-xs"
+                    size="sm"
+                    className="h-10 sm:h-7 text-xs justify-center bg-emerald-800 hover:bg-emerald-900 text-white"
                     onClick={() => handleAction(item.id, "approved")}
                   >
-                    <Check className="size-3" />
+                    <Check className="size-3.5 mr-1" />
                     <span>Approve &amp; Route</span>
                   </Button>
                 </div>

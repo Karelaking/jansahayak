@@ -139,87 +139,97 @@ export default function ReportsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+            <h1 className="font-heading text-xl font-bold tracking-tight text-foreground sm:text-2xl md:text-3xl">
               Hazard Reports Registry
             </h1>
             <Badge variant="secondary" className="text-xs">
               {filteredReports.length} of {reports.length}
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
             Browse, search, inspect dossiers, and update civic action status.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           {reports.length > 0 ? (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setReports([])}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-9 sm:h-8"
+              onClick={() => setReports([])}
+            >
               <RotateCcw className="size-3.5" />
-              <span>Clear to Empty</span>
+              <span>Clear</span>
             </Button>
           ) : (
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5"
+              className="gap-1.5 h-9 sm:h-8"
               onClick={() => setReports(SAMPLE_HAZARDS)}
             >
-              <span>Load Centralized Demo Data</span>
+              <span>Load Demo Data</span>
             </Button>
           )}
 
-          <Button variant="outline" size="sm" className="gap-1.5">
+          <Button variant="outline" size="sm" className="gap-1.5 h-9 sm:h-8">
             <Download className="size-3.5" />
-            <span>Export CSV</span>
+            <span className="hidden sm:inline">Export CSV</span>
+            <span className="sm:hidden">CSV</span>
           </Button>
 
-          <Button size="sm" render={<Link href="/reports/new" />}>
+          <Button size="sm" className="h-9 sm:h-8" render={<Link href="/reports/new" />}>
             <Plus className="size-3.5" />
-            <span>Submit Report</span>
+            <span>Report</span>
           </Button>
         </div>
       </div>
 
-      {/* ── Table Card ─── */}
-      <Card className="shadow-xs">
-        <CardHeader className="border-b border-border pb-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            {/* Search Input using shadcn Input */}
-            <div className="relative flex-1 max-w-sm">
+      {/* ── Table & Mobile Card View ─── */}
+      <Card className="shadow-xs overflow-hidden">
+        <CardHeader className="border-b border-border pb-4 p-4 sm:p-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            {/* Search Input */}
+            <div className="relative w-full md:max-w-xs">
               <Input
-                placeholder="Search by title, location, category, or ID..."
-                className="pl-8 text-xs"
+                placeholder="Search title, location, category..."
+                className="pl-8 text-xs h-9"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
               <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
             </div>
 
-            {/* Filter Tabs using shadcn Tabs */}
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="h-8">
-                <TabsTrigger value="all">All ({reports.length})</TabsTrigger>
-                <TabsTrigger value="open">
-                  Open ({reports.filter((r) => r.status === "open").length})
-                </TabsTrigger>
-                <TabsTrigger value="in-progress">
-                  In Progress ({reports.filter((r) => r.status === "in-progress").length})
-                </TabsTrigger>
-                <TabsTrigger value="escalated">
-                  Escalated ({reports.filter((r) => r.status === "escalated").length})
-                </TabsTrigger>
-                <TabsTrigger value="resolved">
-                  Resolved ({reports.filter((r) => r.status === "resolved").length})
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+            {/* Filter Tabs with horizontal touch scrolling on mobile */}
+            <div className="w-full overflow-x-auto no-scrollbar -mx-1 px-1 md:w-auto">
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="h-9 sm:h-8 w-max min-w-full justify-start sm:w-auto">
+                  <TabsTrigger value="all" className="text-xs px-2.5">
+                    All ({reports.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="open" className="text-xs px-2.5">
+                    Open ({reports.filter((r) => r.status === "open").length})
+                  </TabsTrigger>
+                  <TabsTrigger value="in-progress" className="text-xs px-2.5">
+                    Progress ({reports.filter((r) => r.status === "in-progress").length})
+                  </TabsTrigger>
+                  <TabsTrigger value="escalated" className="text-xs px-2.5">
+                    Escalated ({reports.filter((r) => r.status === "escalated").length})
+                  </TabsTrigger>
+                  <TabsTrigger value="resolved" className="text-xs px-2.5">
+                    Resolved ({reports.filter((r) => r.status === "resolved").length})
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
         </CardHeader>
 
         <CardContent className="p-0">
           {reports.length === 0 ? (
             /* Zatian / shadcn Empty State when no data has been submitted */
-            <Empty className="my-8 border-0 bg-transparent">
+            <Empty className="my-8 border-0 bg-transparent px-4">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <FileText className="size-6 text-muted-foreground" />
@@ -230,19 +240,24 @@ export default function ReportsPage() {
                   submissions across Greater Noida corridors will populate here automatically.
                 </EmptyDescription>
               </EmptyHeader>
-              <EmptyContent>
-                <Button size="sm" render={<Link href="/reports/new" />}>
+              <EmptyContent className="flex flex-wrap gap-2 justify-center">
+                <Button size="sm" className="h-9" render={<Link href="/reports/new" />}>
                   <Plus className="mr-1.5 size-3.5" />
                   <span>Submit First Report</span>
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setReports(SAMPLE_HAZARDS)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9"
+                  onClick={() => setReports(SAMPLE_HAZARDS)}
+                >
                   Load Centralized Demo Data
                 </Button>
               </EmptyContent>
             </Empty>
           ) : filteredReports.length === 0 ? (
             /* Empty state when active filter yields zero results */
-            <Empty className="my-8 border-0 bg-transparent">
+            <Empty className="my-8 border-0 bg-transparent px-4">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <Search className="size-6 text-muted-foreground" />
@@ -257,6 +272,7 @@ export default function ReportsPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="h-9"
                   onClick={() => {
                     setSearchQuery("");
                     setActiveTab("all");
@@ -267,76 +283,126 @@ export default function ReportsPage() {
               </EmptyContent>
             </Empty>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[100px]">Docket ID</TableHead>
-                  <TableHead>Hazard Details</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Severity</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-
-              <TableBody>
+            <>
+              {/* Mobile Card Feed View (< md) */}
+              <div className="block md:hidden divide-y divide-border">
                 {filteredReports.map((report) => (
-                  <TableRow
+                  <button
                     key={report.id}
-                    className="cursor-pointer hover:bg-muted/40"
+                    type="button"
                     onClick={() => setSelectedReport(report)}
+                    className="w-full text-left p-3.5 hover:bg-muted/30 transition-colors cursor-pointer space-y-2 active:bg-muted/50 block focus-visible:outline-2 focus-visible:outline-ring"
                   >
-                    <TableCell className="font-mono text-xs font-semibold text-muted-foreground">
-                      {report.id}
-                    </TableCell>
-
-                    <TableCell>
-                      <div className="font-medium text-xs text-foreground">{report.title}</div>
-                      <div className="text-[11px] text-muted-foreground">
-                        Reported {report.time || report.reportedAt || "Recently"} ·{" "}
-                        {report.votes || report.verificationsCount || 0} verifications
-                      </div>
-                    </TableCell>
-
-                    <TableCell>
-                      <span className="text-xs text-muted-foreground">
-                        {report.categoryLabel || report.category}
-                      </span>
-                    </TableCell>
-
-                    <TableCell>
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <MapPin className="size-3 shrink-0" />
-                        <span className="truncate max-w-[160px]">
-                          {report.location || report.landmark}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs font-bold text-muted-foreground">
+                          {report.id}
                         </span>
+                        {getStatusBadge(report.status)}
+                      </div>
+                      {getSeverityBadge(report.severity)}
+                    </div>
+
+                    <div>
+                      <h4 className="font-semibold text-sm text-foreground leading-snug">
+                        {report.title}
+                      </h4>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="size-3 shrink-0 text-emerald-700" />
+                          <span className="truncate max-w-[190px]">
+                            {report.location || report.landmark}
+                          </span>
+                        </span>
+                        <span>·</span>
+                        <span>{report.categoryLabel || report.category}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 text-[11px] text-muted-foreground border-t border-border/40">
+                      <span>{report.time || report.reportedAt || "Recently"}</span>
+                      <span className="font-medium text-foreground">
+                        {report.votes || report.verificationsCount || 0} verifications · Tap to view
                       </span>
-                    </TableCell>
+                    </div>
+                  </button>
+                ))}
+              </div>
 
-                    <TableCell>{getStatusBadge(report.status)}</TableCell>
+              {/* Desktop Table View (>= md) */}
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[100px]">Docket ID</TableHead>
+                      <TableHead>Hazard Details</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Severity</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
 
-                    <TableCell>{getSeverityBadge(report.severity)}</TableCell>
-
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        className="gap-1 text-xs"
+                  <TableBody>
+                    {filteredReports.map((report) => (
+                      <TableRow
+                        key={report.id}
+                        className="cursor-pointer hover:bg-muted/40"
                         onClick={() => setSelectedReport(report)}
                       >
-                        <Eye className="size-3" />
-                        <span>Inspect</span>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                        <TableCell className="font-mono text-xs font-semibold text-muted-foreground">
+                          {report.id}
+                        </TableCell>
+
+                        <TableCell>
+                          <div className="font-medium text-xs text-foreground">{report.title}</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            Reported {report.time || report.reportedAt || "Recently"} ·{" "}
+                            {report.votes || report.verificationsCount || 0} verifications
+                          </div>
+                        </TableCell>
+
+                        <TableCell>
+                          <span className="text-xs text-muted-foreground">
+                            {report.categoryLabel || report.category}
+                          </span>
+                        </TableCell>
+
+                        <TableCell>
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <MapPin className="size-3 shrink-0" />
+                            <span className="truncate max-w-[160px]">
+                              {report.location || report.landmark}
+                            </span>
+                          </span>
+                        </TableCell>
+
+                        <TableCell>{getStatusBadge(report.status)}</TableCell>
+
+                        <TableCell>{getSeverityBadge(report.severity)}</TableCell>
+
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            className="gap-1 text-xs"
+                            onClick={() => setSelectedReport(report)}
+                          >
+                            <Eye className="size-3" />
+                            <span>Inspect</span>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
 
-        <CardFooter className="flex items-center justify-between border-t border-border px-6 py-3">
+        <CardFooter className="flex items-center justify-between border-t border-border px-4 py-3 sm:px-6">
           <p className="text-xs text-muted-foreground">
             Showing <strong className="font-medium">{filteredReports.length}</strong> reports
           </p>

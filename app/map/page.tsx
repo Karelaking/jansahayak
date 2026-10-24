@@ -16,7 +16,7 @@ export default function ExploreMapPage() {
         <SiteNav />
       </div>
       <main>
-        <LiveHazardMap />
+        <LiveHazardMap showHeroOverlay={false} />
       </main>
       <div className="box-grid">
         <SiteFooter />

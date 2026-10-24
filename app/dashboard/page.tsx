@@ -134,120 +134,124 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* ── Page Header ─── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+            <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
               Civic Operations Overview
             </h1>
             <Badge variant="outline" className="text-xs">
-              {isDemo ? "Centralized Demo Data" : "Clean Initial State"}
+              {isDemo ? "Demo Data" : "Empty State"}
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Greater Noida road-safety hazard command center · Live monitoring &amp; SLA resolution
-            tracking.
+          <p className="text-sm text-muted-foreground">
+            Greater Noida road-safety hazard command center · Monitoring, triage &amp; SLA tracking
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           {isDemo ? (
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5"
+              className="gap-1.5 h-8"
               onClick={() => setIsDemo(false)}
             >
               <RotateCcw className="size-3.5" />
-              <span>Clear to Empty State</span>
+              <span>Clear</span>
             </Button>
           ) : (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setIsDemo(true)}>
-              <span>Preview Centralized Demo Data</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-8"
+              onClick={() => setIsDemo(true)}
+            >
+              <span>Load Demo Data</span>
             </Button>
           )}
 
-          <Button size="sm" className="shrink-0" render={<Link href="/reports/new" />}>
+          <Button size="sm" className="shrink-0 h-8" render={<Link href="/reports/new" />}>
             <Plus className="size-3.5" />
             <span>Report Hazard</span>
           </Button>
         </div>
       </div>
 
-      {/* ── KPI Telemetry Grid ─── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* ── KPI Telemetry Grid (2x2 on mobile for high scannability, 4-col on desktop) ─── */}
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
         <Card className="shadow-xs">
-          <CardHeader className="pb-2">
+          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-xs font-medium text-muted-foreground">
+              <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
                 Active Hazards
               </CardDescription>
-              <Flame className="size-4 text-muted-foreground" />
+              <Flame className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
             </div>
-            <CardTitle className="text-3xl font-bold tracking-tight">
+            <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
               {isDemo ? "142" : "0"}
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">
-              {isDemo ? "+8 reported in the last 24h" : "No active hazards logged"}
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
+              {isDemo ? "+8 in last 24h" : "No active hazards"}
             </p>
           </CardContent>
         </Card>
 
         <Card className="shadow-xs">
-          <CardHeader className="pb-2">
+          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-xs font-medium text-muted-foreground">
+              <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
                 Pending Verification
               </CardDescription>
-              <Clock className="size-4 text-muted-foreground" />
+              <Clock className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
             </div>
-            <CardTitle className="text-3xl font-bold tracking-tight">
+            <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
               {isDemo ? "24" : "0"}
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">
-              {isDemo ? "6 flagged for duplicate checks" : "Moderation queue clean"}
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
+              {isDemo ? "6 flagged for review" : "Queue clean"}
             </p>
           </CardContent>
         </Card>
 
         <Card className="shadow-xs">
-          <CardHeader className="pb-2">
+          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-xs font-medium text-muted-foreground">
+              <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
                 Avg. Resolution Time
               </CardDescription>
-              <TrendingDown className="size-4 text-muted-foreground" />
+              <TrendingDown className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
             </div>
-            <CardTitle className="text-3xl font-bold tracking-tight">
+            <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
               {isDemo ? "4.2d" : "—"}
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">
-              {isDemo ? "0.6d faster than last sprint" : "SLA baseline: 7.0 days"}
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
+              {isDemo ? "-0.6d vs last sprint" : "SLA: 7.0 days"}
             </p>
           </CardContent>
         </Card>
 
         <Card className="shadow-xs">
-          <CardHeader className="pb-2">
+          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-xs font-medium text-muted-foreground">
+              <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
                 Resolved This Month
               </CardDescription>
-              <CheckCircle2 className="size-4 text-muted-foreground" />
+              <CheckCircle2 className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
             </div>
-            <CardTitle className="text-3xl font-bold tracking-tight">
+            <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
               {isDemo ? "89" : "0"}
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">
-              {isDemo ? "71% civic action success rate" : "Awaiting first closure"}
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
+              {isDemo ? "71% success rate" : "Awaiting closure"}
             </p>
           </CardContent>
         </Card>
@@ -258,16 +262,18 @@ export default function DashboardPage() {
         {/* Left: Recent Reports Table (8 cols) */}
         <div className="flex flex-col gap-6 lg:col-span-8">
           <Card className="shadow-xs">
-            <CardHeader className="border-b border-border pb-4">
+            <CardHeader className="border-b border-border pb-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <CardTitle className="text-lg">Recent Hazard Submissions</CardTitle>
+                  <CardTitle className="text-base font-semibold">
+                    Recent Hazard Submissions
+                  </CardTitle>
                   <CardDescription className="text-xs">
-                    Live community records awaiting triage or authority remediation.
+                    Community reports awaiting triage or remediation
                   </CardDescription>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <TabsList className="h-8">
                       <TabsTrigger value="all">All</TabsTrigger>
@@ -281,10 +287,10 @@ export default function DashboardPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-1.5"
+                      className="gap-1.5 h-8"
                       render={<Link href="/dashboard/reports" />}
                     >
-                      <span>Directory</span>
+                      <span>View all</span>
                       <ArrowUpRight className="size-3.5" />
                     </Button>
                   </CardAction>
@@ -374,16 +380,16 @@ export default function DashboardPage() {
               )}
             </CardContent>
 
-            <CardFooter className="border-t border-border px-6 py-3 bg-muted/20">
+            <CardFooter className="border-t border-border px-6 py-3 bg-muted/10">
               <div className="flex items-center justify-between w-full text-xs text-muted-foreground">
                 <span>
                   Showing {filteredReports.length} of {reports.length} reports
                 </span>
                 <Link
                   href="/dashboard/reports"
-                  className="font-medium text-foreground underline-offset-4 hover:underline"
+                  className="text-foreground hover:underline underline-offset-4"
                 >
-                  Go to full reports directory &rarr;
+                  View full reports →
                 </Link>
               </div>
             </CardFooter>
@@ -478,7 +484,7 @@ export default function DashboardPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-full justify-between text-xs text-muted-foreground hover:text-foreground"
+                className="w-full justify-between text-xs h-8"
                 render={<Link href="/dashboard/escalations" />}
               >
                 <span>View escalation log</span>
@@ -530,7 +536,7 @@ export default function DashboardPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-full justify-between text-xs text-muted-foreground hover:text-foreground"
+                className="w-full justify-between text-xs h-8"
                 render={<Link href="/dashboard/analytics" />}
               >
                 <span>Detailed Analytics</span>

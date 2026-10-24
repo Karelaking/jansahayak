@@ -44,7 +44,7 @@ const STEPS = [
 export function ProcessSection() {
   return (
     <Section id="how-it-works" className="process-box bg-[#faf9f5] scroll-mt-24">
-      <div className="px-6 py-10 sm:px-10 sm:py-12 lg:px-14">
+      <div className="px-4 py-8 sm:px-10 sm:py-12 lg:px-14">
         {/* ── Lean, Disciplined Header ──────────────────────────── */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between pb-5 border-b border-[var(--box-border)]">
           <div>

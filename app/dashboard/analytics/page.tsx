@@ -35,14 +35,18 @@ import {
 } from "@/components/ui/empty";
 import { SAMPLE_CIVIC_ANALYTICS } from "@/lib/data";
 import type { CivicAnalytics } from "@/lib/types/hazard";
+import { BarChart } from "@/components/charts/bar-chart";
 
 export default function AnalyticsPage() {
   // Empty state by default; centralized sample data loaded on user demand
   const [analytics, setAnalytics] = React.useState<CivicAnalytics | null>(null);
 
-  const maxFiled = analytics?.monthlyTrends
-    ? Math.max(...analytics.monthlyTrends.map((d) => d.filed), 1)
-    : 1;
+  const chartData =
+    analytics?.monthlyTrends.map((d) => ({
+      month: d.month,
+      Filed: d.filed,
+      Resolved: d.resolved,
+    })) || [];
 
   const handleLoadDemo = () => {
     setAnalytics(SAMPLE_CIVIC_ANALYTICS);
@@ -58,122 +62,144 @@ export default function AnalyticsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+            <h1 className="font-heading text-xl font-bold tracking-tight text-foreground sm:text-2xl md:text-3xl">
               Civic Safety Analytics
             </h1>
             <Badge variant="outline" className="text-xs">
               {analytics ? "Demo Aggregation" : "Empty Telemetry"}
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
             Quantifiable road hazard metrics, resolution velocities, and zone hotspot telemetry
             across Greater Noida.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {analytics ? (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleClear}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-9 sm:h-8"
+              onClick={handleClear}
+            >
               <RotateCcw className="size-3.5" />
-              <span>Clear to Empty</span>
+              <span>Clear</span>
             </Button>
           ) : (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleLoadDemo}>
-              <span>Load Centralized Demo Analytics</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-9 sm:h-8"
+              onClick={handleLoadDemo}
+            >
+              <span>Load Demo Analytics</span>
             </Button>
           )}
 
-          <Tabs defaultValue="6m">
-            <TabsList className="h-8">
-              <TabsTrigger value="30d">30 Days</TabsTrigger>
-              <TabsTrigger value="3m">3 Months</TabsTrigger>
-              <TabsTrigger value="6m">6 Months</TabsTrigger>
-              <TabsTrigger value="all">Pilot All</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <Button variant="outline" size="sm" className="gap-1.5">
+          <div className="overflow-x-auto no-scrollbar">
+            <Tabs defaultValue="6m">
+              <TabsList className="h-9 sm:h-8">
+                <TabsTrigger value="30d" className="text-xs px-2.5">
+                  30D
+                </TabsTrigger>
+                <TabsTrigger value="3m" className="text-xs px-2.5">
+                  3M
+                </TabsTrigger>
+                <TabsTrigger value="6m" className="text-xs px-2.5">
+                  6M
+                </TabsTrigger>
+                <TabsTrigger value="all" className="text-xs px-2.5">
+                  All
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          <Button variant="outline" size="sm" className="gap-1.5 h-9 sm:h-8">
             <Download className="size-3.5" />
-            <span>Report PDF</span>
+            <span className="hidden sm:inline">Report PDF</span>
+            <span className="sm:hidden">PDF</span>
           </Button>
         </div>
       </div>
 
-      {/* ── KPI Metric Cards ─── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="shadow-xs">
-          <CardHeader className="pb-2">
+      {/* ── KPI Metric Cards (Compact 2x2 Grid on Mobile) ─── */}
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
+        <Card className="shadow-xs p-3.5 sm:p-5">
+          <CardHeader className="p-0 pb-1.5">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-xs font-medium text-muted-foreground">
-                Total Hazard Reports
+              <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
+                Total Hazards
               </CardDescription>
-              <Activity className="size-4 text-muted-foreground" />
+              <Activity className="size-3.5 sm:size-4 text-muted-foreground shrink-0" />
             </div>
-            <CardTitle className="text-3xl font-bold tracking-tight">
+            <CardTitle className="text-2xl sm:text-3xl font-bold tracking-tight">
               {analytics ? analytics.kpis.totalReports : "0"}
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">
-              {analytics ? "Since pilot launch in May 2026" : "Awaiting first citizen report"}
+          <CardContent className="p-0 pt-1">
+            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+              {analytics ? "Since May 2026 pilot" : "Awaiting first report"}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs">
-          <CardHeader className="pb-2">
+        <Card className="shadow-xs p-3.5 sm:p-5">
+          <CardHeader className="p-0 pb-1.5">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-xs font-medium text-muted-foreground">
-                Citizen Action Resolved
+              <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
+                Resolved Action
               </CardDescription>
-              <CheckCircle2 className="size-4 text-muted-foreground" />
+              <CheckCircle2 className="size-3.5 sm:size-4 text-muted-foreground shrink-0" />
             </div>
-            <CardTitle className="text-3xl font-bold tracking-tight">
+            <CardTitle className="text-2xl sm:text-3xl font-bold tracking-tight">
               {analytics ? analytics.kpis.resolvedCount : "0"}
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="p-0 pt-1">
+            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
               {analytics
-                ? `${analytics.kpis.resolvedRate}% completion rate across wards`
-                : "No resolved dockets yet"}
+                ? `${analytics.kpis.resolvedRate}% completion rate`
+                : "No dockets resolved"}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs">
-          <CardHeader className="pb-2">
+        <Card className="shadow-xs p-3.5 sm:p-5">
+          <CardHeader className="p-0 pb-1.5">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-xs font-medium text-muted-foreground">
-                Mean Resolution Time
+              <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
+                Mean SLA Time
               </CardDescription>
-              <Clock className="size-4 text-muted-foreground" />
+              <Clock className="size-3.5 sm:size-4 text-muted-foreground shrink-0" />
             </div>
-            <CardTitle className="text-3xl font-bold tracking-tight">
+            <CardTitle className="text-2xl sm:text-3xl font-bold tracking-tight">
               {analytics ? `${analytics.kpis.meanResolutionDays}d` : "—"}
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">
-              {analytics ? "Target SLA: under 7.0 calendar days" : "Target SLA: 7.0 calendar days"}
+          <CardContent className="p-0 pt-1">
+            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+              {analytics ? "SLA: <7.0 days" : "Target: 7.0 days"}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs">
-          <CardHeader className="pb-2">
+        <Card className="shadow-xs p-3.5 sm:p-5">
+          <CardHeader className="p-0 pb-1.5">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-xs font-medium text-muted-foreground">
-                Verified Reporters
+              <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
+                Reporters
               </CardDescription>
-              <Users className="size-4 text-muted-foreground" />
+              <Users className="size-3.5 sm:size-4 text-muted-foreground shrink-0" />
             </div>
-            <CardTitle className="text-3xl font-bold tracking-tight">
+            <CardTitle className="text-2xl sm:text-3xl font-bold tracking-tight">
               {analytics ? analytics.kpis.activeReporters : "0"}
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">
-              {analytics ? "Active community contributors" : "Community volunteers ready"}
+          <CardContent className="p-0 pt-1">
+            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+              {analytics ? "Active contributors" : "Volunteers ready"}
             </p>
           </CardContent>
         </Card>
@@ -228,32 +254,7 @@ export default function AnalyticsPage() {
                   </EmptyContent>
                 </Empty>
               ) : (
-                <div className="flex h-56 items-end gap-4 px-2">
-                  {analytics.monthlyTrends.map((item) => (
-                    <div
-                      key={item.month}
-                      className="flex flex-1 flex-col items-center gap-2 h-full justify-end"
-                    >
-                      <div className="flex w-full items-end justify-center gap-1.5 h-full">
-                        {/* Filed Bar */}
-                        <div
-                          className="w-full max-w-6 rounded-t-sm bg-primary transition-all hover:opacity-85"
-                          style={{ height: `${(item.filed / maxFiled) * 100}%` }}
-                          title={`${item.filed} filed in ${item.month}`}
-                        />
-                        {/* Resolved Bar */}
-                        <div
-                          className="w-full max-w-6 rounded-t-sm bg-muted-foreground/30 transition-all hover:opacity-85"
-                          style={{ height: `${(item.resolved / maxFiled) * 100}%` }}
-                          title={`${item.resolved} resolved in ${item.month}`}
-                        />
-                      </div>
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {item.month}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <BarChart data={chartData} categories={["Filed", "Resolved"]} index="month" />
               )}
             </CardContent>
 

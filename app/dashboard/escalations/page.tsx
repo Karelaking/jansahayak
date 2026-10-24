@@ -100,14 +100,14 @@ export default function EscalationsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+            <h1 className="font-heading text-xl font-bold tracking-tight text-foreground sm:text-2xl md:text-3xl">
               Authority Escalation Tracker
             </h1>
             <Badge variant="outline" className="text-xs">
               {escalations.length} Active Dockets
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
             Auditable trail of hazard files escalated to responsible municipal authorities and
             elected ward reps.
           </p>
@@ -115,13 +115,23 @@ export default function EscalationsPage() {
 
         <div className="flex items-center gap-2">
           {escalations.length > 0 ? (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleClear}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-9 sm:h-8"
+              onClick={handleClear}
+            >
               <RotateCcw className="size-3.5" />
-              <span>Clear to Empty</span>
+              <span>Clear</span>
             </Button>
           ) : (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleLoadDemo}>
-              <span>Load Centralized Demo Dockets</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-9 sm:h-8"
+              onClick={handleLoadDemo}
+            >
+              <span>Load Demo Dockets</span>
             </Button>
           )}
         </div>
@@ -157,7 +167,7 @@ export default function EscalationsPage() {
               <CardHeader className="border-b border-border pb-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-xs font-bold text-muted-foreground">
                         {item.id}
                       </span>
@@ -211,42 +221,41 @@ export default function EscalationsPage() {
                 </div>
               </CardContent>
 
-              <CardFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 text-xs text-foreground hover:underline"
-                  >
-                    <span>View Official PDF Docket</span>
-                    <ExternalLink className="size-3" />
-                  </button>
-                </div>
+              <CardFooter className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-xs text-foreground hover:underline py-1 self-start"
+                >
+                  <span>View Official PDF Docket</span>
+                  <ExternalLink className="size-3" />
+                </button>
 
-                <div className="flex items-center gap-2">
+                {/* Action Buttons - Responsive thumb-friendly grid on mobile */}
+                <div className="grid grid-cols-1 sm:flex sm:items-center gap-2 w-full sm:w-auto">
                   <Button
                     variant="outline"
-                    size="xs"
-                    className="gap-1.5 text-xs"
+                    size="sm"
+                    className="h-10 sm:h-7 text-xs justify-center"
                     onClick={() => setActiveModalId(item.id)}
                   >
-                    <MessageSquare className="size-3" />
+                    <MessageSquare className="size-3.5 mr-1" />
                     <span>Log Officer Reply</span>
                   </Button>
 
                   {item.status !== "resolved" ? (
                     <Button
-                      size="xs"
-                      className="gap-1.5 text-xs"
+                      size="sm"
+                      className="h-10 sm:h-7 text-xs justify-center bg-emerald-800 hover:bg-emerald-900 text-white"
                       onClick={() => handleUpdateStatus(item.id, "resolved")}
                     >
-                      <CheckCircle2 className="size-3" />
+                      <CheckCircle2 className="size-3.5 mr-1" />
                       <span>Mark Remediated</span>
                     </Button>
                   ) : (
                     <Button
                       variant="outline"
-                      size="xs"
-                      className="gap-1.5 text-xs"
+                      size="sm"
+                      className="h-10 sm:h-7 text-xs justify-center"
                       onClick={() => handleUpdateStatus(item.id, "in-progress")}
                     >
                       <span>Re-open Docket</span>

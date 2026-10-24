@@ -13,9 +13,11 @@ import {
   type MapRef,
 } from "@/components/ui/map";
 import { ArrowRight, ArrowUpRight } from "@/components/icons";
+import { Plus } from "lucide-react";
 import { GREATER_NOIDA_CENTER, SAMPLE_HAZARDS } from "@/lib/data";
-import type { HazardReport } from "@/lib/types/hazard";
+import type { HazardReport, HazardCategoryKey } from "@/lib/types/hazard";
 import { HazardPin } from "./hazard-pin";
+import { MapCategoryFilter } from "./map-category-filter";
 
 // Dynamically skin MapLibre vector layers to match the JanSahayak project theme:
 // Webpage Paper: #f5f3ed
@@ -92,10 +94,15 @@ export function LiveHazardMap({
 }: LiveHazardMapProps) {
   const mapRef = useRef<MapRef | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<HazardCategoryKey | "all">("all");
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  const filteredHazards = hazards.filter(
+    (h) => selectedCategory === "all" || h.category === selectedCategory,
+  );
 
   if (!isMounted) {
     return (
@@ -144,7 +151,7 @@ export function LiveHazardMap({
         />
 
         {/* Live hazard markers on the map */}
-        {hazards.map((hazard) => (
+        {filteredHazards.map((hazard) => (
           <MapMarker key={hazard.id} longitude={hazard.longitude} latitude={hazard.latitude}>
             <MarkerContent>
               <HazardPin severity={hazard.severity} />
@@ -178,21 +185,54 @@ export function LiveHazardMap({
         ))}
       </Map>
 
+      {/* ── Floating Controls for Dedicated Map View ── */}
+      {!showHeroOverlay && (
+        <>
+          <div className="pointer-events-auto absolute top-3 inset-x-3 z-20 flex flex-col gap-2 sm:top-4 sm:left-4 sm:right-auto sm:max-w-md">
+            <div className="flex items-center justify-between gap-2 bg-[#faf9f5]/95 backdrop-blur-md px-3 py-1.5 rounded-full border border-[#cbd5cb] shadow-xs">
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold text-[#0e2b24]">
+                <span className="size-2 rounded-full bg-emerald-600 animate-pulse" />
+                Greater Noida Live Safety Map
+              </span>
+              <span className="text-[10px] font-mono text-[#5c6f66]">
+                {filteredHazards.length} Incidents
+              </span>
+            </div>
+            <div className="bg-[#faf9f5]/95 backdrop-blur-md rounded-2xl p-1 border border-[#cbd5cb] shadow-sm">
+              <MapCategoryFilter
+                selectedCategory={selectedCategory}
+                onSelectCategory={setSelectedCategory}
+              />
+            </div>
+          </div>
+
+          <div className="pointer-events-auto absolute bottom-4 left-4 z-20 hidden sm:block">
+            <Link
+              href="/reports/new"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[#0e2b24] text-[#faf9f5] font-semibold text-xs shadow-lg hover:bg-[#1c4b3e] active:scale-95 transition-all"
+            >
+              <Plus className="size-4 stroke-[2.5]" />
+              <span>Report at Current Location</span>
+            </Link>
+          </div>
+        </>
+      )}
+
       {/* ── Empty Map State Notice when no hazards are mapped ── */}
-      {hazards.length === 0 && (
+      {filteredHazards.length === 0 && (
         <div className="pointer-events-auto absolute bottom-8 left-8 z-20 rounded-lg border border-border/80 bg-background/95 p-4 shadow-lg backdrop-blur-xs max-w-sm">
           <div className="flex items-start gap-3">
             <span className="inline-flex size-2 rounded-full bg-emerald-500 mt-1.5" />
             <div>
               <p className="text-xs font-semibold text-foreground">Greater Noida Pilot Ready</p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                No active hazards currently pinned. The map is monitoring Greater Noida corridors.
+                No active hazards currently match this category filter.
               </p>
               <Link
                 href="/reports/new"
                 className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
               >
-                <span>Report the first hazard</span>
+                <span>Report a hazard in this category</span>
                 <span className="size-3.5 inline-flex items-center">
                   <ArrowUpRight />
                 </span>
