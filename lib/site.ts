@@ -5,9 +5,38 @@ export const siteConfig = {
     "Document road-safety hazards, discover existing reports, and follow recorded civic updates in Greater Noida.",
   pilotArea: "Greater Noida, Uttar Pradesh",
   navigation: [
-    { label: "Explore map", href: "#map" },
-    { label: "How it works", href: "#how-it-works" },
-    { label: "Community impact", href: "#community" },
+    { label: "Dashboard", href: "/dashboard" },
+    { label: "Explore map", href: "/map" },
+    { label: "How it works", href: "/#how-it-works" },
+    { label: "Community impact", href: "/#community" },
+  ],
+  languages: [
+    {
+      code: "en",
+      label: "English",
+      native: "English",
+      glyph: "A",
+      script: "Latin",
+      note: "Primary",
+    },
+    {
+      code: "hi",
+      label: "Hindi",
+      native: "हिन्दी",
+      glyph: "अ",
+      script: "Devanagari",
+      note: "मुख्य भाषा",
+    },
+    {
+      code: "ur",
+      label: "Urdu",
+      native: "اردو",
+      glyph: "ع",
+      script: "Nastaliq",
+      note: "علاقائی",
+      dir: "rtl" as const,
+    },
+    { code: "pa", label: "Punjabi", native: "ਪੰਜਾਬੀ", glyph: "ਅ", script: "Gurmukhi", note: "ਖੇਤਰੀ" },
   ],
 } as const;
 
@@ -20,3 +49,4 @@ export const hazardCategories = [
 export type HazardCategory = (typeof hazardCategories)[number];
 export type HazardIconName = HazardCategory["icon"];
 export type HazardTone = HazardCategory["tone"];
+export type LanguageConfig = (typeof siteConfig.languages)[number];
