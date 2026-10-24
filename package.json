@@ -52,7 +52,7 @@
     "drizzle-kit": "^0.31.11",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vite-plus": "catalog:"
+    "vite-plus": "1.1.0"
   },
   "packageManager": "pnpm@12.15.0"
 }
