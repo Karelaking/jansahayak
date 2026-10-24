@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { HazardCategoryKey } from "@/lib/types/hazard";
+import { HAZARD_FILTER_CATEGORIES } from "@/lib/data/constants";
 import { cn } from "@/lib/utils";
 
 interface MapCategoryFilterProps {
@@ -9,19 +10,10 @@ interface MapCategoryFilterProps {
   onSelectCategory: (cat: HazardCategoryKey | "all") => void;
 }
 
-const CATEGORIES: { key: HazardCategoryKey | "all"; label: string }[] = [
-  { key: "all", label: "All Hazards" },
-  { key: "road-surface", label: "Road Surface" },
-  { key: "lighting", label: "Lighting" },
-  { key: "footpath", label: "Footpaths" },
-  { key: "crossing", label: "Crossings" },
-  { key: "drainage", label: "Drainage" },
-];
-
 export function MapCategoryFilter({ selectedCategory, onSelectCategory }: MapCategoryFilterProps) {
   return (
     <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto p-1 text-xs">
-      {CATEGORIES.map((cat) => {
+      {HAZARD_FILTER_CATEGORIES.map((cat) => {
         const isActive = selectedCategory === cat.key;
         return (
           <button

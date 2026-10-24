@@ -1,6 +1,8 @@
-import type { Metadata } from "next";
+"use client";
+
+import * as React from "react";
 import Link from "next/link";
-import { ExternalLink, Plus } from "lucide-react";
+import { ExternalLink, Plus, RotateCcw } from "lucide-react";
 
 import { LiveHazardMap } from "@/components/map";
 import {
@@ -13,13 +15,12 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-
-export const metadata: Metadata = {
-  title: "Live GIS Hazard Map — JanSahayak SafeStreets",
-  description: "Interactive geospatial visualization of road safety reports across Greater Noida.",
-};
+import { SAMPLE_HAZARDS } from "@/lib/data";
+import type { HazardReport } from "@/lib/types/hazard";
 
 export default function DashboardMapPage() {
+  const [hazards, setHazards] = React.useState<HazardReport[]>([]);
+
   return (
     <div className="flex flex-col gap-6">
       {/* ── Page Header ─── */}
@@ -30,7 +31,7 @@ export default function DashboardMapPage() {
               Geospatial Operations Map
             </h1>
             <Badge variant="outline" className="text-xs">
-              GIS Live
+              {hazards.length > 0 ? `${hazards.length} Demo Pins` : "Clean Pilot Basemap"}
             </Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -39,6 +40,22 @@ export default function DashboardMapPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {hazards.length > 0 ? (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setHazards([])}>
+              <RotateCcw className="size-3.5" />
+              <span>Clear Pins</span>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setHazards(SAMPLE_HAZARDS)}
+            >
+              <span>Load Centralized Demo Pins</span>
+            </Button>
+          )}
+
           <Button variant="outline" size="sm" className="gap-1.5" render={<Link href="/map" />}>
             <span>Full-Screen Map</span>
             <ExternalLink className="size-3.5" />
@@ -63,8 +80,8 @@ export default function DashboardMapPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="text-xs">
-                24 Active Geotags
+              <Badge variant={hazards.length > 0 ? "secondary" : "outline"} className="text-xs">
+                {hazards.length} Active Geotags
               </Badge>
             </div>
           </div>
@@ -72,24 +89,28 @@ export default function DashboardMapPage() {
 
         <CardContent className="p-0">
           <div className="relative h-[640px] w-full">
-            <LiveHazardMap />
+            <LiveHazardMap hazards={hazards} showHeroOverlay={false} />
           </div>
         </CardContent>
 
         <CardFooter className="border-t border-border px-6 py-3 bg-muted/20 text-xs text-muted-foreground">
           <div className="flex flex-wrap items-center justify-between gap-4 w-full">
-            <span>Click any marker to inspect incident history and authority dispatch status.</span>
+            <span>
+              {hazards.length > 0
+                ? "Click any marker to inspect incident history and authority dispatch status."
+                : "Pilot radar ready. Click 'Load Centralized Demo Pins' or submit a new report to place pins."}
+            </span>
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-destructive" />
+                <span className="size-2 rounded-full bg-[#e4876f]" />
                 <span>High Urgency</span>
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-amber-500" />
+                <span className="size-2 rounded-full bg-[#e7b64f]" />
                 <span>Medium Urgency</span>
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-emerald-500" />
+                <span className="size-2 rounded-full bg-[#78a37d]" />
                 <span>Resolved</span>
               </span>
             </div>

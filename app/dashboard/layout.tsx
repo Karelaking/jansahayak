@@ -21,7 +21,14 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
-const NAV_ITEMS = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: string;
+};
+
+const NAV_ITEMS: NavItem[] = [
   {
     href: "/dashboard",
     label: "Overview",
@@ -31,7 +38,6 @@ const NAV_ITEMS = [
     href: "/dashboard/reports",
     label: "Reports",
     icon: FileText,
-    badge: "24",
   },
   {
     href: "/dashboard/map",
@@ -42,7 +48,6 @@ const NAV_ITEMS = [
     href: "/dashboard/moderation",
     label: "Moderation",
     icon: ShieldCheck,
-    badge: "6",
   },
   {
     href: "/dashboard/analytics",
@@ -53,7 +58,6 @@ const NAV_ITEMS = [
     href: "/dashboard/escalations",
     label: "Escalations",
     icon: AlertTriangle,
-    badge: "3",
   },
 ];
 
@@ -177,7 +181,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             <Link href="/dashboard" className="flex items-center gap-2 text-inherit no-underline">
               <span className="font-heading text-sm font-bold">JanSahayak</span>
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-[10px] hidden sm:inline-flex">
                 Dashboard
               </Badge>
             </Link>

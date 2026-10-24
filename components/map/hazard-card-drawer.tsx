@@ -32,17 +32,25 @@ export function HazardCardDrawer({
 }: HazardCardDrawerProps) {
   if (!hazard) return null;
 
-  const severityBadgeClass = {
-    critical: "bg-[#e4876f]/20 text-[#8c2e1b] border-[#e4876f]/40 font-medium",
-    moderate: "bg-[#e7b64f]/20 text-[#7a540b] border-[#e7b64f]/40 font-medium",
-    minor: "bg-[#78a37d]/20 text-[#234a29] border-[#78a37d]/40 font-medium",
-  }[hazard.severity];
+  const severityBadgeClass =
+    {
+      critical: "bg-[#e4876f]/20 text-[#8c2e1b] border-[#e4876f]/40 font-medium",
+      high: "bg-[#e4876f]/20 text-[#8c2e1b] border-[#e4876f]/40 font-medium",
+      moderate: "bg-[#e7b64f]/20 text-[#7a540b] border-[#e7b64f]/40 font-medium",
+      medium: "bg-[#e7b64f]/20 text-[#7a540b] border-[#e7b64f]/40 font-medium",
+      minor: "bg-[#78a37d]/20 text-[#234a29] border-[#78a37d]/40 font-medium",
+      low: "bg-[#78a37d]/20 text-[#234a29] border-[#78a37d]/40 font-medium",
+    }[hazard.severity] || "bg-muted text-muted-foreground";
 
-  const severityLabel = {
-    critical: "High Urgency",
-    moderate: "Moderate Urgency",
-    minor: "Standard Priority",
-  }[hazard.severity];
+  const severityLabel =
+    {
+      critical: "High Urgency",
+      high: "High Urgency",
+      moderate: "Moderate Urgency",
+      medium: "Moderate Urgency",
+      minor: "Standard Priority",
+      low: "Standard Priority",
+    }[hazard.severity] || "Reported";
 
   return (
     <Card className="absolute bottom-3 left-3 right-3 z-1000 border border-[#cbd5cb] bg-white/95 shadow-xl backdrop-blur-md sm:bottom-4 sm:left-auto sm:right-4 sm:w-87.5">

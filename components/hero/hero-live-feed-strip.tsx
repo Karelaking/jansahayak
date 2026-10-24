@@ -24,7 +24,7 @@ export function HeroLiveFeedStrip() {
           <div>
             <div className="font-semibold text-xs text-[#0e2b24]">Recent 24h Activity</div>
             <div className="text-[11px] text-[#63736b]">
-              6 citizen-verified hazards logged & tracked
+              Citizen-verified hazards tracked to resolution
             </div>
           </div>
         </div>

@@ -7,8 +7,17 @@ interface HazardPinProps {
 }
 
 export function HazardPin({ severity, isSelected = false }: HazardPinProps) {
-  const colorMap = {
+  const colorMap: Record<
+    HazardSeverity,
+    { fill: string; border: string; ring: string; text: string }
+  > = {
     critical: {
+      fill: "#e4876f",
+      border: "#8c2e1b",
+      ring: "rgba(228, 135, 111, 0.4)",
+      text: "#fff",
+    },
+    high: {
       fill: "#e4876f",
       border: "#8c2e1b",
       ring: "rgba(228, 135, 111, 0.4)",
@@ -20,7 +29,19 @@ export function HazardPin({ severity, isSelected = false }: HazardPinProps) {
       ring: "rgba(231, 182, 79, 0.35)",
       text: "#17382f",
     },
+    medium: {
+      fill: "#e7b64f",
+      border: "#7a540b",
+      ring: "rgba(231, 182, 79, 0.35)",
+      text: "#17382f",
+    },
     minor: {
+      fill: "#78a37d",
+      border: "#234a29",
+      ring: "rgba(120, 163, 125, 0.3)",
+      text: "#fff",
+    },
+    low: {
       fill: "#78a37d",
       border: "#234a29",
       ring: "rgba(120, 163, 125, 0.3)",
@@ -41,7 +62,7 @@ export function HazardPin({ severity, isSelected = false }: HazardPinProps) {
         justifyContent: "center",
         cursor: "pointer",
         transform: isSelected ? "scale(1.2)" : "scale(1)",
-        transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
+        transition: "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
       }}
     >
       {/* Pulse ring for critical hazards */}

@@ -1,4 +1,6 @@
-import type { Metadata } from "next";
+"use client";
+
+import * as React from "react";
 import Link from "next/link";
 import {
   Clock,
@@ -10,6 +12,10 @@ import {
   Plus,
   MapPin,
   Flame,
+  FileText,
+  PieChart,
+  Building2,
+  RotateCcw,
 } from "lucide-react";
 
 import {
@@ -33,151 +39,51 @@ import {
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "@/components/ui/empty";
+import { SAMPLE_HAZARDS, SAMPLE_ESCALATIONS, SAMPLE_CIVIC_ANALYTICS } from "@/lib/data";
+import type { HazardReport, EscalationDocket } from "@/lib/types/hazard";
 
-export const metadata: Metadata = {
-  title: "Dashboard Overview — JanSahayak SafeStreets",
-  description: "Manage hazard reports, moderation queue, escalations, and civic analytics.",
-};
+const EMPTY_REPORTS: HazardReport[] = [];
+const EMPTY_ESCALATIONS: EscalationDocket[] = [];
 
-// ── Illustrative data layer ──────────────────────────────────────────────────
-
-const KPI_STATS = [
-  {
-    title: "Active Hazards",
-    value: "142",
-    description: "+8 reported in the last 24h",
-    trend: "up",
-    icon: Flame,
-    color: "text-amber-600 dark:text-amber-400",
-  },
-  {
-    title: "Pending Verification",
-    value: "24",
-    description: "6 flagged for duplicate checks",
-    trend: "neutral",
-    icon: Clock,
-    color: "text-blue-600 dark:text-blue-400",
-  },
-  {
-    title: "Avg. Resolution Time",
-    value: "4.2d",
-    description: "0.6d faster than last sprint",
-    trend: "down-good",
-    icon: TrendingDown,
-    color: "text-emerald-600 dark:text-emerald-400",
-  },
-  {
-    title: "Resolved This Month",
-    value: "89",
-    description: "71% civic action success rate",
-    trend: "up",
-    icon: CheckCircle2,
-    color: "text-teal-600 dark:text-teal-400",
-  },
-];
-
-const RECENT_REPORTS = [
-  {
-    id: "R-2041",
-    title: "Broken footpath near Alpha II roundabout",
-    category: "Footpath Defect",
-    location: "Alpha II, Greater Noida",
-    status: "open",
-    severity: "high",
-    time: "2h ago",
-    votes: 14,
-  },
-  {
-    id: "R-2040",
-    title: "Pothole on Gaur City road causing near-misses",
-    category: "Road Damage",
-    location: "Gaur City 1, Noida Ext.",
-    status: "in-progress",
-    severity: "high",
-    time: "3h ago",
-    votes: 22,
-  },
-  {
-    id: "R-2039",
-    title: "Street light out — 6 consecutive poles",
-    category: "Dark Spot",
-    location: "Knowledge Park III",
-    status: "open",
-    severity: "medium",
-    time: "5h ago",
-    votes: 9,
-  },
-  {
-    id: "R-2038",
-    title: "Unsafe pedestrian crossing at metro exit",
-    category: "Crossing Safety",
-    location: "Pari Chowk Metro",
-    status: "escalated",
-    severity: "high",
-    time: "7h ago",
-    votes: 31,
-  },
-  {
-    id: "R-2037",
-    title: "Overgrown median obstructing right-turn visibility",
-    category: "Blind Corner",
-    location: "Sector Beta I",
-    status: "open",
-    severity: "low",
-    time: "12h ago",
-    votes: 4,
-  },
-  {
-    id: "R-2036",
-    title: "Loose barricades left after road construction",
-    category: "Road Obstruction",
-    location: "Delta II, Block C",
-    status: "resolved",
-    severity: "medium",
-    time: "1d ago",
-    votes: 7,
-  },
-];
-
-const ESCALATIONS = [
-  {
-    id: "E-019",
-    title: "Pari Chowk crossing — pedestrian incident risk",
-    authority: "GNIDA Traffic Dept.",
-    daysOpen: 12,
-  },
-  {
-    id: "E-018",
-    title: "Alpha I pothole cluster — repeated reports",
-    authority: "GNIDA PWD",
-    daysOpen: 21,
-  },
-  {
-    id: "E-017",
-    title: "Damaged drainage cover — monsoon hazard",
-    authority: "Greater Noida Municipality",
-    daysOpen: 8,
-  },
-];
-
-const CATEGORY_BREAKDOWN = [
-  { label: "Road Damage & Potholes", count: 47, pct: 33 },
-  { label: "Broken Footpaths", count: 31, pct: 22 },
-  { label: "Street Lighting Outages", count: 27, pct: 19 },
-  { label: "Unsafe Crossings", count: 22, pct: 15 },
-  { label: "Traffic Signal Failures", count: 15, pct: 11 },
-];
-
+/** Status vs severity are separate vocabularies (Severity/Status Split). */
 function getStatusBadge(status: string) {
   switch (status) {
     case "open":
-      return <Badge variant="destructive">Open</Badge>;
+      return (
+        <span className="status-open">
+          <i aria-hidden="true" />
+          Open
+        </span>
+      );
     case "in-progress":
-      return <Badge variant="secondary">In Progress</Badge>;
+      return (
+        <span className="status-progress">
+          <i aria-hidden="true" />
+          In Progress
+        </span>
+      );
     case "escalated":
-      return <Badge variant="default">Escalated</Badge>;
+      return (
+        <span className="status-escalated">
+          <i aria-hidden="true" />
+          Escalated
+        </span>
+      );
     case "resolved":
-      return <Badge variant="outline">Resolved</Badge>;
+      return (
+        <span className="status-resolved">
+          <i aria-hidden="true" />
+          Resolved
+        </span>
+      );
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
@@ -186,169 +92,293 @@ function getStatusBadge(status: string) {
 function getSeverityBadge(severity: string) {
   switch (severity) {
     case "high":
+    case "critical":
       return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive">
-          <span className="size-1.5 rounded-full bg-destructive" />
+        <span className="sev-high">
+          <i aria-hidden="true" />
           High
         </span>
       );
     case "medium":
+    case "moderate":
       return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
-          <span className="size-1.5 rounded-full bg-amber-500" />
+        <span className="sev-medium">
+          <i aria-hidden="true" />
           Medium
         </span>
       );
     default:
       return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <span className="size-1.5 rounded-full bg-muted-foreground/60" />
+        <span className="sev-low">
+          <i aria-hidden="true" />
           Low
         </span>
       );
   }
 }
 
-export default function DashboardOverviewPage() {
+export default function DashboardPage() {
+  // Empty state by default; centralized sample data previewable via button
+  const [isDemo, setIsDemo] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState("all");
+
+  const reports = isDemo ? SAMPLE_HAZARDS : EMPTY_REPORTS;
+  const escalations = isDemo ? SAMPLE_ESCALATIONS : EMPTY_ESCALATIONS;
+  const analytics = isDemo ? SAMPLE_CIVIC_ANALYTICS : null;
+
+  const filteredReports = React.useMemo(() => {
+    if (activeTab === "all") return reports;
+    return reports.filter((r) => r.status === activeTab);
+  }, [reports, activeTab]);
+
   return (
     <div className="flex flex-col gap-6">
       {/* ── Page Header ─── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground md:text-3xl">
               Civic Operations Overview
             </h1>
             <Badge variant="outline" className="text-xs">
-              Pilot
+              {isDemo ? "Centralized Demo Data" : "Clean Initial State"}
             </Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Greater Noida Municipal Division &middot; Live status, verification queue, and citizen
+            Greater Noida road-safety hazard command center · Live monitoring &amp; SLA resolution
             tracking.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <Button variant="outline" size="sm" render={<Link href="/dashboard/map" />}>
-            <MapPin className="size-3.5" />
-            <span>Interactive Map</span>
-          </Button>
-          <Button size="sm" render={<Link href="/reports/new" />}>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {isDemo ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setIsDemo(false)}
+            >
+              <RotateCcw className="size-3.5" />
+              <span>Clear to Empty State</span>
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setIsDemo(true)}>
+              <span>Preview Centralized Demo Data</span>
+            </Button>
+          )}
+
+          <Button size="sm" className="shrink-0" render={<Link href="/reports/new" />}>
             <Plus className="size-3.5" />
-            <span>File New Report</span>
+            <span>Report Hazard</span>
           </Button>
         </div>
       </div>
 
-      {/* ── KPI Stat Strip via shadcn Card ─── */}
+      {/* ── KPI Telemetry Grid ─── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {KPI_STATS.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.title} className="relative overflow-hidden shadow-xs">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardDescription className="text-xs font-medium text-muted-foreground">
-                    {stat.title}
-                  </CardDescription>
-                  <Icon className={`size-4 ${stat.color}`} />
-                </div>
-                <CardTitle className="text-3xl font-bold tracking-tight">{stat.value}</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <p className="text-xs text-muted-foreground">{stat.description}</p>
-              </CardContent>
-            </Card>
-          );
-        })}
+        <Card className="shadow-xs">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardDescription className="text-xs font-medium text-muted-foreground">
+                Active Hazards
+              </CardDescription>
+              <Flame className="size-4 text-muted-foreground" />
+            </div>
+            <CardTitle className="text-3xl font-bold tracking-tight">
+              {isDemo ? "142" : "0"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-muted-foreground">
+              {isDemo ? "+8 reported in the last 24h" : "No active hazards logged"}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-xs">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardDescription className="text-xs font-medium text-muted-foreground">
+                Pending Verification
+              </CardDescription>
+              <Clock className="size-4 text-muted-foreground" />
+            </div>
+            <CardTitle className="text-3xl font-bold tracking-tight">
+              {isDemo ? "24" : "0"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-muted-foreground">
+              {isDemo ? "6 flagged for duplicate checks" : "Moderation queue clean"}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-xs">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardDescription className="text-xs font-medium text-muted-foreground">
+                Avg. Resolution Time
+              </CardDescription>
+              <TrendingDown className="size-4 text-muted-foreground" />
+            </div>
+            <CardTitle className="text-3xl font-bold tracking-tight">
+              {isDemo ? "4.2d" : "—"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-muted-foreground">
+              {isDemo ? "0.6d faster than last sprint" : "SLA baseline: 7.0 days"}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-xs">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardDescription className="text-xs font-medium text-muted-foreground">
+                Resolved This Month
+              </CardDescription>
+              <CheckCircle2 className="size-4 text-muted-foreground" />
+            </div>
+            <CardTitle className="text-3xl font-bold tracking-tight">
+              {isDemo ? "89" : "0"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-muted-foreground">
+              {isDemo ? "71% civic action success rate" : "Awaiting first closure"}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* ── Main Two-Column Content Grid ─── */}
+      {/* ── Main Dashboard Workspace Grid ─── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left: Reports Table Card (8 cols) */}
+        {/* Left: Recent Reports Table (8 cols) */}
         <div className="flex flex-col gap-6 lg:col-span-8">
           <Card className="shadow-xs">
             <CardHeader className="border-b border-border pb-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <CardTitle className="text-lg">Recent Road Safety Reports</CardTitle>
-                  <CardDescription>
-                    Incoming citizen hazards filtered by triage priority and status.
+                  <CardTitle className="text-lg">Recent Hazard Submissions</CardTitle>
+                  <CardDescription className="text-xs">
+                    Live community records awaiting triage or authority remediation.
                   </CardDescription>
                 </div>
-                <CardAction>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="gap-1 text-xs"
-                    render={<Link href="/dashboard/reports" />}
-                  >
-                    <span>View all</span>
-                    <ChevronRight className="size-3.5" />
-                  </Button>
-                </CardAction>
-              </div>
 
-              {/* Filtering with shadcn Tabs */}
-              <div className="pt-2">
-                <Tabs defaultValue="all">
-                  <TabsList className="h-8">
-                    <TabsTrigger value="all">All (24)</TabsTrigger>
-                    <TabsTrigger value="open">Open (14)</TabsTrigger>
-                    <TabsTrigger value="in-progress">In Progress (6)</TabsTrigger>
-                    <TabsTrigger value="escalated">Escalated (4)</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                <div className="flex items-center gap-2">
+                  <Tabs value={activeTab} onValueChange={setActiveTab}>
+                    <TabsList className="h-8">
+                      <TabsTrigger value="all">All</TabsTrigger>
+                      <TabsTrigger value="open">Open</TabsTrigger>
+                      <TabsTrigger value="in-progress">In Progress</TabsTrigger>
+                      <TabsTrigger value="escalated">Escalated</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+
+                  <CardAction>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      render={<Link href="/dashboard/reports" />}
+                    >
+                      <span>Directory</span>
+                      <ArrowUpRight className="size-3.5" />
+                    </Button>
+                  </CardAction>
+                </div>
               </div>
             </CardHeader>
 
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-25">ID</TableHead>
-                    <TableHead>Hazard & Location</TableHead>
-                    <TableHead>Severity</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Upvotes</TableHead>
-                    <TableHead className="text-right">Filed</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {RECENT_REPORTS.map((report) => (
-                    <TableRow key={report.id}>
-                      <TableCell className="font-mono text-xs font-semibold text-muted-foreground">
-                        {report.id}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-medium text-foreground text-sm line-clamp-1">
-                            {report.title}
-                          </span>
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <MapPin className="size-3" />
-                            {report.location}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{getSeverityBadge(report.severity)}</TableCell>
-                      <TableCell>{getStatusBadge(report.status)}</TableCell>
-                      <TableCell className="text-right font-medium text-xs">
-                        {report.votes}
-                      </TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground">
-                        {report.time}
-                      </TableCell>
+              {reports.length === 0 ? (
+                /* Zatian / shadcn Empty State */
+                <Empty className="my-8 border-0 bg-transparent">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <FileText className="size-6 text-muted-foreground" />
+                    </EmptyMedia>
+                    <EmptyTitle>No recent reports logged</EmptyTitle>
+                    <EmptyDescription>
+                      Citizen road-safety reports for Greater Noida will populate here with live
+                      verification status.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                  <EmptyContent>
+                    <Button size="sm" render={<Link href="/reports/new" />}>
+                      <Plus className="mr-1.5 size-3.5" />
+                      <span>File First Report</span>
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setIsDemo(true)}>
+                      Preview Demo Records
+                    </Button>
+                  </EmptyContent>
+                </Empty>
+              ) : filteredReports.length === 0 ? (
+                <Empty className="my-8 border-0 bg-transparent">
+                  <EmptyHeader>
+                    <EmptyTitle>No reports match this status</EmptyTitle>
+                    <EmptyDescription>
+                      No records found under &quot;{activeTab}&quot;.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                  <EmptyContent>
+                    <Button variant="outline" size="sm" onClick={() => setActiveTab("all")}>
+                      Show All Reports
+                    </Button>
+                  </EmptyContent>
+                </Empty>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[80px]">ID</TableHead>
+                      <TableHead>Hazard Dossier</TableHead>
+                      <TableHead>Severity</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Votes</TableHead>
+                      <TableHead className="text-right">Reported</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredReports.map((report) => (
+                      <TableRow key={report.id} className="hover:bg-muted/40">
+                        <TableCell className="font-mono text-xs font-semibold text-muted-foreground">
+                          {report.id}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-medium text-foreground text-sm line-clamp-1">
+                              {report.title}
+                            </span>
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <MapPin className="size-3" />
+                              {report.location || report.landmark}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{getSeverityBadge(report.severity)}</TableCell>
+                        <TableCell>{getStatusBadge(report.status)}</TableCell>
+                        <TableCell className="text-right font-medium text-xs">
+                          {report.votes || report.verificationsCount || 0}
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">
+                          {report.time || report.reportedAt || "Recently"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
 
             <CardFooter className="border-t border-border px-6 py-3 bg-muted/20">
               <div className="flex items-center justify-between w-full text-xs text-muted-foreground">
-                <span>Showing 6 of 24 active reports</span>
+                <span>
+                  Showing {filteredReports.length} of {reports.length} reports
+                </span>
                 <Link
                   href="/dashboard/reports"
                   className="font-medium text-foreground underline-offset-4 hover:underline"
@@ -371,12 +401,13 @@ export default function DashboardOverviewPage() {
                   <CardTitle className="text-base text-destructive">Moderation Queue</CardTitle>
                 </div>
                 <Badge variant="destructive" className="font-bold">
-                  6 Needs Review
+                  {isDemo ? "5 Needs Review" : "0 Pending"}
                 </Badge>
               </div>
               <CardDescription className="text-xs">
-                3 potential duplicates, 2 missing GPS tags, and 1 out-of-scope report awaiting
-                curator review.
+                {isDemo
+                  ? "Potential duplicates, missing GPS tags, and out-of-scope reports awaiting triage."
+                  : "All citizen submissions have been audited. No pending duplicate flags."}
               </CardDescription>
             </CardHeader>
             <CardFooter className="pt-0">
@@ -386,7 +417,7 @@ export default function DashboardOverviewPage() {
                 className="w-full justify-between text-xs"
                 render={<Link href="/dashboard/moderation" />}
               >
-                <span>Review Pending Items</span>
+                <span>Review Moderation Queue</span>
                 <ChevronRight className="size-3.5" />
               </Button>
             </CardFooter>
@@ -402,27 +433,47 @@ export default function DashboardOverviewPage() {
                     Cases forwarded to official municipal bodies.
                   </CardDescription>
                 </div>
-                <Badge variant="secondary">3 Active</Badge>
+                <Badge variant={escalations.length > 0 ? "secondary" : "outline"}>
+                  {escalations.length} Active
+                </Badge>
               </div>
             </CardHeader>
+
             <CardContent className="flex flex-col divide-y divide-border pt-0">
-              {ESCALATIONS.map((escl) => (
-                <div key={escl.id} className="py-3 first:pt-0 last:pb-0">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                    <span className="font-mono font-semibold">{escl.id}</span>
-                    <Badge variant="outline" className="text-[10px] text-destructive">
-                      {escl.daysOpen}d without action
-                    </Badge>
+              {escalations.length === 0 ? (
+                /* Zatian / shadcn Empty State */
+                <Empty className="my-4 border-0 bg-transparent py-6">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <Building2 className="size-5 text-muted-foreground" />
+                    </EmptyMedia>
+                    <EmptyTitle className="text-sm font-medium">No active escalations</EmptyTitle>
+                    <EmptyDescription className="text-[11px]">
+                      No formal grievance dockets currently open with GNIDA, PWD, or municipal
+                      cells.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : (
+                escalations.map((escl) => (
+                  <div key={escl.id} className="py-3 first:pt-0 last:pb-0">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                      <span className="font-mono font-semibold">{escl.id}</span>
+                      <Badge variant="outline" className="text-[10px] text-destructive">
+                        {escl.daysOpen}d without action
+                      </Badge>
+                    </div>
+                    <h4 className="text-xs font-semibold text-foreground line-clamp-1">
+                      {escl.title}
+                    </h4>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Agency: {escl.authority}
+                    </p>
                   </div>
-                  <h4 className="text-xs font-semibold text-foreground line-clamp-1">
-                    {escl.title}
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Agency: {escl.authority}
-                  </p>
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
+
             <CardFooter className="border-t border-border pt-3">
               <Button
                 variant="ghost"
@@ -444,19 +495,37 @@ export default function DashboardOverviewPage() {
                 Distribution across recorded road infrastructure incidents.
               </CardDescription>
             </CardHeader>
+
             <CardContent className="flex flex-col gap-4 pt-1">
-              {CATEGORY_BREAKDOWN.map((cat) => (
-                <div key={cat.label} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium text-foreground">{cat.label}</span>
-                    <span className="font-semibold text-muted-foreground">
-                      {cat.count} ({cat.pct}%)
-                    </span>
+              {!analytics ? (
+                /* Zatian / shadcn Empty State */
+                <Empty className="my-4 border-0 bg-transparent py-6">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <PieChart className="size-5 text-muted-foreground" />
+                    </EmptyMedia>
+                    <EmptyTitle className="text-sm font-medium">No category breakdown</EmptyTitle>
+                    <EmptyDescription className="text-[11px]">
+                      Road surface, footpaths, lighting, and crossings will populate once reports
+                      are submitted.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : (
+                analytics.categoryDistribution.map((cat) => (
+                  <div key={cat.label} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-foreground">{cat.label}</span>
+                      <span className="font-semibold text-muted-foreground">
+                        {cat.count} ({cat.pct}%)
+                      </span>
+                    </div>
+                    <Progress value={cat.pct} className="w-full" />
                   </div>
-                  <Progress value={cat.pct} className="w-full" />
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
+
             <CardFooter className="border-t border-border pt-3">
               <Button
                 variant="ghost"

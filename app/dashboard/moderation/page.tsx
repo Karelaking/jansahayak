@@ -11,108 +11,25 @@ import {
   FileQuestion,
   ExternalLink,
   RotateCcw,
+  CheckCircle2,
 } from "lucide-react";
 
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "@/components/ui/empty";
+import { SAMPLE_MODERATION_QUEUE } from "@/lib/data";
+import type { ModerationQueueItem } from "@/lib/types/hazard";
 
-type QueueItem = {
-  id: string;
-  title: string;
-  type: "duplicate" | "location" | "scope";
-  flagLabel: string;
-  detail: string;
-  reporter: string;
-  time: string;
-  badgeVariant: "secondary" | "destructive" | "outline";
-  iconName: "copy" | "map-off" | "alert" | "question";
-  status: "pending" | "approved" | "merged" | "rejected";
-};
-
-const INITIAL_QUEUE: QueueItem[] = [
-  {
-    id: "R-2041",
-    title: "Broken footpath near Alpha II roundabout",
-    type: "duplicate",
-    flagLabel: "Potential Duplicate",
-    detail:
-      "Matches report R-2029 filed 3 weeks ago with 92% GPS proximity and similar photo vector.",
-    reporter: "Citizen (Commuter)",
-    time: "2 hours ago",
-    badgeVariant: "secondary",
-    iconName: "copy",
-    status: "pending",
-  },
-  {
-    id: "R-2039",
-    title: "Street light out — 6 consecutive poles",
-    type: "location",
-    flagLabel: "Unclear Location",
-    detail:
-      "GPS coordinates place the pin within a private commercial tech-park boundary rather than public roadway.",
-    reporter: "Student (Hostel Resident)",
-    time: "5 hours ago",
-    badgeVariant: "destructive",
-    iconName: "map-off",
-    status: "pending",
-  },
-  {
-    id: "R-2037",
-    title: "Overgrown median obstructing right-turn visibility",
-    type: "duplicate",
-    flagLabel: "Potential Duplicate",
-    detail:
-      "Report R-2031 is currently marked In-Progress with GNIDA Horticulture Division for this sector.",
-    reporter: "Delivery Partner",
-    time: "12 hours ago",
-    badgeVariant: "secondary",
-    iconName: "copy",
-    status: "pending",
-  },
-  {
-    id: "R-2035",
-    title: "Open manhole cover near government primary school",
-    type: "duplicate",
-    flagLabel: "High Urgency & Duplicate Check",
-    detail:
-      "Critical severity report matching existing open ticket R-2020. Needs immediate escalation consolidation.",
-    reporter: "School Teacher",
-    time: "1 day ago",
-    badgeVariant: "destructive",
-    iconName: "alert",
-    status: "pending",
-  },
-  {
-    id: "R-2034",
-    title: "Encroached walkway forcing pedestrians into traffic",
-    type: "location",
-    flagLabel: "Missing Geotag",
-    detail:
-      "Manual address submitted without precise GPS coordinates. Curator verification needed on satellite layer.",
-    reporter: "Local Resident",
-    time: "2 days ago",
-    badgeVariant: "destructive",
-    iconName: "map-off",
-    status: "pending",
-  },
-  {
-    id: "R-2028",
-    title: "Stray animal feeding point causing pedestrian bottleneck",
-    type: "scope",
-    flagLabel: "Out of Scope",
-    detail:
-      "Incident pertains to municipal animal control guidelines rather than physical roadway/pedestrian infrastructure.",
-    reporter: "Resident Welfare Rep",
-    time: "4 days ago",
-    badgeVariant: "outline",
-    iconName: "question",
-    status: "pending",
-  },
-];
-
-function getIcon(name: QueueItem["iconName"]) {
+function getIcon(name: ModerationQueueItem["iconName"]) {
   switch (name) {
     case "copy":
       return <Copy className="size-3" />;
@@ -126,7 +43,8 @@ function getIcon(name: QueueItem["iconName"]) {
 }
 
 export default function ModerationPage() {
-  const [items, setItems] = React.useState<QueueItem[]>(INITIAL_QUEUE);
+  // Empty state by default; centralized sample queue loaded on demand
+  const [items, setItems] = React.useState<ModerationQueueItem[]>([]);
   const [activeTab, setActiveTab] = React.useState("all");
 
   const pendingItems = items.filter((i) => i.status === "pending");
@@ -143,8 +61,12 @@ export default function ModerationPage() {
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, status: action } : item)));
   };
 
-  const handleReset = () => {
-    setItems(INITIAL_QUEUE);
+  const handleLoadDemo = () => {
+    setItems(SAMPLE_MODERATION_QUEUE);
+  };
+
+  const handleClear = () => {
+    setItems([]);
   };
 
   return (
@@ -167,6 +89,17 @@ export default function ModerationPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {items.length > 0 ? (
+            <Button variant="outline" size="xs" className="gap-1" onClick={handleClear}>
+              <RotateCcw className="size-3" />
+              <span>Clear to Empty</span>
+            </Button>
+          ) : (
+            <Button variant="outline" size="xs" className="gap-1" onClick={handleLoadDemo}>
+              <span>Load Centralized Demo Queue</span>
+            </Button>
+          )}
+
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="h-8">
               <TabsTrigger value="all">All ({pendingItems.length})</TabsTrigger>
@@ -181,32 +114,55 @@ export default function ModerationPage() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
-
-          {pendingItems.length < INITIAL_QUEUE.length && (
-            <Button variant="outline" size="xs" className="gap-1" onClick={handleReset}>
-              <RotateCcw className="size-3" />
-              <span>Reset Demo Queue</span>
-            </Button>
-          )}
         </div>
       </div>
 
       {/* ── Cards List of Moderation Queue ─── */}
       <div className="grid grid-cols-1 gap-4">
-        {filteredItems.length === 0 ? (
-          <Card className="p-12 text-center shadow-xs">
-            <ShieldAlert className="size-8 mx-auto text-emerald-600 mb-2" />
-            <h3 className="font-heading font-semibold text-base">All Caught Up!</h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-              There are no pending reports requiring moderation in this category. All submitted
-              hazards have been triaged.
-            </p>
-            {pendingItems.length < INITIAL_QUEUE.length && (
-              <Button variant="outline" size="sm" className="mt-4 gap-1.5" onClick={handleReset}>
-                <RotateCcw className="size-3.5" />
-                <span>Reload Demo Items</span>
-              </Button>
-            )}
+        {items.length === 0 ? (
+          /* Zatian / shadcn Empty State when queue is pristine and no data exists */
+          <Card className="shadow-xs p-2">
+            <Empty className="my-8 border-0 bg-transparent">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <CheckCircle2 className="size-6 text-emerald-600" />
+                </EmptyMedia>
+                <EmptyTitle>Moderation queue is clean</EmptyTitle>
+                <EmptyDescription>
+                  There are currently no citizen hazard reports requiring duplicate consolidation,
+                  geotag verification, or scope classification.
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button variant="outline" size="sm" onClick={handleLoadDemo}>
+                  Load Centralized Demo Queue
+                </Button>
+              </EmptyContent>
+            </Empty>
+          </Card>
+        ) : filteredItems.length === 0 ? (
+          /* Empty state when active filter has all items triaged */
+          <Card className="shadow-xs p-2">
+            <Empty className="my-8 border-0 bg-transparent">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <CheckCircle2 className="size-6 text-emerald-600" />
+                </EmptyMedia>
+                <EmptyTitle>All items in this category resolved</EmptyTitle>
+                <EmptyDescription>
+                  No pending reports remain in the &quot;{activeTab}&quot; queue. Switch filters or
+                  reset the queue to inspect other entries.
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button variant="outline" size="sm" onClick={() => setActiveTab("all")}>
+                  View All Categories
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleLoadDemo}>
+                  Reset Demo Queue
+                </Button>
+              </EmptyContent>
+            </Empty>
           </Card>
         ) : (
           filteredItems.map((item) => (
@@ -223,61 +179,80 @@ export default function ModerationPage() {
                     </Badge>
                   </div>
 
-                  <span className="text-xs text-muted-foreground">
-                    Filed {item.time} by {item.reporter}
-                  </span>
+                  <span className="text-xs text-muted-foreground">{item.time}</span>
                 </div>
 
-                <CardTitle className="text-base mt-1">{item.title}</CardTitle>
-                <CardDescription className="text-sm text-foreground/80">
-                  {item.detail}
-                </CardDescription>
+                <CardTitle className="mt-2 text-base font-semibold">{item.title}</CardTitle>
+                <CardDescription className="text-xs">{item.detail}</CardDescription>
               </CardHeader>
 
-              <CardFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/20 px-6 py-3">
+              <CardFooter className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>Filed by:</span>
+                  <strong className="text-foreground">{item.reporter}</strong>
+                  <span>·</span>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-foreground underline underline-offset-2 hover:opacity-80"
+                  >
+                    <span>View photo evidence</span>
+                    <ExternalLink className="size-2.5" />
+                  </button>
+                </div>
+
+                {/* Triage Action Buttons using shadcn Buttons */}
                 <div className="flex items-center gap-2">
                   <Button
-                    size="xs"
-                    variant="default"
-                    className="gap-1"
-                    onClick={() => handleAction(item.id, "approved")}
-                  >
-                    <Check className="size-3" />
-                    <span>Approve &amp; Publish</span>
-                  </Button>
-                  <Button
-                    size="xs"
-                    variant="secondary"
-                    className="gap-1"
-                    onClick={() => handleAction(item.id, "merged")}
-                  >
-                    <Copy className="size-3" />
-                    <span>Merge as Duplicate</span>
-                  </Button>
-                  <Button
-                    size="xs"
                     variant="outline"
-                    className="gap-1"
+                    size="xs"
+                    className="gap-1 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => handleAction(item.id, "rejected")}
                   >
                     <X className="size-3" />
-                    <span>Reject</span>
+                    <span>Reject Out-of-Scope</span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    className="gap-1 text-xs"
+                    onClick={() => handleAction(item.id, "merged")}
+                  >
+                    <Copy className="size-3" />
+                    <span>Merge Duplicate</span>
+                  </Button>
+
+                  <Button
+                    size="xs"
+                    className="gap-1 text-xs"
+                    onClick={() => handleAction(item.id, "approved")}
+                  >
+                    <Check className="size-3" />
+                    <span>Approve &amp; Route</span>
                   </Button>
                 </div>
-
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  className="gap-1 text-muted-foreground hover:text-foreground"
-                >
-                  <span>Inspect Evidence</span>
-                  <ExternalLink className="size-3" />
-                </Button>
               </CardFooter>
             </Card>
           ))
         )}
       </div>
+
+      {/* ── Guidance Card ─── */}
+      <Card className="border-dashed bg-muted/20 shadow-none">
+        <CardHeader className="py-4">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="size-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div className="text-xs">
+              <span className="font-semibold text-foreground">Civic Moderation Policy:</span>
+              <p className="mt-0.5 text-muted-foreground leading-relaxed">
+                JanSahayak does not censor citizen observations. Flagged items only resolve
+                duplicate pings to avoid overburdening municipal engineering divisions with
+                identical coordinates.
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
     </div>
   );
 }
