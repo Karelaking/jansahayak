@@ -43,8 +43,15 @@ export async function executeStage3AIAnalysis(
 
   try {
     const apiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-001";
+    const configuredModel = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
     const baseUrl = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
+
+    // Candidate models in preference order (handles model deprecations/unavailability)
+    const candidateModels = [
+      configuredModel,
+      "google/gemini-2.5-flash",
+      "google/gemini-2.5-flash-lite",
+    ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
     let analysis: AIAnalysisResult;
     let rawApiResponse: Record<string, unknown> = {};
@@ -103,39 +110,85 @@ You must return a valid JSON object conforming exactly to this structure:
 }
 `;
 
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-          "X-Title": "JanSahayak SafeStreets",
-        },
-        body: JSON.stringify({
-          model,
-          response_format: { type: "json_object" },
-          messages: [
-            {
-              role: "user",
-              content: [{ type: "text", text: promptText }, ...imageParts],
-            },
-          ],
-          max_tokens: 1000,
-          temperature: 0.1,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = (await response.json()) as {
+      let successfulResponse: {
         choices?: Array<{ message?: { content?: string } }>;
         usage?: Record<string, unknown>;
-      };
-      rawApiResponse = data as Record<string, unknown>;
-      const content = data.choices?.[0]?.message?.content || "{}";
-      const parsed = JSON.parse(content);
+      } | null = null;
+      let modelUsed = candidateModels[0] || "google/gemini-2.5-flash";
+      let lastErrorMessage = "";
+
+      for (const currentModel of candidateModels) {
+        try {
+          const response = await fetch(`${baseUrl}/chat/completions`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+              "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+              "X-Title": "JanSahayak SafeStreets",
+            },
+            body: JSON.stringify({
+              model: currentModel,
+              response_format: { type: "json_object" },
+              messages: [
+                {
+                  role: "user",
+                  content: [{ type: "text", text: promptText }, ...imageParts],
+                },
+              ],
+              max_tokens: 1500,
+              temperature: 0.1,
+            }),
+          });
+
+          if (!response.ok) {
+            let errorDetails = "";
+            try {
+              const errBody = await response.json();
+              errorDetails = errBody?.error?.message ? `: ${errBody.error.message}` : "";
+            } catch {
+              errorDetails = `: ${await response.text().catch(() => "")}`;
+            }
+            lastErrorMessage = `OpenRouter API error ${response.status} (${response.statusText})${errorDetails}`;
+
+            // If 404 (model not found/deprecated) or 400 (model unsupported), retry with next fallback candidate
+            if (response.status === 404 || response.status === 400) {
+              console.warn(
+                `[AI-Analysis] Model ${currentModel} returned ${response.status}. Attempting fallback...`,
+              );
+              continue;
+            }
+            throw new Error(lastErrorMessage);
+          }
+
+          const data = (await response.json()) as {
+            choices?: Array<{ message?: { content?: string } }>;
+            usage?: Record<string, unknown>;
+          };
+          successfulResponse = data;
+          modelUsed = currentModel;
+          break;
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          lastErrorMessage = errMsg;
+          // If network or endpoint error, continue trying next candidate
+          continue;
+        }
+      }
+
+      if (!successfulResponse) {
+        throw new Error(
+          lastErrorMessage || "All OpenRouter candidate models failed to return a response.",
+        );
+      }
+
+      rawApiResponse = successfulResponse as Record<string, unknown>;
+      let cleanContent = (successfulResponse.choices?.[0]?.message?.content || "{}").trim();
+      const codeBlockMatch = cleanContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (codeBlockMatch && codeBlockMatch[1]) {
+        cleanContent = codeBlockMatch[1].trim();
+      }
+      const parsed = JSON.parse(cleanContent);
 
       analysis = {
         predictedCategory: parsed.predictedCategory || report.category,
@@ -152,7 +205,7 @@ You must return a valid JSON object conforming exactly to this structure:
         embeddingVector: generateFeatureEmbedding(`${report.category} ${parsed.defectSummary}`),
         contradictionsDetected: Boolean(parsed.contradictionsDetected),
         recommendedNextAction: parsed.recommendedNextAction || "create_new",
-        modelUsed: model,
+        modelUsed,
       };
     } else if (process.env.NODE_ENV === "test") {
       // Deterministic test-only mock provider (PRD §21 line 7: "Provide deterministic mock providers only for automated tests")
