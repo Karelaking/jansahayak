@@ -9,6 +9,57 @@ export interface PublicationParams {
 }
 
 /**
+ * PRD §13 Publication Eligibility Predicate Evaluator
+ * Verifies that all required criteria for public map display are met.
+ */
+export function evaluatePublicationPredicate(incident: {
+  moderationStatus?: string | null;
+  status?: string | null;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  spatialUncertaintyMeters?: string | number | null;
+}): { eligible: boolean; failedPredicates: string[] } {
+  const failedPredicates: string[] = [];
+
+  // Predicate 1: Moderation approval check
+  if (incident.moderationStatus !== "approved" && incident.status !== "approved") {
+    failedPredicates.push("Incident has not received official moderation approval.");
+  }
+
+  // Predicate 2: Spatial coordinates validity
+  const lat = Number(incident.latitude);
+  const lng = Number(incident.longitude);
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    lat < -90 ||
+    lat > 90 ||
+    lng < -180 ||
+    lng > 180
+  ) {
+    failedPredicates.push("Canonical spatial coordinates are invalid or out of WGS84 range.");
+  }
+
+  // Predicate 3: Spatial uncertainty threshold (must be <= 25m for public pin)
+  const uncertainty = Number(incident.spatialUncertaintyMeters) || 999;
+  if (uncertainty > 25) {
+    failedPredicates.push(
+      `Spatial uncertainty (${uncertainty}m) exceeds 25m threshold for public display.`,
+    );
+  }
+
+  // Predicate 4: Terminal rejection check
+  if (incident.status === "rejected") {
+    failedPredicates.push("Rejected incidents cannot be published to the public map.");
+  }
+
+  return {
+    eligible: failedPredicates.length === 0,
+    failedPredicates,
+  };
+}
+
+/**
  * Stage 8: Transactional Map Publication Worker
  * Evaluates the strict PRD publication eligibility predicate and atomically commits public pin visibility.
  */
@@ -50,41 +101,9 @@ export async function executeStage8Publication(
     }
 
     // 2. Strict Publication Eligibility Predicate (PRD Section 13)
-    const failedPredicates: string[] = [];
+    const { eligible, failedPredicates } = evaluatePublicationPredicate(incident);
 
-    // Predicate 1: Moderation approval check
-    if (incident.moderationStatus !== "approved" && incident.status !== "approved") {
-      failedPredicates.push("Incident has not received official moderation approval.");
-    }
-
-    // Predicate 2: Spatial coordinates validity
-    const lat = Number(incident.latitude);
-    const lng = Number(incident.longitude);
-    if (
-      !Number.isFinite(lat) ||
-      !Number.isFinite(lng) ||
-      lat < -90 ||
-      lat > 90 ||
-      lng < -180 ||
-      lng > 180
-    ) {
-      failedPredicates.push("Canonical spatial coordinates are invalid or out of WGS84 range.");
-    }
-
-    // Predicate 3: Spatial uncertainty threshold (must be <= 25m for public pin)
-    const uncertainty = Number(incident.spatialUncertaintyMeters) || 999;
-    if (uncertainty > 25) {
-      failedPredicates.push(
-        `Spatial uncertainty (${uncertainty}m) exceeds 25m threshold for public display.`,
-      );
-    }
-
-    // Predicate 4: Terminal rejection check
-    if (incident.status === "rejected") {
-      failedPredicates.push("Rejected incidents cannot be published to the public map.");
-    }
-
-    if (failedPredicates.length > 0) {
+    if (!eligible) {
       return {
         stage: 8,
         stageName,
@@ -93,6 +112,10 @@ export async function executeStage8Publication(
         isRetryable: false,
       };
     }
+
+    const lat = Number(incident.latitude);
+    const lng = Number(incident.longitude);
+    const uncertainty = Number(incident.spatialUncertaintyMeters) || 10;
 
     // 3. Prepare Privacy-Safe Public Snapshot (No citizen personal details, EXIF, or private notes)
     const publicSnapshot = {

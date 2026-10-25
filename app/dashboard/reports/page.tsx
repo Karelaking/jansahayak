@@ -101,11 +101,32 @@ function getSeverityBadge(severity: string) {
 }
 
 export default function ReportsPage() {
-  // Empty state by default; sample records loaded on request from centralized layer
+  // Real records fetched from API, or sample records loaded on request
   const [reports, setReports] = React.useState<HazardReport[]>([]);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [activeTab, setActiveTab] = React.useState("all");
   const [selectedReport, setSelectedReport] = React.useState<HazardReport | null>(null);
+
+  // Fetch real database reports on mount
+  React.useEffect(() => {
+    let active = true;
+    async function loadReports() {
+      try {
+        const res = await fetch("/api/map/incidents");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (active && data.success && Array.isArray(data.incidents) && data.incidents.length > 0) {
+          setReports(data.incidents);
+        }
+      } catch (e) {
+        console.warn("Could not load database reports for registry:", e);
+      }
+    }
+    loadReports();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Filtered reports
   const filteredReports = React.useMemo(() => {

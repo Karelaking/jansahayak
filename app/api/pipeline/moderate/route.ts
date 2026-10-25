@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserSession } from "@/lib/auth/session";
 import { reviewAndPublishIncident } from "@/lib/pipeline/orchestrator";
-import { ModerationDecision } from "@/lib/pipeline/stage7-moderation";
+import { ModerationDecision } from "@/lib/pipeline/moderation";
 
 export async function POST(req: NextRequest) {
   try {

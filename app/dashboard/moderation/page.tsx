@@ -43,9 +43,59 @@ function getIcon(name: ModerationQueueItem["iconName"]) {
 }
 
 export default function ModerationPage() {
-  // Empty state by default; centralized sample queue loaded on demand
+  // Empty state by default; centralized sample queue loaded on demand or fetched from API
   const [items, setItems] = React.useState<ModerationQueueItem[]>([]);
   const [activeTab, setActiveTab] = React.useState("all");
+  const [isSubmitting, setIsSubmitting] = React.useState<string | null>(null);
+
+  // Fetch live review queue on mount
+  React.useEffect(() => {
+    let active = true;
+    async function loadReviewQueue() {
+      try {
+        const res = await fetch("/api/admin/review-queue");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (active && data.success && Array.isArray(data.items) && data.items.length > 0) {
+          // If items are raw database incidents, map them to ModerationQueueItem format
+          const mapped: ModerationQueueItem[] = data.items.map((rawRow: unknown) => {
+            const row = rawRow as Record<string, unknown>;
+            if (row.flagLabel) return row as unknown as ModerationQueueItem; // already mapped/seed
+            const meta = (row.metadata as Record<string, unknown>) || {};
+            return {
+              id: String(row.id || ""),
+              title: String(row.title || "Hazard Incident"),
+              type:
+                row.category === "lighting" || row.category === "crossing"
+                  ? "location"
+                  : "duplicate",
+              flagLabel: row.status === "under_review" ? "Awaiting Review" : "Unverified Incident",
+              detail: String(
+                row.summary || "Citizen submitted hazard awaiting municipal verification.",
+              ),
+              reporter: String(meta.reporter || "Verified Citizen"),
+              time: row.createdAt
+                ? new Date(String(row.createdAt)).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "Recently",
+              badgeVariant: "secondary",
+              iconName: "alert",
+              status: "pending",
+            };
+          });
+          setItems(mapped);
+        }
+      } catch (err) {
+        console.warn("Could not fetch live review queue, offline mode active:", err);
+      }
+    }
+    loadReviewQueue();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const pendingItems = items.filter((i) => i.status === "pending");
 
@@ -57,8 +107,28 @@ export default function ModerationPage() {
     });
   }, [items, activeTab]);
 
-  const handleAction = (id: string, action: "approved" | "merged" | "rejected") => {
+  const handleAction = async (id: string, action: "approved" | "merged" | "rejected") => {
+    setIsSubmitting(id);
+    // Optimistic update
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, status: action } : item)));
+
+    try {
+      const decision =
+        action === "approved" ? "approve" : action === "rejected" ? "reject" : "approve";
+      await fetch("/api/pipeline/moderate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          incidentId: id,
+          decision,
+          reason: `Audited and marked ${action} by civic staff`,
+        }),
+      });
+    } catch (e) {
+      console.warn("Failed to submit moderation decision to backend:", e);
+    } finally {
+      setIsSubmitting(null);
+    }
   };
 
   const handleLoadDemo = () => {
@@ -214,6 +284,7 @@ export default function ModerationPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    disabled={isSubmitting === item.id}
                     className="h-10 sm:h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive justify-center"
                     onClick={() => handleAction(item.id, "rejected")}
                   >
@@ -224,6 +295,7 @@ export default function ModerationPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    disabled={isSubmitting === item.id}
                     className="h-10 sm:h-7 text-xs justify-center"
                     onClick={() => handleAction(item.id, "merged")}
                   >
@@ -233,11 +305,12 @@ export default function ModerationPage() {
 
                   <Button
                     size="sm"
+                    disabled={isSubmitting === item.id}
                     className="h-10 sm:h-7 text-xs justify-center bg-emerald-800 hover:bg-emerald-900 text-white"
                     onClick={() => handleAction(item.id, "approved")}
                   >
                     <Check className="size-3.5 mr-1" />
-                    <span>Approve &amp; Route</span>
+                    <span>{isSubmitting === item.id ? "Publishing..." : "Approve & Route"}</span>
                   </Button>
                 </div>
               </CardFooter>

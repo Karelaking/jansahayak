@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "vp lint",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "prepare": "vp config"
   },
   "dependencies": {
@@ -52,7 +53,8 @@
     "drizzle-kit": "^0.31.11",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vite-plus": "1.1.0"
+    "vite-plus": "1.1.0",
+    "vitest": "^5.0.5"
   },
   "packageManager": "pnpm@12.15.0"
 }

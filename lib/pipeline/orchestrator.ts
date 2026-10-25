@@ -1,12 +1,12 @@
 import { ReportSubmissionPayload, StageExecutionResult } from "./types";
-import { executeStage1Intake } from "./stage1-intake";
-import { executeStage2EvidenceValidation } from "./stage2-evidence-validation";
-import { executeStage3AIAnalysis } from "./stage3-ai-analysis";
-import { executeStage4LocationVerification } from "./stage4-location-verification";
-import { executeStage5DuplicateMatching } from "./stage5-duplicate-matching";
-import { executeStage6CanonicalIncident } from "./stage6-canonical-incident";
-import { executeStage7Moderation, ModerationDecision } from "./stage7-moderation";
-import { executeStage8Publication } from "./stage8-publication";
+import { executeStage1Intake } from "./intake";
+import { executeStage2EvidenceValidation } from "./evidence-validation";
+import { executeStage3AIAnalysis } from "./ai-analysis";
+import { executeStage4LocationVerification } from "./location-verification";
+import { executeStage5DuplicateMatching } from "./duplicate-matching";
+import { executeStage6CanonicalIncident } from "./canonical-incident";
+import { executeStage7Moderation, ModerationDecision } from "./moderation";
+import { executeStage8Publication } from "./publication";
 import { getPipelineLogsCollection } from "@/lib/db/mongodb";
 
 export interface PipelineExecutionSummary {

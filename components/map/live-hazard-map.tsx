@@ -95,12 +95,32 @@ export function LiveHazardMap({
   const mapRef = useRef<MapRef | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<HazardCategoryKey | "all">("all");
+  const [liveHazards, setLiveHazards] = useState<HazardReport[]>(hazards);
 
   useEffect(() => {
     setIsMounted(true);
+    let active = true;
+
+    async function fetchLiveIncidents() {
+      try {
+        const res = await fetch("/api/map/incidents");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (active && data.success && Array.isArray(data.incidents) && data.incidents.length > 0) {
+          setLiveHazards(data.incidents);
+        }
+      } catch (err) {
+        console.warn("Public map fallback to baseline:", err);
+      }
+    }
+
+    fetchLiveIncidents();
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const filteredHazards = hazards.filter(
+  const filteredHazards = liveHazards.filter(
     (h) => selectedCategory === "all" || h.category === selectedCategory,
   );
 

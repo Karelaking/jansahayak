@@ -861,7 +861,7 @@ export default function NewReportPage() {
                       <Trash2 className="h-3 w-3" />
                     </button>
 
-                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-1.5 text-white flex items-center justify-between">
+                    <div className="absolute bottom-0 inset-x-0 bg-linear-to-t from-black/80 via-black/40 to-transparent p-1.5 text-white flex items-center justify-between">
                       <span className="text-[10px] font-medium truncate">Photo {idx + 1}</span>
                       <span className="text-[9px] opacity-80">
                         {(photo.byteSize / 1024).toFixed(0)}KB
