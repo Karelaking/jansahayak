@@ -57,6 +57,15 @@ interface ReportDetail {
   photoCount: number;
   photos: EvidencePhoto[];
   associatedIncidentId?: string;
+  canonicalIncident?: {
+    id: string;
+    incidentNumber: string;
+    isPublished: boolean;
+    status: string;
+    moderationStatus: string;
+    reportCount: number;
+    publishedAt: string | null;
+  } | null;
   stages: StageLog[];
 }
 
@@ -346,6 +355,45 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
                 </div>
               </div>
             </div>
+
+            {/* Canonical Incident Docket Association (PRD §3, §16) */}
+            {report.canonicalIncident && (
+              <div className="border border-[#cbd5cb] bg-white rounded-xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-900 border border-emerald-200">
+                      {report.canonicalIncident.incidentNumber}
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className={
+                        report.canonicalIncident.isPublished
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                          : "bg-amber-50 text-amber-900 border-amber-300"
+                      }
+                    >
+                      {report.canonicalIncident.isPublished
+                        ? "✓ Published on Safety Map"
+                        : "Awaiting Publication"}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-[#5c6f66] mt-1">
+                    Canonical public incident associated with {report.canonicalIncident.reportCount}{" "}
+                    citizen report{report.canonicalIncident.reportCount > 1 ? "s" : ""}.
+                  </p>
+                </div>
+
+                {report.canonicalIncident.isPublished && (
+                  <Link
+                    href={`/map?highlight=${encodeURIComponent(report.canonicalIncident.id)}`}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0e2b24] bg-[#eef1e9] hover:bg-[#dfe6db] px-3 py-1.5 rounded-lg border border-[#cbd5cb] transition-colors shrink-0"
+                  >
+                    <MapPin className="size-3.5 text-emerald-800" />
+                    <span>View on Public Map →</span>
+                  </Link>
+                )}
+              </div>
+            )}
 
             {/* ── PRD §3 8-Stage Automated Processing Stepper ── */}
             <Card className="border-[#cbd5cb] bg-[#faf9f5] shadow-xs">

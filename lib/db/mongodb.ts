@@ -96,6 +96,7 @@ export async function uploadEvidencePhotoToGridFS(params: {
   reportId: string;
   photoIndex: number;
   contentType: string;
+  isCameraCapture?: boolean;
   gps: {
     latitude: number;
     longitude: number;
@@ -112,6 +113,7 @@ export async function uploadEvidencePhotoToGridFS(params: {
         contentType: params.contentType,
         reportId: params.reportId,
         photoIndex: params.photoIndex,
+        isCameraCapture: params.isCameraCapture,
         sha256,
         gps: params.gps,
         uploadedAt: new Date().toISOString(),
@@ -156,6 +158,7 @@ export interface PhotoCaptureRecord {
   contentType: string;
   byteSize: number;
   captureTimestamp: string;
+  isCameraCapture?: boolean;
   gpsSamples: Array<{
     latitude: number;
     longitude: number;

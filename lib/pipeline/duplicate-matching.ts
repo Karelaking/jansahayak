@@ -242,7 +242,8 @@ export async function executeStage5DuplicateMatching(
       stageName,
       success: false,
       error: `Stage 5 duplicate matching error: ${msg}`,
-      isRetryable: false,
+      isRetryable:
+        msg.includes("ECONNREFUSED") || msg.includes("connect") || msg.includes("timeout"),
     };
   }
 }

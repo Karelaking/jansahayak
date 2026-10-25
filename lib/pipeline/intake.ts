@@ -62,10 +62,19 @@ export async function executeStage1Intake(
       };
     }
 
-    // 4. Normalize Photo Telemetry & Flags
+    // 4. In-App Camera Verification & Telemetry (PRD §2, §6: Gallery uploads rejected)
     for (let i = 0; i < payload.photos.length; i++) {
       const photo = payload.photos[i];
       if (!photo) continue;
+      if (photo.isCameraCapture === false) {
+        return {
+          stage: 1,
+          stageName,
+          success: false,
+          error: `PRD §6 requirement: Photo ${i + 1} was not captured via in-app camera viewfinder. Gallery/file-picker uploads are prohibited.`,
+          isRetryable: false,
+        };
+      }
       if (photo.isCameraCapture === undefined) {
         photo.isCameraCapture = true;
       }
@@ -125,6 +134,7 @@ export async function executeStage1Intake(
         reportId,
         photoIndex: i + 1,
         contentType: photo.contentType || "image/jpeg",
+        isCameraCapture: photo.isCameraCapture,
         gps: {
           latitude: primaryGps.latitude,
           longitude: primaryGps.longitude,
@@ -140,6 +150,7 @@ export async function executeStage1Intake(
         contentType: photo.contentType,
         byteSize: gridFsUpload.length,
         captureTimestamp: photo.capturedAt || new Date().toISOString(),
+        isCameraCapture: photo.isCameraCapture,
         gpsSamples: photo.gpsSamples,
       });
     }

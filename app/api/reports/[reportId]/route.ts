@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getReportsCollection, getPipelineLogsCollection } from "@/lib/db/mongodb";
+import { db, incidents } from "@/lib/db";
+import { eq } from "drizzle-orm";
 
 /**
  * PRD §16 Public-Safe Report Progress Endpoint
@@ -50,6 +52,40 @@ export async function GET(
       downloadUrl: p.fileId ? `/api/pipeline/photos/${p.fileId}` : undefined,
     }));
 
+    let canonicalIncident: {
+      id: string;
+      incidentNumber: string;
+      isPublished: boolean;
+      status: string;
+      moderationStatus: string;
+      reportCount: number;
+      publishedAt: Date | null;
+    } | null = null;
+
+    if (report.associatedIncidentId) {
+      try {
+        const [inc] = await db
+          .select({
+            id: incidents.id,
+            incidentNumber: incidents.incidentNumber,
+            isPublished: incidents.isPublished,
+            status: incidents.status,
+            moderationStatus: incidents.moderationStatus,
+            reportCount: incidents.reportCount,
+            publishedAt: incidents.publishedAt,
+          })
+          .from(incidents)
+          .where(eq(incidents.id, report.associatedIncidentId))
+          .limit(1);
+
+        if (inc) {
+          canonicalIncident = inc;
+        }
+      } catch {
+        // Non-blocking fallback
+      }
+    }
+
     return NextResponse.json({
       success: true,
       reportId: report.reportId,
@@ -61,6 +97,7 @@ export async function GET(
       photoCount: formattedPhotos.length,
       photos: formattedPhotos,
       associatedIncidentId: report.associatedIncidentId,
+      canonicalIncident,
       stages: stageLogs,
     });
   } catch (error) {

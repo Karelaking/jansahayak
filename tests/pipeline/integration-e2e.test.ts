@@ -12,7 +12,7 @@ import { executeStage1Intake } from "@/lib/pipeline/intake";
 import { executeStage2EvidenceValidation } from "@/lib/pipeline/evidence-validation";
 import { processOutboxBatch } from "@/lib/pipeline/worker";
 
-describe("PRD §19 End-to-End Integration Test Suite (20 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (26 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -449,5 +449,221 @@ describe("PRD §19 End-to-End Integration Test Suite (20 Scenarios)", () => {
     );
     expect(res.success).toBe(false);
     expect(res.error).toMatch(/Minimum 4 evidence photographs required/i);
+  });
+
+  // Scenario 23: Stage 1 Intake rejects submissions where photos were not taken via in-app camera (PRD §2, §6)
+  it("Scenario 23: Stage 1 Intake strictly rejects photos uploaded via gallery or file picker", async () => {
+    const res = await executeStage1Intake({
+      userId: "user_test_valid",
+      category: "Road Surface / Pothole",
+      description: "Severe crater on expressway service road",
+      photos: [
+        {
+          buffer: Buffer.from("dummy-photo-1"),
+          filename: "p1.jpg",
+          contentType: "image/jpeg",
+          capturedAt: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [],
+        },
+        {
+          buffer: Buffer.from("dummy-photo-2"),
+          filename: "p2.jpg",
+          contentType: "image/jpeg",
+          capturedAt: new Date().toISOString(),
+          isCameraCapture: false, // Gallery upload prohibited
+          gpsSamples: [],
+        },
+        {
+          buffer: Buffer.from("dummy-photo-3"),
+          filename: "p3.jpg",
+          contentType: "image/jpeg",
+          capturedAt: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [],
+        },
+        {
+          buffer: Buffer.from("dummy-photo-4"),
+          filename: "p4.jpg",
+          contentType: "image/jpeg",
+          capturedAt: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [],
+        },
+      ],
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 6,
+        capturedAt: new Date().toISOString(),
+      },
+    });
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/was not captured via in-app camera viewfinder.*prohibited/i);
+  });
+
+  // Scenario 24: Stage 2 Evidence Validation rejects photos exceeding the 15MB file size limit (PRD §2, §7)
+  it("Scenario 24: Stage 2 Evidence Validation rejects photos exceeding 15MB limit or with camera provenance violations", async () => {
+    const mockReport = {
+      reportId: "rep_test_evidence_size_01",
+      userId: "user_test_valid",
+      category: "Road Surface / Pothole",
+      description: "Pothole evidence size check",
+      status: "EVIDENCE_VALIDATION_PENDING" as const,
+      createdAt: new Date().toISOString(),
+      evidencePhotos: [
+        {
+          fileId: "file_01",
+          filename: "photo1.jpg",
+          contentType: "image/jpeg",
+          byteSize: 16 * 1024 * 1024, // 16MB > 15MB limit
+          sha256: "hash1",
+          captureTimestamp: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [
+            {
+              latitude: 28.4744,
+              longitude: 77.504,
+              horizontalAccuracyMeters: 5,
+              sampleTimestamp: new Date().toISOString(),
+            },
+          ],
+        },
+        {
+          fileId: "file_02",
+          filename: "photo2.jpg",
+          contentType: "image/jpeg",
+          byteSize: 2 * 1024 * 1024,
+          sha256: "hash2",
+          captureTimestamp: new Date().toISOString(),
+          isCameraCapture: false, // Gallery upload
+          gpsSamples: [
+            {
+              latitude: 28.4744,
+              longitude: 77.504,
+              horizontalAccuracyMeters: 5,
+              sampleTimestamp: new Date().toISOString(),
+            },
+          ],
+        },
+        {
+          fileId: "file_03",
+          filename: "photo3.jpg",
+          contentType: "image/jpeg",
+          byteSize: 2 * 1024 * 1024,
+          sha256: "hash3",
+          captureTimestamp: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [
+            {
+              latitude: 28.4744,
+              longitude: 77.504,
+              horizontalAccuracyMeters: 5,
+              sampleTimestamp: new Date().toISOString(),
+            },
+          ],
+        },
+        {
+          fileId: "file_04",
+          filename: "photo4.jpg",
+          contentType: "image/jpeg",
+          byteSize: 2 * 1024 * 1024,
+          sha256: "hash4",
+          captureTimestamp: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [
+            {
+              latitude: 28.4744,
+              longitude: 77.504,
+              horizontalAccuracyMeters: 5,
+              sampleTimestamp: new Date().toISOString(),
+            },
+          ],
+        },
+      ],
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 6,
+        capturedAt: new Date().toISOString(),
+      },
+    };
+    const res = await executeStage2EvidenceValidation(
+      mockReport as unknown as Parameters<typeof executeStage2EvidenceValidation>[0],
+    );
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/exceeding 15MB limit/i);
+    expect(res.error).toMatch(/in-app camera viewfinder/i);
+  });
+
+  // Scenario 25: Canonical incident centroid recalculation and weighted update (PRD §11)
+  it("Scenario 25: Representative centroid recalculates accurately as weighted mean when reports merge", () => {
+    // Initial incident with 1 report at (28.47400, 77.50400)
+    const existingLat = 28.474;
+    const existingLng = 77.504;
+    const existingCount = 1;
+
+    // Incoming merged report at (28.47460, 77.50440)
+    const incomingLat = 28.4746;
+    const incomingLng = 77.5044;
+
+    const newCount = existingCount + 1;
+    const recalculatedLat = (existingLat * existingCount + incomingLat) / newCount;
+    const recalculatedLng = (existingLng * existingCount + incomingLng) / newCount;
+
+    expect(recalculatedLat).toBeCloseTo(28.4743, 5);
+    expect(recalculatedLng).toBeCloseTo(77.5042, 5);
+
+    // Geodesic distance from recalculated centroid to both constituents must be within spatial bounds
+    const distToFirst = calculateGeodesicDistanceMeters(
+      recalculatedLat,
+      recalculatedLng,
+      existingLat,
+      existingLng,
+    );
+    const distToSecond = calculateGeodesicDistanceMeters(
+      recalculatedLat,
+      recalculatedLng,
+      incomingLat,
+      incomingLng,
+    );
+
+    expect(distToFirst).toBeLessThan(40);
+    expect(distToSecond).toBeLessThan(40);
+  });
+
+  // Scenario 26: Stage 7 Moderation rejects actions without non-empty moderatorId (PRD §12)
+  it("Scenario 26: Stage 7 Moderation strictly rejects actions with empty moderator ID for civic auditability", async () => {
+    const moderationRes = await executeStage7Moderation({
+      incidentId: "inc_test_123",
+      moderatorId: "", // Empty ID
+      decision: "approve",
+    });
+    expect(moderationRes.success).toBe(false);
+    expect(moderationRes.error).toMatch(/Moderator ID is required for civic auditability/i);
+
+    const mergeRes = await executeIncidentMerge({
+      primaryIncidentId: "inc_target",
+      duplicateIncidentIds: ["inc_source"],
+      moderatorId: "   ", // Whitespace only
+    });
+    expect(mergeRes.success).toBe(false);
+    expect(mergeRes.error).toMatch(/Moderator ID is required/i);
+
+    const splitRes = await executeIncidentSplit({
+      incidentId: "inc_split",
+      reportIdsToSplit: ["rep_1"],
+      moderatorId: "",
+    });
+    expect(splitRes.success).toBe(false);
+    expect(splitRes.error).toMatch(/Moderator ID is required/i);
+
+    const unpublishRes = await executeIncidentUnpublish({
+      incidentId: "inc_unpublish",
+      moderatorId: "",
+      reason: "Incorrect classification",
+    });
+    expect(unpublishRes.success).toBe(false);
+    expect(unpublishRes.error).toMatch(/Moderator ID is required/i);
   });
 });

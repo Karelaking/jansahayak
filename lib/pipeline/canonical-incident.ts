@@ -43,14 +43,44 @@ export async function executeStage6CanonicalIncident(
     if (matching.action === "AUTO_MERGE" && matching.matchedIncidentId) {
       const incidentId = matching.matchedIncidentId;
 
+      const [existing] = await db
+        .select()
+        .from(incidents)
+        .where(eq(incidents.id, incidentId))
+        .limit(1);
+
+      if (!existing) {
+        throw new Error(`Incident ${incidentId} could not be retrieved for merge.`);
+      }
+
+      // PRD §11: Recalculate representative position using validated samples
+      const existingLat = Number(existing.latitude) || lat;
+      const existingLng = Number(existing.longitude) || lng;
+      const existingCount = existing.reportCount || 1;
+      const newLat = Number(((existingLat * existingCount + lat) / (existingCount + 1)).toFixed(7));
+      const newLng = Number(((existingLng * existingCount + lng) / (existingCount + 1)).toFixed(7));
+      const updatedUncertainty = Math.min(
+        Number(existing.spatialUncertaintyMeters) || 15,
+        location.spatialUncertaintyMeters,
+      ).toFixed(2);
+
       // Update incident report count and recalculate location centroid
-      await db
+      const [updated] = await db
         .update(incidents)
         .set({
           reportCount: sql`${incidents.reportCount} + 1`,
+          latitude: newLat.toString(),
+          longitude: newLng.toString(),
+          canonicalGeom: `SRID=4326;POINT(${newLng} ${newLat})`,
+          spatialUncertaintyMeters: updatedUncertainty,
           updatedAt: new Date(),
         })
-        .where(eq(incidents.id, incidentId));
+        .where(eq(incidents.id, incidentId))
+        .returning();
+
+      if (!updated) {
+        throw new Error(`Incident ${incidentId} could not be updated.`);
+      }
 
       // Record association in incident_reports junction
       await db.insert(incidentReports).values({
@@ -72,17 +102,9 @@ export async function executeStage6CanonicalIncident(
           reportId: report.reportId,
           matchScore: matching.matchScore,
           updatedReportCount: "+1",
+          updatedCoordinates: { latitude: newLat, longitude: newLng },
         },
       });
-
-      const [updated] = await db
-        .select()
-        .from(incidents)
-        .where(eq(incidents.id, incidentId))
-        .limit(1);
-      if (!updated) {
-        throw new Error(`Incident ${incidentId} could not be retrieved after update.`);
-      }
 
       // Update report status in MongoDB
       const reportsColl = await getReportsCollection();
@@ -205,7 +227,8 @@ export async function executeStage6CanonicalIncident(
       stageName,
       success: false,
       error: `Stage 6 canonical incident creation failed: ${msg}`,
-      isRetryable: false,
+      isRetryable:
+        msg.includes("ECONNREFUSED") || msg.includes("connect") || msg.includes("timeout"),
     };
   }
 }

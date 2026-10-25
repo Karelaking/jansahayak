@@ -429,6 +429,7 @@ export default function NewReportPage() {
       const idempotencyKey = idempotencyKeyRef.current;
 
       const payload = {
+        userId: "citizen_dev",
         category,
         description: description.trim(),
         idempotencyKey,

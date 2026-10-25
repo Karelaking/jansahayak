@@ -78,17 +78,37 @@ export async function executeStage2EvidenceValidation(
       seenHashes.add(p.sha256);
       sha256Hashes.push(p.sha256);
 
-      // 3. File Buffer Magic Numbers (if buffers provided)
+      // 3. File Buffer Magic Numbers & Size Limit (PRD §7)
       if (photoBuffers && photoBuffers[i]) {
         const buf = photoBuffers[i];
         if (buf) {
           if (buf.length < 100) {
             issues.push(`Photo ${i + 1} file is empty or corrupted.`);
           }
+          const MAX_PHOTO_BYTES = 15 * 1024 * 1024; // 15MB limit
+          if (buf.length > MAX_PHOTO_BYTES) {
+            issues.push(
+              `Photo ${i + 1} exceeds maximum allowable file size of 15MB (${(buf.length / (1024 * 1024)).toFixed(1)}MB).`,
+            );
+          }
           if (!isValidImageMagicNumber(buf)) {
             issues.push(`Photo ${i + 1} has an invalid or corrupted image header.`);
           }
         }
+      }
+
+      // Check byteSize metadata
+      if (p.byteSize && p.byteSize > 15 * 1024 * 1024) {
+        issues.push(
+          `Photo ${i + 1} records size exceeding 15MB limit (${(p.byteSize / (1024 * 1024)).toFixed(1)}MB).`,
+        );
+      }
+
+      // In-app camera capture verification (PRD §2, §6, §7)
+      if (p.isCameraCapture === false) {
+        issues.push(
+          `Photo ${i + 1} was not captured via in-app camera viewfinder. Gallery uploads are prohibited.`,
+        );
       }
 
       // 4. Timestamp Plausibility Check

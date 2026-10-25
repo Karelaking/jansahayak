@@ -9,6 +9,8 @@ import { executeStage7Moderation, ModerationDecision } from "./moderation";
 import { executeStage8Publication } from "./publication";
 import { processOutboxBatch } from "./worker";
 import { getPipelineLogsCollection } from "@/lib/db/mongodb";
+import { db, incidents } from "@/lib/db";
+import { eq } from "drizzle-orm";
 
 export interface PipelineExecutionSummary {
   reportId: string;
@@ -65,6 +67,37 @@ export async function runReportPipeline(
 
   const { reportId, document } = s1.data;
   await logStage(s1, reportId);
+
+  // PRD §1, §6, §19 Idempotency Guard:
+  // If report has already completed downstream stages and is linked to an incident, short-circuit
+  if (
+    document.associatedIncidentId &&
+    document.status !== "SUBMITTED" &&
+    document.status !== "DRAFT"
+  ) {
+    try {
+      const [existingIncident] = await db
+        .select()
+        .from(incidents)
+        .where(eq(incidents.id, document.associatedIncidentId))
+        .limit(1);
+
+      if (existingIncident) {
+        return {
+          reportId,
+          incidentId: existingIncident.id,
+          incidentNumber: existingIncident.incidentNumber,
+          status: existingIncident.status,
+          stagesCompleted: 6,
+          stageResults,
+          isPublished: existingIncident.isPublished,
+          durationMs: Date.now() - startTime,
+        };
+      }
+    } catch {
+      // Non-blocking fallback
+    }
+  }
 
   // Extract photo buffers for downstream validation & AI
   const photoBuffers = payload.photos.map((p) => p.buffer);

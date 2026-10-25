@@ -44,6 +44,16 @@ export async function executeStage7Moderation(
     const { incidentId, moderatorId, decision, reason, notes, correctedLocation } = params;
 
     // 1. Mandatory Input Validation (PRD §12)
+    if (!moderatorId || moderatorId.trim().length === 0) {
+      return {
+        stage: 7,
+        stageName,
+        success: false,
+        error: "Moderator ID is required for civic auditability.",
+        isRetryable: false,
+      };
+    }
+
     if (decision === "reject" && (!reason || reason.trim().length === 0)) {
       return {
         stage: 7,
@@ -204,6 +214,9 @@ export async function executeIncidentMerge(params: IncidentMergeParams): Promise
   try {
     const { primaryIncidentId, duplicateIncidentIds, moderatorId, reason } = params;
 
+    if (!moderatorId || moderatorId.trim().length === 0) {
+      return { success: false, error: "Moderator ID is required for merge." };
+    }
     if (!primaryIncidentId) {
       return { success: false, error: "Primary incident ID is required for merge." };
     }
@@ -338,6 +351,9 @@ export async function executeIncidentSplit(params: IncidentSplitParams): Promise
   try {
     const { incidentId, reportIdsToSplit, moderatorId, reason } = params;
 
+    if (!moderatorId || moderatorId.trim().length === 0) {
+      return { success: false, error: "Moderator ID is required for split." };
+    }
     if (!incidentId) {
       return { success: false, error: "Original incident ID is required for split." };
     }
@@ -492,6 +508,9 @@ export async function executeIncidentUnpublish(params: IncidentUnpublishParams):
   try {
     const { incidentId, moderatorId, reason } = params;
 
+    if (!moderatorId || moderatorId.trim().length === 0) {
+      return { success: false, error: "Moderator ID is required for unpublish." };
+    }
     if (!incidentId) {
       return { success: false, error: "Incident ID is required for unpublish." };
     }
