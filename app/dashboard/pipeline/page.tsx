@@ -52,6 +52,58 @@ export default function PipelineInspectionPage() {
   const [publicationResult, setPublicationResult] = React.useState<Record<string, unknown> | null>(
     null,
   );
+  const [outboxData, setOutboxData] = React.useState<{
+    counts: {
+      pending: number;
+      processing: number;
+      completed: number;
+      failed: number;
+      totalRecent: number;
+    };
+    events: Array<{
+      id: string;
+      eventType: string;
+      aggregateId: string;
+      status: string;
+      createdAt: string;
+    }>;
+  } | null>(null);
+  const [isProcessingOutbox, setIsProcessingOutbox] = React.useState(false);
+  const [outboxWorkerResult, setOutboxWorkerResult] = React.useState<Record<
+    string,
+    unknown
+  > | null>(null);
+
+  const fetchOutboxStatus = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/outbox");
+      const json = await res.json();
+      if (json.success) {
+        setOutboxData(json);
+      }
+    } catch {
+      // Non-blocking
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchOutboxStatus();
+  }, [fetchOutboxStatus]);
+
+  const handleTriggerOutboxWorker = async () => {
+    setIsProcessingOutbox(true);
+    setOutboxWorkerResult(null);
+    try {
+      const res = await fetch("/api/cron/process-outbox?batch=25", { method: "POST" });
+      const json = await res.json();
+      setOutboxWorkerResult(json);
+      await fetchOutboxStatus();
+    } catch (err) {
+      setOutboxWorkerResult({ error: String(err) });
+    } finally {
+      setIsProcessingOutbox(false);
+    }
+  };
 
   // Generate 4 synthetic JPEG test buffers (each with valid JPEG headers 0xFF, 0xD8, 0xFF)
   const createMockPhoto = (name: string, index: number) => {
@@ -276,6 +328,131 @@ export default function PipelineInspectionPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* PRD §18 Transactional Outbox Telemetry & Worker Controls */}
+      <Card className="border-border bg-card">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <RefreshCw
+                  className={`h-4 w-4 text-emerald-600 ${isProcessingOutbox ? "animate-spin" : ""}`}
+                />
+                Transactional Outbox Queue &amp; Worker Telemetry
+              </CardTitle>
+              <CardDescription className="text-xs">
+                PRD §4 &amp; §18 asynchronous post-commit event queue with guaranteed delivery and
+                retry backoff.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchOutboxStatus}
+                className="text-xs h-8"
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                Refresh
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleTriggerOutboxWorker}
+                disabled={isProcessingOutbox}
+                className="bg-emerald-800 hover:bg-emerald-900 text-white text-xs h-8"
+              >
+                {isProcessingOutbox ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-3.5 w-3.5 mr-1" />
+                    Process Outbox Batch
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+            <div className="p-2.5 rounded-md bg-muted/40 border border-border">
+              <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+                Pending
+              </p>
+              <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                {outboxData?.counts.pending ?? 0}
+              </p>
+            </div>
+            <div className="p-2.5 rounded-md bg-muted/40 border border-border">
+              <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+                Processing
+              </p>
+              <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                {outboxData?.counts.processing ?? 0}
+              </p>
+            </div>
+            <div className="p-2.5 rounded-md bg-muted/40 border border-border">
+              <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+                Completed
+              </p>
+              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                {outboxData?.counts.completed ?? 0}
+              </p>
+            </div>
+            <div className="p-2.5 rounded-md bg-muted/40 border border-border">
+              <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+                Dead-Letter / Failed
+              </p>
+              <p className="text-lg font-bold text-rose-600 dark:text-rose-400">
+                {outboxData?.counts.failed ?? 0}
+              </p>
+            </div>
+          </div>
+
+          {outboxWorkerResult && (
+            <div className="p-2.5 rounded bg-muted/60 text-xs font-mono">
+              <span className="font-semibold text-foreground">Worker Dispatch Result: </span>
+              <pre className="text-[11px] text-muted-foreground overflow-x-auto mt-1">
+                {JSON.stringify(outboxWorkerResult, null, 2)}
+              </pre>
+            </div>
+          )}
+
+          {outboxData?.events && outboxData.events.length > 0 && (
+            <div className="border border-border rounded-md overflow-hidden text-xs">
+              <div className="bg-muted/50 px-3 py-1.5 font-semibold text-muted-foreground border-b border-border flex justify-between">
+                <span>Recent Outbox Events</span>
+                <span>{outboxData.events.length} Recorded</span>
+              </div>
+              <div className="max-h-44 overflow-y-auto divide-y divide-border font-mono text-[11px]">
+                {outboxData.events.map((evt) => (
+                  <div key={evt.id} className="p-2 flex items-center justify-between gap-2">
+                    <div className="truncate">
+                      <span className="font-semibold text-foreground">{evt.eventType}</span>
+                      <span className="text-muted-foreground ml-2">ID: {evt.aggregateId}</span>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] shrink-0 ${
+                        evt.status === "completed"
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                          : evt.status === "failed"
+                            ? "bg-rose-50 text-rose-800 border-rose-300"
+                            : "bg-amber-50 text-amber-800 border-amber-300"
+                      }`}
+                    >
+                      {evt.status}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Simulation Controls */}
       <Card className="border-border">

@@ -189,6 +189,7 @@ export interface RawReportDocument {
     | "ADDITIONAL_EVIDENCE_REQUIRED"
     | "APPROVED"
     | "REJECTED"
+    | "SUSPENDED"
     | "PUBLICATION_PENDING"
     | "PUBLISHED"
     | "PROCESSING_FAILED";

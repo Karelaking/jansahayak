@@ -2,7 +2,13 @@ import { describe, it, expect } from "vite-plus/test";
 import { calculateGeodesicDistanceMeters } from "@/lib/pipeline/location-verification";
 import { computeCosineSimilarity } from "@/lib/pipeline/duplicate-matching";
 import { evaluatePublicationPredicate } from "@/lib/pipeline/publication";
-import { executeStage7Moderation } from "@/lib/pipeline/moderation";
+import {
+  executeStage7Moderation,
+  executeIncidentMerge,
+  executeIncidentSplit,
+  executeIncidentUnpublish,
+} from "@/lib/pipeline/moderation";
+import { executeStage1Intake } from "@/lib/pipeline/intake";
 import { processOutboxBatch } from "@/lib/pipeline/worker";
 
 describe("PRD §19 End-to-End Integration Test Suite (14 Scenarios)", () => {
@@ -193,5 +199,93 @@ describe("PRD §19 End-to-End Integration Test Suite (14 Scenarios)", () => {
     expect(publicPin).not.toHaveProperty("reporterEmail");
     expect(publicPin).not.toHaveProperty("phone");
     expect(publicPin).not.toHaveProperty("deviceImei");
+  });
+
+  // Scenario 15: Incident Merge validation & boundary checks (PRD §10, §12, §16)
+  it("Scenario 15: executeIncidentMerge rejects invalid arguments and self-merges", async () => {
+    // Empty primary
+    const res1 = await executeIncidentMerge({
+      primaryIncidentId: "",
+      duplicateIncidentIds: ["inc_dup_1"],
+      moderatorId: "mod_01",
+    });
+    expect(res1.success).toBe(false);
+    expect(res1.error).toMatch(/Primary incident ID is required/);
+
+    // Empty duplicates
+    const res2 = await executeIncidentMerge({
+      primaryIncidentId: "inc_prim_1",
+      duplicateIncidentIds: [],
+      moderatorId: "mod_01",
+    });
+    expect(res2.success).toBe(false);
+    expect(res2.error).toMatch(/At least one duplicate incident ID/);
+
+    // Self-merge
+    const res3 = await executeIncidentMerge({
+      primaryIncidentId: "inc_prim_1",
+      duplicateIncidentIds: ["inc_prim_1"],
+      moderatorId: "mod_01",
+    });
+    expect(res3.success).toBe(false);
+    expect(res3.error).toMatch(/cannot contain the primary incident ID/);
+  });
+
+  // Scenario 16: Incident Split validation & partition constraints (PRD §12, §16)
+  it("Scenario 16: executeIncidentSplit enforces non-empty partition list", async () => {
+    // Missing incidentId
+    const res1 = await executeIncidentSplit({
+      incidentId: "",
+      reportIdsToSplit: ["rep_01"],
+      moderatorId: "mod_01",
+    });
+    expect(res1.success).toBe(false);
+    expect(res1.error).toMatch(/Original incident ID is required/);
+
+    // Empty reportIdsToSplit
+    const res2 = await executeIncidentSplit({
+      incidentId: "inc_01",
+      reportIdsToSplit: [],
+      moderatorId: "mod_01",
+    });
+    expect(res2.success).toBe(false);
+    expect(res2.error).toMatch(/At least one report ID must be specified/);
+  });
+
+  // Scenario 17: Incident Unpublish requires reason (PRD §13, §14, §16)
+  it("Scenario 17: executeIncidentUnpublish enforces documented justification", async () => {
+    const res1 = await executeIncidentUnpublish({
+      incidentId: "inc_01",
+      moderatorId: "mod_01",
+      reason: "", // Empty reason
+    });
+    expect(res1.success).toBe(false);
+    expect(res1.error).toMatch(/documented reason/);
+
+    const res2 = await executeIncidentUnpublish({
+      incidentId: "",
+      moderatorId: "mod_01",
+      reason: "Invalid report",
+    });
+    expect(res2.success).toBe(false);
+    expect(res2.error).toMatch(/Incident ID is required/);
+  });
+
+  // Scenario 18: Stage 1 Intake enforces client authentication and required fields (PRD §6)
+  it("Scenario 18: Stage 1 Intake validates authentication and category requirement", async () => {
+    const res = await executeStage1Intake({
+      userId: "", // Missing user ID
+      category: "Road Surface / Pothole",
+      description: "Pothole on main lane",
+      photos: [],
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 6,
+        capturedAt: new Date().toISOString(),
+      },
+    });
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/Unauthenticated submission/);
   });
 });

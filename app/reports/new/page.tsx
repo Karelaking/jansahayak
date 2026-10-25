@@ -161,6 +161,7 @@ export default function NewReportPage() {
   const [locationNotice, setLocationNotice] = React.useState<string | null>(null);
   const [photos, setPhotos] = React.useState<PhotoItem[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const idempotencyKeyRef = React.useRef<string>("");
   const [submissionReceipt, setSubmissionReceipt] = React.useState<Record<string, unknown> | null>(
     null,
   );
@@ -344,9 +345,18 @@ export default function NewReportPage() {
     setIsSubmitting(true);
 
     try {
+      if (!idempotencyKeyRef.current) {
+        idempotencyKeyRef.current =
+          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `idem_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      }
+      const idempotencyKey = idempotencyKeyRef.current;
+
       const payload = {
         category,
         description: description.trim(),
+        idempotencyKey,
         submissionLocation: {
           latitude,
           longitude,
@@ -375,7 +385,7 @@ export default function NewReportPage() {
         })),
       };
 
-      const res = await fetch("/api/pipeline/submit", {
+      const res = await fetch("/api/reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
