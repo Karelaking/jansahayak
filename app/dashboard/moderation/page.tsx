@@ -19,6 +19,7 @@ import {
   Sparkles,
   Sliders,
   Scissors,
+  Mail,
 } from "lucide-react";
 
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -127,6 +128,7 @@ export default function ModerationPage() {
             badgeVariant: "secondary",
             iconName: "alert",
             status: "pending",
+            metadata: meta,
           };
         });
         setItems(mapped);
@@ -135,6 +137,52 @@ export default function ModerationPage() {
       console.warn("Could not fetch live review queue:", err);
     }
   }, []);
+
+  const handleDispatchMunicipal = async (id: string) => {
+    setIsSubmitting(id);
+    try {
+      const res = await fetch(`/api/admin/incidents/${encodeURIComponent(id)}/dispatch-municipal`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data.success && data.docketNumber) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  metadata: {
+                    ...item.metadata,
+                    municipalDocketNumber: data.docketNumber,
+                    municipalDispatchedAt: data.dispatchedAt,
+                    municipalRecipient: data.recipient,
+                  },
+                }
+              : item,
+          ),
+        );
+        if (inspectingItem && inspectingItem.id === id) {
+          setInspectingItem((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  metadata: {
+                    ...prev.metadata,
+                    municipalDocketNumber: data.docketNumber,
+                    municipalDispatchedAt: data.dispatchedAt,
+                    municipalRecipient: data.recipient,
+                  },
+                }
+              : null,
+          );
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to dispatch municipal dossier:", e);
+    } finally {
+      setIsSubmitting(null);
+    }
+  };
 
   React.useEffect(() => {
     loadReviewQueue();
@@ -418,6 +466,15 @@ export default function ModerationPage() {
                       {getIcon(item.iconName)}
                       <span>{item.flagLabel}</span>
                     </Badge>
+                    {item.metadata?.municipalDocketNumber ? (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 text-[11px] font-mono border-blue-600/30 text-blue-700 bg-blue-50/50"
+                      >
+                        <Mail className="size-3 text-blue-600" />
+                        <span>{String(item.metadata.municipalDocketNumber)}</span>
+                      </Badge>
+                    ) : null}
                   </div>
 
                   <span className="text-xs text-muted-foreground">{item.time}</span>
@@ -506,6 +563,14 @@ export default function ModerationPage() {
                       >
                         <Scissors className="size-3.5 mr-2 text-orange-600" />
                         <span>Split Incident</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => handleDispatchMunicipal(item.id)}
+                        disabled={isSubmitting === item.id}
+                      >
+                        <Mail className="size-3.5 mr-2 text-blue-600" />
+                        <span>Dispatch Municipal Email</span>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
@@ -672,6 +737,42 @@ export default function ModerationPage() {
                     High contrast
                   </span>
                 </div>
+              </div>
+
+              {/* Municipal Escalation Dossier Status */}
+              <div className="p-3.5 rounded-lg bg-white border border-[#d2d9d0] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
+                <div>
+                  <span className="font-semibold text-[#17382f] flex items-center gap-1.5 mb-1">
+                    <Mail className="size-3.5 text-blue-700" />
+                    <span>Municipal Grievance Dossier</span>
+                  </span>
+                  {inspectingItem.metadata?.municipalDocketNumber ? (
+                    <p className="font-mono text-xs text-blue-800">
+                      Docket: {String(inspectingItem.metadata.municipalDocketNumber)}
+                      {inspectingItem.metadata.municipalRecipient
+                        ? ` · Sent to ${String(inspectingItem.metadata.municipalRecipient)}`
+                        : ""}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-[#5c6f66]">
+                      Not yet dispatched to municipal engineering authority.
+                    </p>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs border-blue-600/40 text-blue-700 hover:bg-blue-50 gap-1.5 self-start sm:self-auto"
+                  disabled={isSubmitting === inspectingItem.id}
+                  onClick={() => handleDispatchMunicipal(inspectingItem.id)}
+                >
+                  <Mail className="size-3.5" />
+                  <span>
+                    {inspectingItem.metadata?.municipalDocketNumber
+                      ? "Re-dispatch Email"
+                      : "Dispatch Municipal Email"}
+                  </span>
+                </Button>
               </div>
 
               {/* Modal Footer Actions */}

@@ -193,7 +193,7 @@ export default function PipelineInspectionPage() {
         createDiagnosticPhoto("pothole_traffic_orientation", 3),
       ];
 
-      const res = await fetch("/api/pipeline/submit", {
+      const res = await fetch("/api/pipeline/submit?sync=true", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -1,7 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { Building2, Clock, ExternalLink, MessageSquare, CheckCircle2, Send } from "lucide-react";
+import {
+  Building2,
+  Clock,
+  ExternalLink,
+  MessageSquare,
+  CheckCircle2,
+  Send,
+  Loader2,
+} from "lucide-react";
 
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,10 +33,34 @@ import {
 import type { EscalationDocket } from "@/lib/types/hazard";
 
 export default function EscalationsPage() {
-  // Empty state by default; centralized sample records loaded on request
   const [escalations, setEscalations] = React.useState<EscalationDocket[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [activeModalId, setActiveModalId] = React.useState<string | null>(null);
   const [officialNote, setOfficialNote] = React.useState("");
+
+  React.useEffect(() => {
+    let active = true;
+    fetch("/api/admin/escalations")
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch escalations");
+        return res.json();
+      })
+      .then((data) => {
+        if (active && Array.isArray(data.escalations)) {
+          setEscalations(data.escalations);
+        }
+      })
+      .catch((err) => {
+        console.error("Error loading escalations:", err);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const activeEscalation = escalations.find((e) => e.id === activeModalId);
 
@@ -98,7 +130,14 @@ export default function EscalationsPage() {
 
       {/* ── Escalation Dockets List ─── */}
       <div className="grid grid-cols-1 gap-5">
-        {escalations.length === 0 ? (
+        {loading ? (
+          <Card className="shadow-xs p-8 flex items-center justify-center">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              <span>Loading municipal escalation dockets...</span>
+            </div>
+          </Card>
+        ) : escalations.length === 0 ? (
           /* Zatian / shadcn Empty State when no dockets exist */
           <Card className="shadow-xs p-2">
             <Empty className="my-8 border-0 bg-transparent">

@@ -8,7 +8,7 @@ import { cookies, headers } from "next/headers";
  * Integrates directly with Clerk JS while maintaining a real PostgreSQL-backed
  * session bridge for local development without mock data.
  */
-export async function getCurrentUserSession(): Promise<UserSession> {
+export async function getCurrentUserSession(req?: Request): Promise<UserSession> {
   // Check if Clerk environment variables are configured
   const clerkPubKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   const clerkSecret = process.env.CLERK_SECRET_KEY;
@@ -88,12 +88,20 @@ export async function getCurrentUserSession(): Promise<UserSession> {
 
   let headerUserId: string | undefined;
   let headerRole: string | undefined;
-  try {
-    const headerStore = await headers();
-    headerUserId = headerStore.get("x-user-id") || undefined;
-    headerRole = headerStore.get("x-user-role") || undefined;
-  } catch {
-    // Outside request scope
+
+  if (req) {
+    headerUserId = req.headers.get("x-user-id") || undefined;
+    headerRole = req.headers.get("x-user-role") || undefined;
+  }
+
+  if (!headerUserId && !headerRole) {
+    try {
+      const headerStore = await headers();
+      headerUserId = headerStore.get("x-user-id") || undefined;
+      headerRole = headerStore.get("x-user-role") || undefined;
+    } catch {
+      // Outside request scope
+    }
   }
 
   const resolvedUserId = headerUserId || cookieUserId;

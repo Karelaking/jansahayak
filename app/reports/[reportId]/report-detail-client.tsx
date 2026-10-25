@@ -201,8 +201,12 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
   const getStageStatus = (stageNum: number) => {
     if (!report) return "pending";
 
-    // Published = All 8 done
-    if (report.status === "PUBLISHED" || report.status === "APPROVED") {
+    // Published or Municipally Dispatched = All 8 done
+    if (
+      report.status === "PUBLISHED" ||
+      report.status === "APPROVED" ||
+      report.status === "MUNICIPALLY_DISPATCHED"
+    ) {
       return "completed";
     }
 
@@ -224,14 +228,28 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
     if (stageNum === 1) return "completed";
     if (
       stageNum === 2 &&
-      ["EVIDENCE_VALIDATED", "MODERATION_PENDING", "APPROVED", "PUBLISHED"].includes(report.status)
+      [
+        "EVIDENCE_VALIDATED",
+        "MODERATION_PENDING",
+        "APPROVED",
+        "PUBLISHED",
+        "MUNICIPALLY_DISPATCHED",
+      ].includes(report.status)
     ) {
       return "completed";
     }
-    if (stageNum <= 6 && ["MODERATION_PENDING", "APPROVED", "PUBLISHED"].includes(report.status)) {
+    if (
+      stageNum <= 6 &&
+      ["MODERATION_PENDING", "APPROVED", "PUBLISHED", "MUNICIPALLY_DISPATCHED"].includes(
+        report.status,
+      )
+    ) {
       return "completed";
     }
-    if (stageNum === 7 && ["APPROVED", "PUBLISHED"].includes(report.status)) {
+    if (
+      stageNum === 7 &&
+      ["APPROVED", "PUBLISHED", "MUNICIPALLY_DISPATCHED"].includes(report.status)
+    ) {
       return "completed";
     }
 

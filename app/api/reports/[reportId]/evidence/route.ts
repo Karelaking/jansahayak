@@ -6,6 +6,7 @@ import {
   PhotoCaptureRecord,
 } from "@/lib/db/mongodb";
 import { db, outboxEvents } from "@/lib/db";
+import { processReportBackground } from "@/lib/pipeline/background-processor";
 
 /**
  * PRD §16 Report Supplementary Evidence Endpoint
@@ -182,6 +183,14 @@ export async function POST(
     } catch {
       // Offline fallback: continue
     }
+
+    // Immediately trigger asynchronous background re-verification (PRD §3, §4)
+    void processReportBackground(reportId).catch((err) => {
+      console.error(
+        `[Evidence] Asynchronous background re-verification error for ${reportId}:`,
+        err,
+      );
+    });
 
     return NextResponse.json({
       success: true,

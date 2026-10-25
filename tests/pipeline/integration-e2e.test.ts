@@ -13,8 +13,12 @@ import { executeStage2EvidenceValidation } from "@/lib/pipeline/evidence-validat
 import { processOutboxBatch } from "@/lib/pipeline/worker";
 import { processReportBackground } from "@/lib/pipeline/background-processor";
 import { dispatchMunicipalReportEmail } from "@/lib/email/municipal-dispatcher";
+import { NextRequest } from "next/server";
+import { POST as dispatchMunicipalRoute } from "@/app/api/admin/incidents/[incidentId]/dispatch-municipal/route";
+import { GET as getEscalationsRoute } from "@/app/api/admin/escalations/route";
+import { POST as processPipelineRoute } from "@/app/api/pipeline/process/route";
 
-describe("PRD §19 End-to-End Integration Test Suite (29 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (32 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -745,5 +749,78 @@ describe("PRD §19 End-to-End Integration Test Suite (29 Scenarios)", () => {
     // Verifies fail-safe handling when incident record does not exist
     expect(dispatchRes.success).toBe(false);
     expect(dispatchRes.error).toContain(invalidIncidentId);
+  });
+
+  // Scenario 30: Admin Municipal Grievance Dossier Dispatch API (PRD §14, §16)
+  it("Scenario 30: POST /api/admin/incidents/:incidentId/dispatch-municipal enforces staff authorization and dispatches dossier", async () => {
+    const fakeIncidentId = "00000000-0000-0000-0000-000000000000";
+
+    // 1. Citizen role is strictly forbidden (403)
+    const citizenReq = new NextRequest(
+      `http://localhost:3000/api/admin/incidents/${fakeIncidentId}/dispatch-municipal`,
+      { method: "POST" },
+    );
+    const citizenRes = await dispatchMunicipalRoute(citizenReq, {
+      params: Promise.resolve({ incidentId: fakeIncidentId }),
+    });
+    expect(citizenRes.status).toBe(403);
+
+    // 2. Authorized moderator validates existence and status (404 for unknown incident)
+    const staffReq = new NextRequest(
+      `http://localhost:3000/api/admin/incidents/${fakeIncidentId}/dispatch-municipal`,
+      {
+        method: "POST",
+        headers: { "x-user-role": "moderator", "x-user-id": "mod_test_1" },
+      },
+    );
+    const staffRes = await dispatchMunicipalRoute(staffReq, {
+      params: Promise.resolve({ incidentId: fakeIncidentId }),
+    });
+    expect(staffRes.status).toBe(404);
+    const json = await staffRes.json();
+    expect(json.error).toBeDefined();
+  });
+
+  // Scenario 31: Authority Escalation Tracker API (PRD §14, §16)
+  it("Scenario 31: GET /api/admin/escalations returns real database-backed municipal escalation dockets", async () => {
+    const req = new NextRequest("http://localhost:3000/api/admin/escalations?limit=10", {
+      method: "GET",
+      headers: { "x-user-role": "moderator", "x-user-id": "mod_test_1" },
+    });
+    const res = await getEscalationsRoute(req);
+    expect(res.status).toBe(200);
+
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(Array.isArray(json.escalations)).toBe(true);
+    expect(typeof json.count).toBe("number");
+  });
+
+  // Scenario 32: Background Pipeline Worker Processing API (PRD §3, §16)
+  it("Scenario 32: POST /api/pipeline/process supports targeted report and outbox batch execution", async () => {
+    // 1. Single report mode
+    const singleReq = new NextRequest("http://localhost:3000/api/pipeline/process", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reportId: "rep_non_existent_9999" }),
+    });
+    const singleRes = await processPipelineRoute(singleReq);
+    expect(singleRes.status).toBe(200);
+    const singleJson = await singleRes.json();
+    expect(singleJson.mode).toBe("single_report");
+    expect(singleJson.result.status).toBe("NOT_FOUND");
+
+    // 2. Outbox batch mode
+    const batchReq = new NextRequest("http://localhost:3000/api/pipeline/process", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ batchSize: 5 }),
+    });
+    const batchRes = await processPipelineRoute(batchReq);
+    expect(batchRes.status).toBe(200);
+    const batchJson = await batchRes.json();
+    expect(batchJson.mode).toBe("outbox_batch");
+    expect(batchJson.summary).toBeDefined();
+    expect(typeof batchJson.summary.processed).toBe("number");
   });
 });

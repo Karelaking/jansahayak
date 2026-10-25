@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserSession } from "@/lib/auth/session";
 import { getReportsCollection, downloadEvidencePhotoFromGridFS } from "@/lib/db/mongodb";
 import { runReportPipeline } from "@/lib/pipeline/orchestrator";
+import { processReportBackground } from "@/lib/pipeline/background-processor";
 import { IngestedEvidencePhoto, ReportSubmissionPayload } from "@/lib/pipeline/types";
 
 /**
@@ -12,12 +13,13 @@ import { IngestedEvidencePhoto, ReportSubmissionPayload } from "@/lib/pipeline/t
  * following a transient failure, updated evidence, or moderator intervention.
  */
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ reportId: string }> },
 ) {
   try {
     const session = await getCurrentUserSession();
     const { reportId } = await params;
+    const isSync = req.nextUrl.searchParams.get("sync") === "true";
 
     const reportsColl = await getReportsCollection();
     const reportDoc = await reportsColl.findOne({ reportId });
@@ -77,16 +79,29 @@ export async function POST(
       photos,
     };
 
-    const summary = await runReportPipeline(payload);
+    if (isSync) {
+      const summary = await runReportPipeline(payload);
+      return NextResponse.json({
+        success: true,
+        reportId: summary.reportId,
+        status: summary.status,
+        stagesCompleted: summary.stagesCompleted,
+        incidentId: summary.incidentId,
+        stageResults: summary.stageResults,
+        durationMs: summary.durationMs,
+      });
+    }
+
+    // Default: Asynchronous background reprocessing (PRD §3, §4)
+    void processReportBackground(reportId).catch((err) => {
+      console.error(`[Reprocess] Asynchronous background reprocessing error for ${reportId}:`, err);
+    });
 
     return NextResponse.json({
       success: true,
-      reportId: summary.reportId,
-      status: summary.status,
-      stagesCompleted: summary.stagesCompleted,
-      incidentId: summary.incidentId,
-      stageResults: summary.stageResults,
-      durationMs: summary.durationMs,
+      reportId,
+      status: "PROCESSING",
+      message: "Report reprocessing queued in background",
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
