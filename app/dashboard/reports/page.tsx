@@ -112,11 +112,56 @@ export default function ReportsPage() {
     let active = true;
     async function loadReports() {
       try {
-        const res = await fetch("/api/map/incidents");
-        if (!res.ok) return;
-        const data = await res.json();
-        if (active && data.success && Array.isArray(data.incidents) && data.incidents.length > 0) {
-          setReports(data.incidents);
+        const [mapRes, reportsRes] = await Promise.all([
+          fetch("/api/map/incidents").catch(() => null),
+          fetch("/api/reports?limit=50").catch(() => null),
+        ]);
+
+        const mapData = mapRes && mapRes.ok ? await mapRes.json() : null;
+        const reportsData = reportsRes && reportsRes.ok ? await reportsRes.json() : null;
+
+        const combined: HazardReport[] = [];
+        const seenIds = new Set<string>();
+
+        if (mapData && Array.isArray(mapData.incidents)) {
+          for (const inc of mapData.incidents) {
+            combined.push(inc);
+            seenIds.add(inc.id);
+          }
+        }
+
+        if (reportsData && Array.isArray(reportsData.reports)) {
+          for (const r of reportsData.reports) {
+            const rid = r.reportId || r._id;
+            if (rid && !seenIds.has(rid)) {
+              combined.push({
+                id: rid,
+                title: r.description ? r.description.slice(0, 60) : `${r.category} Report`,
+                description: r.description || "Citizen road safety report",
+                category: r.category || "road-surface",
+                severity: "medium",
+                status:
+                  r.status === "APPROVED" || r.status === "PUBLISHED" ? "resolved" : "under-review",
+                latitude: r.submissionLocation?.latitude || 28.4744,
+                longitude: r.submissionLocation?.longitude || 77.504,
+                landmark: "Greater Noida",
+                time: r.createdAt
+                  ? new Date(r.createdAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "Recently",
+                reportedAt: r.createdAt
+                  ? new Date(r.createdAt).toLocaleDateString("en-IN")
+                  : "Recently",
+              });
+              seenIds.add(rid);
+            }
+          }
+        }
+
+        if (active && combined.length > 0) {
+          setReports(combined);
         }
       } catch (e) {
         console.warn("Could not load database reports for registry:", e);
@@ -518,7 +563,16 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex items-center justify-between gap-2 border-t border-border pt-3">
+              <Link href={`/reports/${selectedReport.id}`}>
+                <Button
+                  size="sm"
+                  className="gap-1.5 text-xs bg-[#0e2b24] hover:bg-[#1c4b3e] text-white"
+                >
+                  <FileText className="size-3.5" />
+                  <span>Track Full 8-Stage Dossier</span>
+                </Button>
+              </Link>
               <Button variant="outline" size="sm" onClick={() => setSelectedReport(null)}>
                 Close Dossier
               </Button>

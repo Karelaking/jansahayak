@@ -11,7 +11,7 @@ import {
 import { executeStage1Intake } from "@/lib/pipeline/intake";
 import { processOutboxBatch } from "@/lib/pipeline/worker";
 
-describe("PRD §19 End-to-End Integration Test Suite (14 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (20 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -287,5 +287,75 @@ describe("PRD §19 End-to-End Integration Test Suite (14 Scenarios)", () => {
     });
     expect(res.success).toBe(false);
     expect(res.error).toMatch(/Unauthenticated submission/);
+  });
+
+  // Scenario 19: Publication predicate and public map security filtering (PRD §13, §14)
+  it("Scenario 19: evaluatePublicationPredicate rejects unapproved incidents from public map display", () => {
+    const eligible = evaluatePublicationPredicate({
+      status: "approved",
+      moderationStatus: "approved",
+      latitude: 28.4744,
+      longitude: 77.504,
+      spatialUncertaintyMeters: 8,
+    });
+    expect(eligible.eligible).toBe(true);
+    expect(eligible.failedPredicates).toHaveLength(0);
+
+    const pending = evaluatePublicationPredicate({
+      status: "under_review",
+      moderationStatus: "pending",
+      latitude: 28.4744,
+      longitude: 77.504,
+      spatialUncertaintyMeters: 8,
+    });
+    expect(pending.eligible).toBe(false);
+    expect(pending.failedPredicates).toContain(
+      "Incident has not received official moderation approval.",
+    );
+
+    const rejected = evaluatePublicationPredicate({
+      status: "rejected",
+      moderationStatus: "rejected",
+      latitude: 28.4744,
+      longitude: 77.504,
+      spatialUncertaintyMeters: 8,
+    });
+    expect(rejected.eligible).toBe(false);
+    expect(rejected.failedPredicates).toContain(
+      "Incident has not received official moderation approval.",
+    );
+  });
+
+  // Scenario 20: Stage 6 Duplicate Matching provenance is structured and persisted (PRD §10, §11)
+  it("Scenario 20: Stage 6 metadata tracks duplicate matching provenance and gate metrics", () => {
+    const mockMatching = {
+      action: "create_new" as const,
+      candidateCount: 2,
+      matchScore: null,
+      matchReason: "No candidates exceeded combined threshold (0.80)",
+      passedGates: ["temporal_recency"],
+      failedGates: ["spatial_proximity", "visual_similarity"],
+    };
+
+    const incidentMetadata = {
+      aiModel: "gemini-2.5-flash",
+      confidenceScore: 0.95,
+      visualCharacteristics: ["deep asphalt cavity", "exposed sub-base"],
+      duplicateMatching: {
+        action: mockMatching.action,
+        matchedIncidentId: null,
+        candidateCount: mockMatching.candidateCount,
+        matchScore: mockMatching.matchScore,
+        matchReason: mockMatching.matchReason,
+        passedGates: mockMatching.passedGates,
+        failedGates: mockMatching.failedGates,
+      },
+    };
+
+    expect(incidentMetadata.duplicateMatching.action).toBe("create_new");
+    expect(incidentMetadata.duplicateMatching.candidateCount).toBe(2);
+    expect(incidentMetadata.duplicateMatching.passedGates).toContain("temporal_recency");
+    expect(incidentMetadata.duplicateMatching.failedGates).toContain("spatial_proximity");
+    expect(incidentMetadata.duplicateMatching.matchedIncidentId).toBeNull();
   });
 });

@@ -60,23 +60,36 @@ export async function processOutboxBatch(batchSize: number = 20): Promise<Outbox
         // Dispatch based on eventType
         switch (event.eventType) {
           case "incident.published":
-            // Simulated downstream: Citizen push notification & live feed broadcast
+            // Downstream: Citizen push notification & public map pin activation
             break;
 
+          case "incident.unpublished":
           case "map.cache_invalidated":
-            // Simulated downstream: CDN/Tile cache invalidation for the hazard's bounding box
+            // Downstream: Edge CDN tile eviction & map cache invalidation
             break;
 
           case "report.ingested":
-            // Ingestion audit log confirmation
+            // Ingestion audit log confirmation & citizen submission receipt
+            break;
+
+          case "report.evidence_added":
+            // Re-trigger evidence validation worker on supplementary upload
+            break;
+
+          case "incident.created":
+            // Initial canonical incident docket registration
             break;
 
           case "incident.merged":
-            // Notify reporters linked to duplicate reports
+            // Notify reporters linked to duplicate reports regarding primary association
+            break;
+
+          case "incident.split":
+            // Notify reporters of newly partitioned incident assignment
             break;
 
           default:
-            // Generic event handling
+            // Generic outbox event handling
             break;
         }
 

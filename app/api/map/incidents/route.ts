@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, incidents } from "@/lib/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { SAMPLE_HAZARDS } from "@/lib/data";
 
 /**
@@ -16,18 +16,18 @@ export async function GET(req: NextRequest) {
     let rows: (typeof incidents.$inferSelect)[] = [];
 
     try {
-      let query = db
-        .select()
-        .from(incidents)
-        .where(eq(incidents.isPublished, true))
-        .orderBy(desc(incidents.createdAt))
-        .$dynamic();
+      const conditions = [eq(incidents.isPublished, true), eq(incidents.status, "approved")];
 
       if (category && category !== "all") {
-        query = query.where(eq(incidents.category, category));
+        conditions.push(eq(incidents.category, category));
       }
 
-      rows = await query.limit(100);
+      rows = await db
+        .select()
+        .from(incidents)
+        .where(and(...conditions))
+        .orderBy(desc(incidents.createdAt))
+        .limit(100);
     } catch {
       // Fallback to baseline verified seed hazards when database is offline/initializing
       const filteredSeed =

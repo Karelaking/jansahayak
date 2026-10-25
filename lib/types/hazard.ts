@@ -57,7 +57,8 @@ export interface ModerationQueueItem {
   time: string;
   badgeVariant: "secondary" | "destructive" | "outline" | "default";
   iconName: "copy" | "map-off" | "alert" | "question";
-  status: "pending" | "approved" | "merged" | "rejected";
+  status: "pending" | "approved" | "merged" | "rejected" | "needs_evidence" | "suspended";
+  metadata?: Record<string, unknown>;
 }
 
 export interface EscalationDocket {

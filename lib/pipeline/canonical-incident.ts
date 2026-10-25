@@ -134,6 +134,15 @@ export async function executeStage6CanonicalIncident(
           aiModel: aiAnalysis.modelUsed,
           confidenceScore: aiAnalysis.confidenceScore,
           visualCharacteristics: aiAnalysis.visualCharacteristics,
+          duplicateMatching: {
+            action: matching.action,
+            matchedIncidentId: matching.matchedIncidentId || null,
+            candidateCount: matching.candidateCount,
+            matchScore: matching.matchScore || null,
+            matchReason: matching.matchReason || null,
+            passedGates: matching.passedGates,
+            failedGates: matching.failedGates,
+          },
         },
       })
       .returning();

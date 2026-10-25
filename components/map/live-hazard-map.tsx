@@ -193,11 +193,16 @@ export function LiveHazardMap({
                 <p className="mt-0.5 text-[11px] text-[#486057]">
                   {hazard.landmark || hazard.location}
                 </p>
-                <div className="mt-2.5 flex items-center justify-between border-t border-[#eef1e9] pt-1.5 text-[10px]">
+                <div className="mt-2.5 flex items-center justify-between border-t border-[#eef1e9] pt-2 text-[10px]">
                   <span className="font-medium text-[#78a37d]">
                     ✓ {hazard.verificationsCount || hazard.votes || 0} verified
                   </span>
-                  <span className="text-[#63736b]">{hazard.statusLabel || hazard.status}</span>
+                  <Link
+                    href={`/reports/${hazard.id}`}
+                    className="font-semibold text-[#0e2b24] underline underline-offset-2 hover:opacity-80"
+                  >
+                    View Case Details &rarr;
+                  </Link>
                 </div>
               </div>
             </MarkerPopup>

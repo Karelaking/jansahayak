@@ -20,10 +20,12 @@ export async function GET(
           projection: {
             reportId: 1,
             category: 1,
+            description: 1,
             status: 1,
             createdAt: 1,
             submissionLocation: 1,
-            photoCount: { $size: "$photos" },
+            evidencePhotos: 1,
+            associatedIncidentId: 1,
           },
         },
       );
@@ -36,17 +38,31 @@ export async function GET(
       const logsColl = await getPipelineLogsCollection();
       const stageLogs = await logsColl
         .find({ reportId })
-        .project({ stage: 1, stageName: 1, success: 1, timestamp: 1 })
+        .project({ stage: 1, stageName: 1, status: 1, details: 1, timestamp: 1 })
         .sort({ stage: 1 })
         .toArray();
+
+      const formattedPhotos = (report.evidencePhotos || []).map((p, idx) => ({
+        index: idx + 1,
+        fileId: p.fileId,
+        filename: p.filename,
+        contentType: p.contentType,
+        byteSize: p.byteSize,
+        captureTimestamp: p.captureTimestamp,
+        downloadUrl: p.fileId ? `/api/pipeline/photos/${p.fileId}` : undefined,
+      }));
 
       return NextResponse.json({
         success: true,
         reportId: report.reportId,
         category: report.category,
+        description: report.description,
         status: report.status,
         createdAt: report.createdAt,
         location: report.submissionLocation,
+        photoCount: formattedPhotos.length,
+        photos: formattedPhotos,
+        associatedIncidentId: report.associatedIncidentId,
         stages: stageLogs,
       });
     } catch (mongoErr) {

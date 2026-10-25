@@ -17,12 +17,21 @@ import {
   MapPin,
   Calendar,
   Sparkles,
+  Sliders,
+  Scissors,
 } from "lucide-react";
 
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -61,6 +70,33 @@ export default function ModerationPage() {
   const [activeTab, setActiveTab] = React.useState("all");
   const [isSubmitting, setIsSubmitting] = React.useState<string | null>(null);
   const [inspectingItem, setInspectingItem] = React.useState<ModerationQueueItem | null>(null);
+
+  // PRD §12 Action Modals State
+  const [rejectItem, setRejectItem] = React.useState<ModerationQueueItem | null>(null);
+  const [rejectionReason, setRejectionReason] = React.useState("");
+
+  const [requestEvidenceItem, setRequestEvidenceItem] = React.useState<ModerationQueueItem | null>(
+    null,
+  );
+  const [evidenceNotes, setEvidenceNotes] = React.useState("");
+
+  const [correctLocationItem, setCorrectLocationItem] = React.useState<ModerationQueueItem | null>(
+    null,
+  );
+  const [latInput, setLatInput] = React.useState("28.4744");
+  const [lngInput, setLngInput] = React.useState("77.5040");
+  const [locationNotes, setLocationNotes] = React.useState("");
+
+  const [mergeItem, setMergeItem] = React.useState<ModerationQueueItem | null>(null);
+  const [duplicateIdsInput, setDuplicateIdsInput] = React.useState("");
+  const [mergeReason, setMergeReason] = React.useState("");
+
+  const [splitItem, setSplitItem] = React.useState<ModerationQueueItem | null>(null);
+  const [splitReportIdsInput, setSplitReportIdsInput] = React.useState("");
+  const [splitReason, setSplitReason] = React.useState("");
+
+  const [unpublishItem, setUnpublishItem] = React.useState<ModerationQueueItem | null>(null);
+  const [unpublishReason, setUnpublishReason] = React.useState("");
 
   // Fetch live review queue on mount
   React.useEffect(() => {
@@ -121,27 +157,168 @@ export default function ModerationPage() {
     });
   }, [items, activeTab]);
 
-  const handleAction = async (id: string, action: "approved" | "merged" | "rejected") => {
+  const handleApprove = async (id: string) => {
     setIsSubmitting(id);
-    // Optimistic update
-    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, status: action } : item)));
-
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: "approved" } : item)),
+    );
     try {
-      const decision =
-        action === "approved" ? "approve" : action === "rejected" ? "reject" : "approve";
-      await fetch("/api/pipeline/moderate", {
+      await fetch(`/api/admin/incidents/${encodeURIComponent(id)}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Verified and published to public map by civic staff" }),
+      });
+    } catch (e) {
+      console.warn("Failed to approve incident:", e);
+    } finally {
+      setIsSubmitting(null);
+    }
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectItem || !rejectionReason.trim()) return;
+    const id = rejectItem.id;
+    setIsSubmitting(id);
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: "rejected" } : item)),
+    );
+    setRejectItem(null);
+    try {
+      await fetch(`/api/admin/incidents/${encodeURIComponent(id)}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: rejectionReason.trim() }),
+      });
+    } catch (e) {
+      console.warn("Failed to reject incident:", e);
+    } finally {
+      setIsSubmitting(null);
+      setRejectionReason("");
+    }
+  };
+
+  const handleConfirmRequestEvidence = async () => {
+    if (!requestEvidenceItem) return;
+    const id = requestEvidenceItem.id;
+    setIsSubmitting(id);
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: "needs_evidence" } : item)),
+    );
+    setRequestEvidenceItem(null);
+    try {
+      await fetch(`/api/admin/incidents/${encodeURIComponent(id)}/request-evidence`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          incidentId: id,
-          decision,
-          reason: `Audited and marked ${action} by civic staff`,
+          notes: evidenceNotes.trim() || "Additional road hazard photographs required",
         }),
       });
     } catch (e) {
-      console.warn("Failed to submit moderation decision to backend:", e);
+      console.warn("Failed to request evidence:", e);
     } finally {
       setIsSubmitting(null);
+      setEvidenceNotes("");
+    }
+  };
+
+  const handleConfirmCorrectLocation = async () => {
+    if (!correctLocationItem) return;
+    const id = correctLocationItem.id;
+    setIsSubmitting(id);
+    setCorrectLocationItem(null);
+    try {
+      await fetch(`/api/admin/incidents/${encodeURIComponent(id)}/location`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          latitude: parseFloat(latInput),
+          longitude: parseFloat(lngInput),
+          notes: locationNotes.trim() || "Coordinates adjusted by civic moderator",
+        }),
+      });
+    } catch (e) {
+      console.warn("Failed to correct location:", e);
+    } finally {
+      setIsSubmitting(null);
+      setLocationNotes("");
+    }
+  };
+
+  const handleConfirmMerge = async () => {
+    if (!mergeItem || !duplicateIdsInput.trim()) return;
+    const id = mergeItem.id;
+    setIsSubmitting(id);
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, status: "merged" } : item)));
+    setMergeItem(null);
+    try {
+      const duplicateIncidentIds = duplicateIdsInput
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await fetch("/api/admin/incidents/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          primaryIncidentId: id,
+          duplicateIncidentIds,
+          reason: mergeReason.trim() || "Merged duplicate incident reports",
+        }),
+      });
+    } catch (e) {
+      console.warn("Failed to merge incident:", e);
+    } finally {
+      setIsSubmitting(null);
+      setDuplicateIdsInput("");
+      setMergeReason("");
+    }
+  };
+
+  const handleConfirmSplit = async () => {
+    if (!splitItem || !splitReportIdsInput.trim()) return;
+    const id = splitItem.id;
+    setIsSubmitting(id);
+    setSplitItem(null);
+    try {
+      const reportIdsToSplit = splitReportIdsInput
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await fetch(`/api/admin/incidents/${encodeURIComponent(id)}/split`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reportIdsToSplit,
+          reason: splitReason.trim() || "Partitioned into separate incident by moderator",
+        }),
+      });
+    } catch (e) {
+      console.warn("Failed to split incident:", e);
+    } finally {
+      setIsSubmitting(null);
+      setSplitReportIdsInput("");
+      setSplitReason("");
+    }
+  };
+
+  const handleConfirmUnpublish = async () => {
+    if (!unpublishItem || !unpublishReason.trim()) return;
+    const id = unpublishItem.id;
+    setIsSubmitting(id);
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: "suspended" } : item)),
+    );
+    setUnpublishItem(null);
+    try {
+      await fetch(`/api/admin/incidents/${encodeURIComponent(id)}/unpublish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: unpublishReason.trim() }),
+      });
+    } catch (e) {
+      console.warn("Failed to unpublish incident:", e);
+    } finally {
+      setIsSubmitting(null);
+      setUnpublishReason("");
     }
   };
 
@@ -294,38 +471,93 @@ export default function ModerationPage() {
                   </button>
                 </div>
 
-                {/* Triage Action Buttons - Responsive thumb-friendly grid on mobile */}
-                <div className="grid grid-cols-1 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+                {/* PRD §12 Triage Action Controls */}
+                <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={isSubmitting === item.id}
                     className="h-10 sm:h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive justify-center"
-                    onClick={() => handleAction(item.id, "rejected")}
+                    onClick={() => {
+                      setRejectItem(item);
+                      setRejectionReason("");
+                    }}
                   >
                     <X className="size-3.5 mr-1" />
-                    <span>Reject Out-of-Scope</span>
+                    <span>Reject</span>
                   </Button>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={isSubmitting === item.id}
-                    className="h-10 sm:h-7 text-xs justify-center"
-                    onClick={() => handleAction(item.id, "merged")}
-                  >
-                    <Copy className="size-3.5 mr-1" />
-                    <span>Merge Duplicate</span>
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      disabled={isSubmitting === item.id}
+                      className="h-10 sm:h-7 text-xs justify-center gap-1 inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1 font-medium shadow-xs hover:bg-accent hover:text-accent-foreground cursor-pointer disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      <Sliders className="size-3 text-muted-foreground" />
+                      <span>Actions</span>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="text-xs">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setRequestEvidenceItem(item);
+                          setEvidenceNotes("");
+                        }}
+                      >
+                        <Camera className="size-3.5 mr-2 text-amber-600" />
+                        <span>Request Evidence</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setCorrectLocationItem(item);
+                          setLatInput("28.4744");
+                          setLngInput("77.5040");
+                          setLocationNotes("");
+                        }}
+                      >
+                        <MapPin className="size-3.5 mr-2 text-blue-600" />
+                        <span>Correct Coordinates</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setMergeItem(item);
+                          setDuplicateIdsInput("");
+                          setMergeReason("");
+                        }}
+                      >
+                        <Copy className="size-3.5 mr-2 text-purple-600" />
+                        <span>Merge Duplicate</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setSplitItem(item);
+                          setSplitReportIdsInput("");
+                          setSplitReason("");
+                        }}
+                      >
+                        <Scissors className="size-3.5 mr-2 text-orange-600" />
+                        <span>Split Incident</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => {
+                          setUnpublishItem(item);
+                          setUnpublishReason("");
+                        }}
+                      >
+                        <MapPinOff className="size-3.5 mr-2" />
+                        <span>Unpublish Pin</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
 
                   <Button
                     size="sm"
                     disabled={isSubmitting === item.id}
-                    className="h-10 sm:h-7 text-xs justify-center bg-emerald-800 hover:bg-emerald-900 text-white"
-                    onClick={() => handleAction(item.id, "approved")}
+                    className="col-span-2 sm:col-span-1 h-10 sm:h-7 text-xs justify-center bg-emerald-800 hover:bg-emerald-900 text-white"
+                    onClick={() => handleApprove(item.id)}
                   >
                     <Check className="size-3.5 mr-1" />
-                    <span>{isSubmitting === item.id ? "Publishing..." : "Approve & Route"}</span>
+                    <span>{isSubmitting === item.id ? "Publishing..." : "Approve & Publish"}</span>
                   </Button>
                 </div>
               </CardFooter>
@@ -478,7 +710,8 @@ export default function ModerationPage() {
                   size="sm"
                   className="text-xs text-destructive hover:bg-destructive/10 hover:text-destructive h-9"
                   onClick={() => {
-                    handleAction(inspectingItem.id, "rejected");
+                    setRejectItem(inspectingItem);
+                    setRejectionReason("");
                     setInspectingItem(null);
                   }}
                 >
@@ -492,19 +725,20 @@ export default function ModerationPage() {
                     size="sm"
                     className="text-xs h-9"
                     onClick={() => {
-                      handleAction(inspectingItem.id, "merged");
+                      setRequestEvidenceItem(inspectingItem);
+                      setEvidenceNotes("");
                       setInspectingItem(null);
                     }}
                   >
-                    <Copy className="size-3.5 mr-1" />
-                    <span>Merge Duplicate</span>
+                    <Camera className="size-3.5 mr-1" />
+                    <span>Request Evidence</span>
                   </Button>
 
                   <Button
                     size="sm"
                     className="text-xs h-9 bg-emerald-800 hover:bg-emerald-900 text-white"
                     onClick={() => {
-                      handleAction(inspectingItem.id, "approved");
+                      handleApprove(inspectingItem.id);
                       setInspectingItem(null);
                     }}
                   >
@@ -515,6 +749,344 @@ export default function ModerationPage() {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── PRD §12 Reject with Documented Reason Dialog ── */}
+      <Dialog open={!!rejectItem} onOpenChange={(open) => !open && setRejectItem(null)}>
+        <DialogContent className="max-w-md bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-5">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#0e2b24]">
+              Reject Hazard Incident
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#5c6f66]">
+              PRD §12 requires a documented civic justification for every rejection. This decision
+              is immutably logged to the audit trail.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <label className="text-xs font-semibold text-[#17382f] block">
+              Documented Rejection Reason (Required)
+            </label>
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="e.g. Private residential driveway outside municipal Greater Noida maintenance scope."
+              rows={3}
+              className="w-full text-xs rounded-md border border-[#cbd5cb] bg-white p-2.5 text-[#0e2b24] focus:outline-none focus:ring-1 focus:ring-emerald-700"
+            />
+          </div>
+
+          <DialogFooter className="flex items-center justify-end gap-2 pt-2 border-t border-[#eef1e9]">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRejectItem(null)}
+              className="text-xs h-8"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={!rejectionReason.trim() || isSubmitting === rejectItem?.id}
+              onClick={handleConfirmReject}
+              className="text-xs h-8 bg-rose-800 hover:bg-rose-900 text-white"
+            >
+              Confirm Rejection
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── PRD §12 & §16 Request Evidence Dialog ── */}
+      <Dialog
+        open={!!requestEvidenceItem}
+        onOpenChange={(open) => !open && setRequestEvidenceItem(null)}
+      >
+        <DialogContent className="max-w-md bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-5">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#0e2b24]">
+              Request Supplementary Evidence
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#5c6f66]">
+              Flags the incident as ADDITIONAL_EVIDENCE_REQUIRED, prompting reporting citizens to
+              attach supplementary daytime photographs.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <label className="text-xs font-semibold text-[#17382f] block">
+              Evidence Instructions for Citizens
+            </label>
+            <textarea
+              value={evidenceNotes}
+              onChange={(e) => setEvidenceNotes(e.target.value)}
+              placeholder="e.g. Please capture a wide-angle photograph showing road lane markings and proximity to curb."
+              rows={3}
+              className="w-full text-xs rounded-md border border-[#cbd5cb] bg-white p-2.5 text-[#0e2b24] focus:outline-none focus:ring-1 focus:ring-emerald-700"
+            />
+          </div>
+
+          <DialogFooter className="flex items-center justify-end gap-2 pt-2 border-t border-[#eef1e9]">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRequestEvidenceItem(null)}
+              className="text-xs h-8"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={isSubmitting === requestEvidenceItem?.id}
+              onClick={handleConfirmRequestEvidence}
+              className="text-xs h-8 bg-[#0e2b24] hover:bg-[#1c4b3e] text-white"
+            >
+              Send Evidence Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── PRD §12 & §16 Correct Location Dialog ── */}
+      <Dialog
+        open={!!correctLocationItem}
+        onOpenChange={(open) => !open && setCorrectLocationItem(null)}
+      >
+        <DialogContent className="max-w-md bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-5">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#0e2b24]">
+              Correct Canonical Coordinates
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#5c6f66]">
+              Adjust canonical WGS84 coordinates based on verified road surveys or GIS centerline
+              alignment.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="font-semibold text-[#17382f] block mb-1">Latitude</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={latInput}
+                  onChange={(e) => setLatInput(e.target.value)}
+                  className="w-full rounded-md border border-[#cbd5cb] bg-white p-2 text-[#0e2b24]"
+                />
+              </div>
+              <div>
+                <label className="font-semibold text-[#17382f] block mb-1">Longitude</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={lngInput}
+                  onChange={(e) => setLngInput(e.target.value)}
+                  className="w-full rounded-md border border-[#cbd5cb] bg-white p-2 text-[#0e2b24]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="font-semibold text-[#17382f] block mb-1">Verification Note</label>
+              <input
+                type="text"
+                value={locationNotes}
+                onChange={(e) => setLocationNotes(e.target.value)}
+                placeholder="e.g. Aligned to northbound carriageway curb"
+                className="w-full rounded-md border border-[#cbd5cb] bg-white p-2 text-[#0e2b24]"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex items-center justify-end gap-2 pt-2 border-t border-[#eef1e9]">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCorrectLocationItem(null)}
+              className="text-xs h-8"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={isSubmitting === correctLocationItem?.id}
+              onClick={handleConfirmCorrectLocation}
+              className="text-xs h-8 bg-[#0e2b24] hover:bg-[#1c4b3e] text-white"
+            >
+              Update Coordinates
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── PRD §10 & §16 Merge Duplicate Incidents Dialog ── */}
+      <Dialog open={!!mergeItem} onOpenChange={(open) => !open && setMergeItem(null)}>
+        <DialogContent className="max-w-md bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-5">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#0e2b24]">
+              Merge Duplicate Incidents
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#5c6f66]">
+              Consolidates duplicate incidents into primary incident{" "}
+              <span className="font-mono font-bold">{mergeItem?.id}</span>, recalculating total
+              report counts.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div>
+              <label className="font-semibold text-[#17382f] block mb-1">
+                Duplicate Incident IDs (Comma-separated)
+              </label>
+              <input
+                type="text"
+                value={duplicateIdsInput}
+                onChange={(e) => setDuplicateIdsInput(e.target.value)}
+                placeholder="e.g. 1a2b3c4d-..., 5e6f7g8h-..."
+                className="w-full rounded-md border border-[#cbd5cb] bg-white p-2 font-mono text-[11px] text-[#0e2b24]"
+              />
+            </div>
+
+            <div>
+              <label className="font-semibold text-[#17382f] block mb-1">Merge Reason</label>
+              <input
+                type="text"
+                value={mergeReason}
+                onChange={(e) => setMergeReason(e.target.value)}
+                placeholder="e.g. Confirmed duplicate pothole on westbound Pari Chowk lane"
+                className="w-full rounded-md border border-[#cbd5cb] bg-white p-2 text-[#0e2b24]"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex items-center justify-end gap-2 pt-2 border-t border-[#eef1e9]">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMergeItem(null)}
+              className="text-xs h-8"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={!duplicateIdsInput.trim() || isSubmitting === mergeItem?.id}
+              onClick={handleConfirmMerge}
+              className="text-xs h-8 bg-purple-800 hover:bg-purple-900 text-white"
+            >
+              Execute Incident Merge
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── PRD §12 & §16 Split Incident Dialog ── */}
+      <Dialog open={!!splitItem} onOpenChange={(open) => !open && setSplitItem(null)}>
+        <DialogContent className="max-w-md bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-5">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#0e2b24]">
+              Split Incident Reports
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#5c6f66]">
+              Partitions erroneously grouped citizen reports out of this incident into a newly
+              synthesized canonical incident record.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div>
+              <label className="font-semibold text-[#17382f] block mb-1">
+                Report IDs to Partition (Comma-separated)
+              </label>
+              <input
+                type="text"
+                value={splitReportIdsInput}
+                onChange={(e) => setSplitReportIdsInput(e.target.value)}
+                placeholder="e.g. REP-2026-0012, REP-2026-0014"
+                className="w-full rounded-md border border-[#cbd5cb] bg-white p-2 font-mono text-[11px] text-[#0e2b24]"
+              />
+            </div>
+
+            <div>
+              <label className="font-semibold text-[#17382f] block mb-1">Partition Rationale</label>
+              <input
+                type="text"
+                value={splitReason}
+                onChange={(e) => setSplitReason(e.target.value)}
+                placeholder="e.g. Distinct street light outage 60m east of pothole cluster"
+                className="w-full rounded-md border border-[#cbd5cb] bg-white p-2 text-[#0e2b24]"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex items-center justify-end gap-2 pt-2 border-t border-[#eef1e9]">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSplitItem(null)}
+              className="text-xs h-8"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={!splitReportIdsInput.trim() || isSubmitting === splitItem?.id}
+              onClick={handleConfirmSplit}
+              className="text-xs h-8 bg-orange-800 hover:bg-orange-900 text-white"
+            >
+              Partition into New Incident
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── PRD §13 & §14 Unpublish Incident Dialog ── */}
+      <Dialog open={!!unpublishItem} onOpenChange={(open) => !open && setUnpublishItem(null)}>
+        <DialogContent className="max-w-md bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-5">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#0e2b24]">
+              Revoke Public Map Visibility
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#5c6f66]">
+              PRD §13 &amp; §14: Suspends this incident from the public map, sets status to
+              suspended, and dispatches edge CDN cache invalidation.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <label className="font-semibold text-[#17382f] block">
+              Reason for Revocation (Required)
+            </label>
+            <textarea
+              value={unpublishReason}
+              onChange={(e) => setUnpublishReason(e.target.value)}
+              placeholder="e.g. Road repair completed by GNIDA or incorrect hazard coordinates."
+              rows={3}
+              className="w-full rounded-md border border-[#cbd5cb] bg-white p-2.5 text-[#0e2b24] focus:outline-none focus:ring-1 focus:ring-emerald-700"
+            />
+          </div>
+
+          <DialogFooter className="flex items-center justify-end gap-2 pt-2 border-t border-[#eef1e9]">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setUnpublishItem(null)}
+              className="text-xs h-8"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={!unpublishReason.trim() || isSubmitting === unpublishItem?.id}
+              onClick={handleConfirmUnpublish}
+              className="text-xs h-8 bg-rose-800 hover:bg-rose-900 text-white"
+            >
+              Revoke &amp; Evict from Map
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

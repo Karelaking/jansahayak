@@ -23,6 +23,7 @@ import {
   Clock,
   ImageIcon,
   Sparkles,
+  FileText,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -548,13 +549,22 @@ export default function NewReportPage() {
               {/* Action Buttons */}
               <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
                 <Link
-                  href="/map"
+                  href={`/reports/${repId}`}
                   className={buttonVariants({
                     className:
                       "w-full sm:w-auto bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed]! text-xs h-10 px-5 rounded-lg font-semibold",
                   })}
                 >
-                  <MapPin className="h-4 w-4 mr-2" /> View on Public Map
+                  <FileText className="h-4 w-4 mr-2" /> Track Case Progress
+                </Link>
+                <Link
+                  href="/map"
+                  className={buttonVariants({
+                    variant: "outline",
+                    className: "w-full sm:w-auto text-xs h-10 px-4 border-[#cbd5cb] rounded-lg",
+                  })}
+                >
+                  <MapPin className="h-4 w-4 mr-2" /> View Public Map
                 </Link>
                 <Link
                   href="/dashboard/reports"
