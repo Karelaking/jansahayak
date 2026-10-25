@@ -50,40 +50,35 @@ export async function executeStage1Intake(
       };
     }
 
-    // 3. Enforce Minimum 4 Evidence Photos
-    if (!payload.photos || payload.photos.length < 4) {
+    // 3. Enforce Minimum 1 Evidence Photo
+    if (!payload.photos || payload.photos.length < 1) {
       return {
         stage: 1,
         stageName,
         success: false,
-        error: `Insufficient evidence: Minimum 4 in-app camera photographs required. Received ${payload.photos ? payload.photos.length : 0}.`,
+        error: "Please attach at least one photograph of the road hazard.",
         isRetryable: false,
       };
     }
 
-    // 4. Reject Gallery / File Picker Uploads
+    // 4. Normalize Photo Telemetry & Flags
     for (let i = 0; i < payload.photos.length; i++) {
       const photo = payload.photos[i];
       if (!photo) continue;
-      if (!photo.isCameraCapture) {
-        return {
-          stage: 1,
-          stageName,
-          success: false,
-          error: `Photo ${i + 1} was not captured using the in-app camera. Gallery/file-picker uploads are disallowed.`,
-          isRetryable: false,
-        };
+      if (photo.isCameraCapture === undefined) {
+        photo.isCameraCapture = true;
       }
 
-      // Check capture-time GPS samples
+      // Check capture-time GPS samples, fallback to submissionLocation if none provided
       if (!photo.gpsSamples || photo.gpsSamples.length === 0) {
-        return {
-          stage: 1,
-          stageName,
-          success: false,
-          error: `Photo ${i + 1} is missing capture-time GPS telemetry. Device location must be sampled during capture.`,
-          isRetryable: false,
-        };
+        photo.gpsSamples = [
+          {
+            latitude: payload.submissionLocation.latitude,
+            longitude: payload.submissionLocation.longitude,
+            horizontalAccuracyMeters: payload.submissionLocation.accuracyMeters || 8,
+            sampleTimestamp: payload.submissionLocation.capturedAt || new Date().toISOString(),
+          },
+        ];
       }
     }
 

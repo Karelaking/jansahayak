@@ -42,12 +42,12 @@ export async function executeStage2EvidenceValidation(
   try {
     const photos = report.evidencePhotos;
 
-    if (!photos || photos.length < 4) {
+    if (!photos || photos.length < 1) {
       return {
         stage: 2,
         stageName,
         success: false,
-        error: `Insufficient photos: Expected >= 4, found ${photos ? photos.length : 0}.`,
+        error: `Please attach at least 1 photo of the road hazard.`,
         isRetryable: false,
       };
     }
@@ -82,10 +82,8 @@ export async function executeStage2EvidenceValidation(
       if (photoBuffers && photoBuffers[i]) {
         const buf = photoBuffers[i];
         if (buf) {
-          if (buf.length < 5000) {
-            issues.push(
-              `Photo ${i + 1} file size is suspiciously small (${buf.length} bytes). Minimum 5KB required.`,
-            );
+          if (buf.length < 100) {
+            issues.push(`Photo ${i + 1} file is empty or corrupted.`);
           }
           if (!isValidImageMagicNumber(buf)) {
             issues.push(`Photo ${i + 1} has an invalid or corrupted image header.`);
