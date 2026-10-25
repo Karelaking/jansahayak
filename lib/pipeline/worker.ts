@@ -1,5 +1,7 @@
 import { db, outboxEvents } from "@/lib/db";
 import { eq, and, lte, or, asc } from "drizzle-orm";
+import { processReportBackground } from "./background-processor";
+import { dispatchMunicipalReportEmail } from "@/lib/email/municipal-dispatcher";
 
 export interface OutboxProcessingSummary {
   processed: number;
@@ -59,8 +61,15 @@ export async function processOutboxBatch(batchSize: number = 20): Promise<Outbox
       try {
         // Dispatch based on eventType
         switch (event.eventType) {
+          case "report.submitted":
+          case "report.ingested":
+            // PRD §3, §4: Background worker analyzes submitted report asynchronously
+            await processReportBackground(event.aggregateId);
+            break;
+
           case "incident.published":
-            // Downstream: Citizen push notification & public map pin activation
+            // PRD §14: Dispatch formal municipal grievance dossier via email
+            await dispatchMunicipalReportEmail(event.aggregateId);
             break;
 
           case "incident.unpublished":
@@ -68,12 +77,9 @@ export async function processOutboxBatch(batchSize: number = 20): Promise<Outbox
             // Downstream: Edge CDN tile eviction & map cache invalidation
             break;
 
-          case "report.ingested":
-            // Ingestion audit log confirmation & citizen submission receipt
-            break;
-
           case "report.evidence_added":
             // Re-trigger evidence validation worker on supplementary upload
+            await processReportBackground(event.aggregateId);
             break;
 
           case "incident.created":

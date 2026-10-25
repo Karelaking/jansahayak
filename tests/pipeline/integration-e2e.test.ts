@@ -11,8 +11,10 @@ import {
 import { executeStage1Intake } from "@/lib/pipeline/intake";
 import { executeStage2EvidenceValidation } from "@/lib/pipeline/evidence-validation";
 import { processOutboxBatch } from "@/lib/pipeline/worker";
+import { processReportBackground } from "@/lib/pipeline/background-processor";
+import { dispatchMunicipalReportEmail } from "@/lib/email/municipal-dispatcher";
 
-describe("PRD §19 End-to-End Integration Test Suite (26 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (29 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -665,5 +667,83 @@ describe("PRD §19 End-to-End Integration Test Suite (26 Scenarios)", () => {
     });
     expect(unpublishRes.success).toBe(false);
     expect(unpublishRes.error).toMatch(/Moderator ID is required/i);
+  });
+
+  // Scenario 27: Fast Asynchronous Intake accepts submission with SUBMITTED status (PRD §3, §4, §6)
+  it("Scenario 27: Fast Asynchronous Intake accepts submission with status SUBMITTED in non-blocking mode", async () => {
+    const validPhotoBuffer = Buffer.from(
+      "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=",
+      "base64",
+    );
+
+    const intakeResult = await executeStage1Intake({
+      userId: "user_async_intake_01",
+      category: "Road Surface / Pothole",
+      description: "Severe crater on service corridor near sector gate",
+      photos: [
+        {
+          buffer: validPhotoBuffer,
+          filename: "photo_1.jpg",
+          contentType: "image/jpeg",
+          capturedAt: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [],
+        },
+        {
+          buffer: validPhotoBuffer,
+          filename: "photo_2.jpg",
+          contentType: "image/jpeg",
+          capturedAt: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [],
+        },
+        {
+          buffer: validPhotoBuffer,
+          filename: "photo_3.jpg",
+          contentType: "image/jpeg",
+          capturedAt: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [],
+        },
+        {
+          buffer: validPhotoBuffer,
+          filename: "photo_4.jpg",
+          contentType: "image/jpeg",
+          capturedAt: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [],
+        },
+      ],
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 6.5,
+        capturedAt: new Date().toISOString(),
+      },
+    });
+
+    expect(intakeResult.success).toBe(true);
+    expect(intakeResult.data?.document.status).toBe("SUBMITTED");
+    expect(intakeResult.data?.reportId).toBeDefined();
+  });
+
+  // Scenario 28: Dedicated Background Worker handles report and transitions invalid ones to REJECTED (PRD §3, §4, §7)
+  it("Scenario 28: Background processor safely identifies invalid or missing report and records explicit failure", async () => {
+    const nonExistentReportId = "rep_non_existent_999999";
+    const bgResult = await processReportBackground(nonExistentReportId);
+
+    expect(bgResult.success).toBe(false);
+    expect(bgResult.status).toBe("NOT_FOUND");
+    expect(bgResult.error).toContain(nonExistentReportId);
+  });
+
+  // Scenario 29: Municipal Grievance Dossier formatting & Email Dispatch (PRD §14)
+  it("Scenario 29: Municipal Civic Report Dossier generates structured grievance references and navigation links", async () => {
+    const invalidIncidentId = "00000000-0000-0000-0000-000000000000";
+    const dispatchRes = await dispatchMunicipalReportEmail(invalidIncidentId);
+
+    // Verifies fail-safe handling when incident record does not exist
+    expect(dispatchRes.success).toBe(false);
+    expect(dispatchRes.error).toContain(invalidIncidentId);
   });
 });

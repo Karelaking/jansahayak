@@ -2,6 +2,7 @@ import { StageExecutionResult } from "./types";
 import { db, incidents, publicationRecords, outboxEvents, Incident } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { getReportsCollection } from "@/lib/db/mongodb";
+import { dispatchMunicipalReportEmail } from "@/lib/email/municipal-dispatcher";
 
 export interface PublicationParams {
   incidentId: string;
@@ -198,6 +199,11 @@ export async function executeStage8Publication(
         },
       },
     );
+
+    // 7. PRD §14: Trigger Municipal Email Dossier Dispatch
+    void dispatchMunicipalReportEmail(incidentId).catch((err) => {
+      console.warn("[Publication] Municipal dossier dispatch warning:", err);
+    });
 
     return {
       stage: 8,

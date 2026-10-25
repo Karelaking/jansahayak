@@ -179,6 +179,7 @@ export interface RawReportDocument {
   status:
     | "DRAFT"
     | "SUBMITTED"
+    | "PROCESSING"
     | "EVIDENCE_VALIDATED"
     | "EVIDENCE_VALIDATION_FAILED"
     | "AI_ANALYSIS_PENDING"
@@ -195,7 +196,9 @@ export interface RawReportDocument {
     | "SUSPENDED"
     | "PUBLICATION_PENDING"
     | "PUBLISHED"
+    | "MUNICIPALLY_DISPATCHED"
     | "PROCESSING_FAILED";
+  rejectionReason?: string;
   evidencePhotos: PhotoCaptureRecord[];
   submissionLocation: {
     latitude: number;

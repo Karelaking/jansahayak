@@ -60,6 +60,9 @@ export async function GET(
       moderationStatus: string;
       reportCount: number;
       publishedAt: Date | null;
+      municipalDocketNumber?: string | null;
+      municipalDispatchedAt?: string | null;
+      municipalRecipient?: string | null;
     } | null = null;
 
     if (report.associatedIncidentId) {
@@ -73,13 +76,26 @@ export async function GET(
             moderationStatus: incidents.moderationStatus,
             reportCount: incidents.reportCount,
             publishedAt: incidents.publishedAt,
+            metadata: incidents.metadata,
           })
           .from(incidents)
           .where(eq(incidents.id, report.associatedIncidentId))
           .limit(1);
 
         if (inc) {
-          canonicalIncident = inc;
+          const meta = (inc.metadata || {}) as Record<string, unknown>;
+          canonicalIncident = {
+            id: inc.id,
+            incidentNumber: inc.incidentNumber,
+            isPublished: inc.isPublished,
+            status: inc.status,
+            moderationStatus: inc.moderationStatus,
+            reportCount: inc.reportCount,
+            publishedAt: inc.publishedAt,
+            municipalDocketNumber: (meta.municipalDocketNumber as string) || null,
+            municipalDispatchedAt: (meta.municipalDispatchedAt as string) || null,
+            municipalRecipient: (meta.municipalRecipient as string) || null,
+          };
         }
       } catch {
         // Non-blocking fallback
@@ -92,6 +108,7 @@ export async function GET(
       category: report.category,
       description: report.description,
       status: report.status,
+      rejectionReason: (report as unknown as { rejectionReason?: string }).rejectionReason || null,
       createdAt: report.createdAt,
       location: report.submissionLocation,
       photoCount: formattedPhotos.length,

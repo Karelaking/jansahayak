@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  AlertTriangle,
   Camera,
   MapPin,
   ShieldCheck,
@@ -47,6 +48,7 @@ interface ReportDetail {
   category: string;
   description: string;
   status: string;
+  rejectionReason?: string | null;
   createdAt: string;
   location?: {
     latitude: number;
@@ -65,6 +67,9 @@ interface ReportDetail {
     moderationStatus: string;
     reportCount: number;
     publishedAt: string | null;
+    municipalDocketNumber?: string | null;
+    municipalDispatchedAt?: string | null;
+    municipalRecipient?: string | null;
   } | null;
   stages: StageLog[];
 }
@@ -113,6 +118,21 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
 
   React.useEffect(() => {
     fetchReport();
+    // PRD §3: Automatically poll for updates while background worker analyzes report
+    const interval = setInterval(() => {
+      setReport((curr) => {
+        if (
+          !curr ||
+          curr.status === "SUBMITTED" ||
+          curr.status === "PROCESSING" ||
+          curr.status === "DRAFT"
+        ) {
+          fetchReport();
+        }
+        return curr;
+      });
+    }, 3000);
+    return () => clearInterval(interval);
   }, [fetchReport]);
 
   // Handle local supplementary photo capture or selection
@@ -355,6 +375,83 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
                 </div>
               </div>
             </div>
+
+            {/* PRD §3 Asynchronous Status Banners */}
+            {report.status === "REJECTED" && (
+              <div className="border border-red-300 bg-red-50/80 rounded-xl p-4 sm:p-5 text-xs text-red-900 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-red-950 text-sm">
+                  <AlertTriangle className="size-4 text-red-700 shrink-0" />
+                  <span>Report Rejected by Automated Verification</span>
+                </div>
+                <p className="text-red-800 leading-relaxed text-[11px]">
+                  {report.rejectionReason ||
+                    "This report did not meet the mandatory evidence integrity or camera capture standards specified in PRD §6 and §7."}
+                </p>
+                <p className="text-[10px] text-red-700 font-mono">
+                  Preserved in database for transparency & civic auditability. No public map pin
+                  generated.
+                </p>
+              </div>
+            )}
+
+            {(report.status === "SUBMITTED" || report.status === "PROCESSING") && (
+              <div className="border border-emerald-300 bg-emerald-50/80 rounded-xl p-4 sm:p-5 text-xs text-emerald-950 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-emerald-950 text-sm">
+                  <div className="size-3.5 border-2 border-emerald-700 border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span>
+                    {report.status === "SUBMITTED"
+                      ? "Report Accepted — Queued for Background Analysis"
+                      : "Background Analysis Worker In Progress"}
+                  </span>
+                </div>
+                <p className="text-emerald-800 leading-relaxed text-[11px]">
+                  Our decoupled background worker is currently verifying evidence integrity,
+                  extracting defect characteristics via AI vision, and cross-referencing PostGIS
+                  spatial clusters. This page will update automatically.
+                </p>
+              </div>
+            )}
+
+            {/* PRD §14: Municipal Civic Dossier Email Dispatch Card */}
+            {report.canonicalIncident?.municipalDocketNumber && (
+              <div className="border border-emerald-200 bg-gradient-to-r from-emerald-50/70 to-teal-50/70 rounded-xl p-4 sm:p-5 text-xs shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-emerald-200/60 pb-3">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="size-4 text-emerald-800 shrink-0" />
+                    <span className="font-bold text-emerald-950 text-sm">
+                      Civic Dossier Dispatched to Local Municipality
+                    </span>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className="bg-emerald-100/80 text-emerald-900 border-emerald-300 font-mono text-[10px] self-start sm:self-auto"
+                  >
+                    Docket: {report.canonicalIncident.municipalDocketNumber}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-[#2c4038]">
+                  <div>
+                    <span className="font-semibold text-emerald-900">Municipal Recipient:</span>{" "}
+                    <span className="font-mono">
+                      {report.canonicalIncident.municipalRecipient || "PWD / Municipal Redressal"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="font-semibold text-emerald-900">Dispatched:</span>{" "}
+                    <span>
+                      {report.canonicalIncident.municipalDispatchedAt
+                        ? new Date(report.canonicalIncident.municipalDispatchedAt).toLocaleString()
+                        : "Confirmed"}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-emerald-800/90 leading-relaxed">
+                  An official notice containing verified GPS coordinates, AI hazard analysis, and
+                  photo evidence has been emailed to the local urban local body for site repair
+                  prioritization.
+                </p>
+              </div>
+            )}
 
             {/* Canonical Incident Docket Association (PRD §3, §16) */}
             {report.canonicalIncident && (

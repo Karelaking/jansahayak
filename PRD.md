@@ -1,16 +1,15 @@
-# PRD: Automated Citizen Report Processing, Evidence Analysis, Geolocation and Map Publication
+# PRD: Asynchronous Citizen Report Intake, Background Verification Pipeline, Map Publication, and Municipal Email Dispatch
 
 **Product:** JanSahayak SafeStreets  
-**Module:** Automated Report Processing Pipeline  
-**Document type:** Product and Engineering Requirements  
+**Module:** Asynchronous Report Intake & Background Processing Pipeline  
 **Priority:** Critical  
-**Implementation objective:** Build a resilient, asynchronous pipeline that automatically validates submitted evidence, analyses images using AI, verifies the incident location, detects duplicate reports, resolves incident associations and publishes approved incidents to the public map.
+**Implementation objective:** Deliver an instant, non-blocking citizen submission experience by decoupling intake from multi-stage processing. Submissions are accepted immediately (<500ms) and staged with status `SUBMITTED`. A dedicated background analysis worker executes evidence validation, AI vision analysis, location verification, and duplicate matching, marking invalid submissions as `REJECTED` and advancing valid ones to moderation and canonical incident synthesis. Approved incidents are published to the public map, and a formal civic report dossier is automatically compiled and dispatched to the local municipality via email for field action.
 
 ---
 
 ## 1. Product objective
 
-Implement an end-to-end automated pipeline that processes a citizen's road-safety report from submission through evidence analysis, location verification, incident matching, approval and map publication.
+Implement an end-to-end decoupled pipeline that accepts a citizen's road-safety report with near-instantaneous feedback, processes the evidence asynchronously through a background analysis worker, resolves incident associations, publishes verified hazards to the public map, and automatically dispatches an official civic report dossier to the local municipal authority via email.
 
 The system must automate every processing stage that can be reliably automated. Human intervention is permitted only where required by configured business rules, insufficient evidence, ambiguous AI predictions, moderation policies or operational failures.
 
@@ -18,46 +17,49 @@ The system must never publish a report or incident when a required processing st
 
 ### Core principles
 
-1. Fail closed: incomplete processing cannot produce a public map pin.
-2. Preserve evidence: processing failures must not destroy original reports or uploaded evidence.
-3. Idempotent execution: retries must not create duplicate incidents, merges, map pins or notifications.
-4. Evidence-first decisions: AI predictions must be supported by recorded evidence and confidence information.
-5. Strict automatic merging: automatically merge only calibrated high-confidence matches that pass every hard rule.
-6. Human-review fallback: uncertain or contradictory cases must enter an appropriate review queue.
-7. Transactional publication: public incident visibility and canonical map-pin creation must happen atomically from the application's perspective.
-8. Full auditability: every stage, decision, failure, retry, override and publication must be traceable.
-9. Privacy by default: private user data, raw device metadata and unnecessary precise location information must not be exposed publicly.
-10. Recoverability: infrastructure failures must result in retries or explicit failed states, never silent data loss.
+1. **Instant, non-blocking intake**: The user submission HTTP request must never block on long-running AI vision, geospatial matching, or external network calls. Intake must persist raw evidence and return a durable tracking receipt within 500ms.
+2. **Asynchronous background processing**: A dedicated worker picks up queued submissions in the background, executing verification and updating report status explicitly (`SUBMITTED` → `PROCESSING` → `APPROVED` / `REJECTED`).
+3. **Fail closed**: Incomplete or unverified processing cannot produce a public map pin.
+4. **Preserve evidence**: Processing failures or rejections must not destroy original reports or uploaded evidence.
+5. **Idempotent execution**: Retries must not create duplicate incidents, merges, map pins, or municipal email dispatches.
+6. **Evidence-first decisions**: AI predictions must be supported by recorded evidence and confidence information.
+7. **Strict automatic merging**: Automatically merge only calibrated high-confidence matches that pass every hard rule.
+8. **Human-review fallback**: Uncertain or contradictory cases must enter an appropriate review queue.
+9. **Transactional publication**: Public incident visibility and canonical map-pin creation must happen atomically from the application's perspective.
+10. **Direct municipal accountability**: Once an incident is verified and published, the system must generate a formal civic report dossier and automatically dispatch it to the local municipality via email.
+11. **Full auditability**: Every stage, decision, failure, retry, override, publication, and municipal email dispatch must be traceable.
+12. **Privacy by default**: Private citizen data, raw device metadata and unnecessary precise location information must not be exposed publicly.
+13. **Recoverability**: Infrastructure failures must result in retries or explicit failed states, never silent data loss.
 
 ## 2. Scope
 
 ### Included
 
-- Authenticated report submission.
-- In-app camera evidence capture integration.
-- Minimum four valid evidence photographs.
+- Authenticated report submission with instant non-blocking intake (<500ms SLA).
+- In-app camera evidence capture integration with minimum four valid photographs.
 - Capture-time GPS sampling and location-quality validation.
-- Secure evidence upload and storage.
-- AI image-quality assessment and hazard classification.
+- Secure evidence upload to MongoDB GridFS.
+- Asynchronous background report analysis worker.
+- Server-side evidence validation and corruption checks.
+- AI image-quality assessment, hazard classification, and structured defect extraction.
 - Image embeddings and duplicate-image detection.
-- Candidate incident discovery using geospatial queries.
+- Candidate incident discovery using geospatial PostGIS queries.
 - Image, location, category, temporal and defect-context matching.
-- Strict automatic merge eligibility.
-- Manual merge and incident-boundary review.
+- Strict automatic merge eligibility and manual merge/split review.
 - Evidence-based representative incident location calculation.
-- Continuous road-defect segmentation suggestions.
 - Moderation and approval workflow.
-- Canonical incident creation and public map publication.
-- Automatic retries, failure handling and operational monitoring.
-- Audit logs, notifications and automated tests.
+- Explicit terminal rejection with documented reasons (`REJECTED` status).
+- Canonical incident creation and public map publication upon complete verification.
+- **Municipal civic report dossier generation and automatic email dispatch to the local municipality**.
+- Automatic retries, transactional outbox pattern, failure handling, and operational monitoring.
+- Audit logs, citizen notifications, and automated integration tests.
 
 ### Excluded from this module
 
-- Automatic government-authority escalation.
-- Authority performance scoring.
+- Authority performance scoring and SLA penalties.
 - Citizen resolution voting.
-- Final repair verification.
-- Government-system integrations unless explicitly configured and independently verified.
+- Final physical repair verification by field contractors.
+- Proprietary closed-source municipal ERP integrations (the open standard email dossier is the primary dispatch channel).
 
 These later workflows must consume the canonical incident created by this pipeline without weakening its validation or publication requirements.
 
@@ -65,51 +67,77 @@ These later workflows must consume the canonical incident created by this pipeli
 
 1. A citizen creates an account and starts a report.
 2. The citizen selects a problem category and enters a description.
-3. The citizen captures at least four photographs using the in-app camera.
+3. The citizen captures at least four photographs using the in-app camera viewfinder.
 4. The application samples device location at each capture and associates it with the corresponding evidence record.
-5. The citizen submits the report.
-6. The backend creates a durable report record and a processing job.
-7. The pipeline validates evidence and location data.
-8. AI analyses the evidence and extracts structured attributes.
-9. The system calculates a report-level location estimate.
-10. The system searches for candidate incidents and evaluates duplicate matches.
-11. A qualifying high-confidence duplicate may be merged automatically; uncertain cases enter review.
-12. A new incident candidate is created when no eligible duplicate exists.
-13. The system calculates the canonical incident location and spatial extent.
-14. The configured moderation policy determines whether human approval is required.
-15. Only an eligible, approved incident is published to the public map.
-16. The system records publication, updates the report status and notifies the citizen.
-
-The application must expose processing progress to the submitting user without exposing internal model prompts, private evidence or sensitive moderation data.
+5. **Instant Intake & Staging (<500ms)**: The citizen taps "Submit Report". The backend fast-intake API authenticates the citizen, verifies minimum photograph count, streams images to MongoDB GridFS, persists a durable `raw_reports` document with status `SUBMITTED`, logs an outbox event, and immediately returns a success receipt with `reportId`. The user sees an instant confirmation screen without waiting for downstream AI or spatial processing.
+6. **Asynchronous Background Processing Worker**: A dedicated background analysis worker picks up the `SUBMITTED` report.
+7. **Evidence & Corruption Validation**: The worker validates image bitstreams, dimensions, metadata, and timestamps. If the submission fails validation or is deemed invalid/abusive, the worker marks the report status as `REJECTED` with a documented rejection rationale, notifying the citizen.
+8. **AI Vision & Hazard Classification**: If valid, the worker invokes the AI vision model to extract structured attributes, defect severity, usability metrics, and feature embeddings.
+9. **Location Geodesic Calculation**: The system calculates a robust representative location and uncertainty radius from validated GPS samples.
+10. **Duplicate Discovery & Candidate Matching**: The system searches PostGIS for existing nearby incidents and determines if the submission matches an existing incident.
+11. **Incident Association**: A qualifying high-confidence duplicate is associated with the existing canonical incident; otherwise, a new canonical incident is created.
+12. **Moderation & Publication**: The configured moderation policy determines whether automatic or manual human approval applies.
+13. **Map Publication**: Only upon complete, approved workflow execution does the incident transition to `PUBLISHED` and appear on the public safety map.
+14. **Municipal Civic Report Generation & Email Dispatch**: Immediately following publication, the system compiles a formal civic report docket containing the incident details, verified coordinates, AI findings, and evidence photos, and automatically dispatches it to the local municipality grievance redressal authority via email.
+15. **Citizen Tracking**: The citizen can track progress at any time via `/reports/:reportId`, observing stage transitions in real-time (`SUBMITTED` → `PROCESSING` → `APPROVED` / `REJECTED` → `PUBLISHED` & `MUNICIPALLY_DISPATCHED`).
 
 ## 4. Processing architecture
 
-Use a durable, asynchronous job-processing architecture.
+Use a decoupled, asynchronous two-phase architecture:
+
+1. **Phase A: Fast Intake Gateway (`POST /api/reports`, `POST /api/pipeline/submit`)**:
+   - Validates authentication and payload schema.
+   - Stores photos in MongoDB GridFS.
+   - Inserts raw report into MongoDB with status `SUBMITTED`.
+   - Records transactional outbox event `report.submitted` in PostgreSQL.
+   - Immediately returns HTTP 200/202 with `{ success: true, reportId, status: "SUBMITTED" }` in under 500ms.
+   - The user is never blocked by downstream AI vision, GIS queries, or municipal dispatch.
+
+2. **Phase B: Background Pipeline Worker (`lib/pipeline/worker.ts`, `/api/cron/process-outbox`)**:
+   - Polls or receives `report.submitted` events asynchronously.
+   - Transitions report status to `PROCESSING` (or specific stage pending status).
+   - Executes Stage 2 (Evidence Validation), Stage 3 (AI Analysis), Stage 4 (Location Verification), Stage 5 (Candidate Matching), Stage 6 (Canonical Incident Synthesis).
+   - **Terminal Branch A (Rejection)**: If evidence is corrupted, fraudulent, or missing required camera provenance, the worker sets status to `REJECTED` with an immutable reason in MongoDB and PostgreSQL audit logs.
+   - **Terminal Branch B (Approval & Publication)**: If valid, the report is linked to a canonical incident. Upon moderation approval, Stage 8 marks `isPublished = true`, rendering the pin on the public map.
+   - **Municipal Dispatch (Stage 9)**: The worker compiles a standardized civic complaint dossier and emails it to the municipal corporation / PWD authority.
 
 Recommended logical components:
 
-- Report API: validates and accepts submissions.
-- Evidence service: handles secure image storage and metadata.
-- Processing orchestrator: manages stage transitions and dependencies.
-- Validation worker: validates files, capture records and evidence quality.
-- AI analysis worker: performs image analysis and structured extraction.
-- Geospatial worker: calculates representative locations and finds nearby incidents.
-- Matching worker: ranks candidates and evaluates merge eligibility.
-- Incident service: manages canonical incidents and associations.
-- Moderation service: handles manual review and approval.
-- Publication service: exposes eligible incidents to the public map.
-- Notification worker: sends user notifications after committed state changes.
-- Audit service: records immutable decision history.
+- Report Intake Gateway: validates and stages submissions (<500ms).
+- Evidence Storage: handles secure GridFS image storage and metadata.
+- Background Processing Worker: manages asynchronous stage transitions and error handling.
+- Validation Worker: validates files, capture records and evidence quality; marks `REJECTED` if invalid.
+- AI Analysis Worker: performs vision analysis and structured defect extraction.
+- Geospatial Worker: calculates representative locations and finds nearby incidents.
+- Matching Worker: evaluates candidate merge eligibility.
+- Incident Service: manages canonical incidents and Postgres records.
+- Moderation Service: handles manual review and approval overrides.
+- Publication Service: exposes eligible approved incidents to the public map.
+- **Municipal Email Dispatch Service**: compiles civic report dossiers and emails local municipal grievance authorities.
+- Notification Worker: sends user status updates upon committed state changes.
+- Audit Service: records immutable decision history.
 
-Use a durable queue or job system supported by the existing project stack. If Redis and a queue library are used, queue messages must not become the sole source of truth for processing state.
-
-Persist job state in PostgreSQL. Use transactional outbox patterns or equivalent mechanisms to reliably dispatch jobs after database transactions commit.
-
-The implementation must follow the repository's existing architecture and dependencies where suitable rather than adding unnecessary infrastructure.
+Persist job and incident state in PostgreSQL. Use transactional outbox patterns to reliably dispatch jobs and external email notifications after database transactions commit.
 
 ## 5. State machine
 
 Implement explicit, validated state transitions.
+
+Report processing states:
+
+- `DRAFT`: Report composition in progress on client.
+- `SUBMITTED`: Fast intake accepted; evidence persisted in GridFS; awaiting background worker.
+- `PROCESSING`: Background worker has picked up the report and is analyzing evidence.
+- `EVIDENCE_VALIDATED`: Evidence passed server-side integrity and camera provenance checks.
+- `AI_ANALYZED`: Multimodal vision extraction and usability assessment completed.
+- `LOCATION_VERIFIED`: Geodesic representative coordinates and uncertainty computed.
+- `INCIDENT_ASSOCIATED`: Associated with an existing or newly synthesized canonical incident.
+- `MODERATION_PENDING`: Awaiting civic staff review or policy verification.
+- `APPROVED`: Report verified and approved for canonical inclusion and map publication.
+- `REJECTED`: Terminal rejection due to invalid/corrupted evidence, failed criteria, or moderator rejection.
+- `PUBLISHED`: Incident pin is live and visible on the public safety map.
+- `MUNICIPALLY_DISPATCHED`: Formal civic report docket generated and emailed to the local municipality.
+- `PROCESSING_FAILED`: Transient worker failure; scheduled for retry with exponential backoff.
 
 Suggested report processing states:
 
@@ -434,7 +462,35 @@ Do not expose:
 
 Use sanitized media and the canonical public location.
 
-## 14. Failure and retry policy
+## 14. Stage 9: Municipal Civic Report Generation & Email Dispatch
+
+Once a canonical incident satisfies the publication eligibility predicate and transitions to `isPublished = true`, the platform automatically compiles an official, structured **Municipal Civic Grievance Dossier** and dispatches it directly to the competent local municipal corporation / urban local body / PWD grievance redressal authority via email.
+
+### Requirements
+
+1. **Dossier Composition**:
+   - **Grievance Reference Number**: Stable municipal docket code formatted as `GRV-[YYYYMMDD]-[INCIDENT_NUMBER]`.
+   - **Hazard Classification & Urgency**: Verified category (e.g. `Road Surface / Pothole`), severity (`critical`, `high`, `medium`), and defect summary.
+   - **Verified Spatial Geolocation**: WGS84 coordinates with 7 decimal precision, estimated spatial uncertainty radius in metres, and clickable navigation links (Google Maps, OpenStreetMap).
+   - **Defect Engineering Findings**: AI-extracted visual characteristics (depth, perimeter crumbling, vehicle trap risk), timestamped capture records, and environmental conditions.
+   - **Photographic Evidence Matrix**: High-resolution evidence photo URLs hosted securely, preserving date/time and in-app camera provenance.
+   - **Civic Impact Metrics**: Number of independent citizen reports merged into the canonical incident, highlighting localized community urgency.
+   - **Action Request**: Formally requested municipal response timeframe based on severity (e.g. 24-48 hours for critical roadway hazards).
+
+2. **Automated Dispatch Mechanism**:
+   - The municipal dispatch service reads the configured target recipient (e.g. `process.env.MUNICIPAL_GRIEVANCE_EMAIL` or district-specific routing rules).
+   - Formats a dual-stream payload:
+     - High-fidelity HTML civic report template formatted with official government grievance styling, visual alert callouts, and evidence thumbnails.
+     - Accessible, machine-readable plain-text summary suitable for legacy municipal ticketing systems.
+   - Dispatches via authenticated SMTP / email provider (or durable transactional outbox delivery).
+   - Records an immutable audit entry in PostgreSQL `moderation_actions` and `outbox_events` with recipient address, message ID, timestamp, and payload snapshot.
+   - Updates the canonical incident metadata with `municipalDispatchedAt`, `municipalDocketNumber`, and `municipalRecipient`.
+   - Transitions report status to `MUNICIPALLY_DISPATCHED`.
+
+3. **Citizen Notification**:
+   - The citizen's tracking dossier at `/reports/:reportId` displays a confirmed dispatch badge: _"Official Civic Dossier Dispatched to Local Municipality"_, providing transparent civic accountability.
+
+## 15. Failure and retry policy
 
 Every stage must classify errors as:
 
@@ -517,6 +573,9 @@ Possible endpoints:
 - `POST /api/admin/incidents/:incidentId/location`
 - `POST /api/admin/incidents/merge`
 - `POST /api/admin/incidents/:incidentId/split`
+- `POST /api/admin/incidents/:incidentId/dispatch-municipal`
+- `POST /api/cron/process-outbox`
+- `POST /api/pipeline/process`
 - `GET /api/map/incidents`
 
 All administrative routes must enforce authentication, role-based authorization, input validation and audit logging.
@@ -636,7 +695,7 @@ Before implementation:
 7. Provide deterministic mock providers only for automated tests.
 8. Make model providers configurable and validate every response.
 9. Never bypass the publication eligibility predicate.
-10. Do not claim that any government authority has been contacted by this pipeline.
+10. Automatically compile and dispatch the municipal civic grievance dossier via email only after complete verification and publication approval, recording an immutable audit trail in PostgreSQL.
 11. Run the full test suite and report any incomplete work or infrastructure dependency honestly.
 
-**Final outcome:** A citizen submits one report, and the platform automatically processes its evidence, location and incident relationship. If every required stage succeeds and the publication policy is satisfied, one canonical incident is published to the map. If any mandatory stage fails or remains unresolved, the report stays safely unpublised, recoverable and traceable.
+**Final outcome:** A citizen submits a report and receives instant confirmation (<500ms). A dedicated background worker asynchronously validates evidence, performs AI analysis, verifies geolocation, and synthesizes canonical incidents. Approved incidents appear on the public map, and an official civic report is automatically compiled and emailed to the local municipality. Unverified or rejected submissions remain safely unpinned with transparent citizen auditability.

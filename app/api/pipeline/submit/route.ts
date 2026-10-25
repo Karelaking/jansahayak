@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserSession } from "@/lib/auth/session";
 import { runReportPipeline } from "@/lib/pipeline/orchestrator";
+import { executeStage1Intake } from "@/lib/pipeline/intake";
+import { processReportBackground } from "@/lib/pipeline/background-processor";
+import { db, outboxEvents } from "@/lib/db";
 import { IngestedEvidencePhoto, ReportSubmissionPayload } from "@/lib/pipeline/types";
 
 export async function POST(req: NextRequest) {
+  const startTime = Date.now();
   try {
     const session = await getCurrentUserSession();
     const contentType = req.headers.get("content-type") || "";
+    const isSync = req.nextUrl.searchParams.get("sync") === "true";
 
     let payload: ReportSubmissionPayload;
 
@@ -102,11 +107,61 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    const summary = await runReportPipeline(payload);
+    // PRD §3, §4: Synchronous override for internal diagnostic benchmarking (?sync=true)
+    if (isSync) {
+      const summary = await runReportPipeline(payload);
+      return NextResponse.json({
+        success: summary.stagesCompleted >= 6,
+        summary,
+      });
+    }
+
+    // PRD §3, §4: Default Fast Intake Gateway (<500ms SLA)
+    // Persists raw report in MongoDB GridFS, creates PostgreSQL outbox event,
+    // and returns immediately to ensure an instant, responsive citizen UX.
+    const s1 = await executeStage1Intake(payload);
+    if (!s1.success || !s1.data) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: s1.error || "Intake validation failed.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const { reportId } = s1.data;
+
+    // Record transactional outbox event in PostgreSQL
+    try {
+      await db.insert(outboxEvents).values({
+        eventType: "report.submitted",
+        aggregateType: "report",
+        aggregateId: reportId,
+        payload: {
+          reportId,
+          category: payload.category,
+          idempotencyKey: payload.idempotencyKey,
+        },
+      });
+    } catch (outboxErr) {
+      console.warn("[Submit] Non-blocking outbox insertion warning:", outboxErr);
+    }
+
+    // Trigger dedicated background analysis worker asynchronously
+    void processReportBackground(reportId).catch((err) => {
+      console.error(`[Submit] Asynchronous background analysis error for ${reportId}:`, err);
+    });
 
     return NextResponse.json({
-      success: summary.stagesCompleted >= 6,
-      summary,
+      success: true,
+      summary: {
+        reportId,
+        status: "SUBMITTED",
+        stagesCompleted: 1,
+        message: "Report accepted and queued for background analysis",
+        durationMs: Date.now() - startTime,
+      },
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
