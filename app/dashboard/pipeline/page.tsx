@@ -105,19 +105,63 @@ export default function PipelineInspectionPage() {
     }
   };
 
-  // Generate 4 synthetic JPEG test buffers (each with valid JPEG headers 0xFF, 0xD8, 0xFF)
-  const createMockPhoto = (name: string, index: number) => {
-    // Valid minimal JPEG binary buffer encoded as base64
-    // FF D8 FF DB (JPEG header) + dummy bytes
-    const bytes = new Uint8Array(6000);
-    bytes[0] = 0xff;
-    bytes[1] = 0xd8;
-    bytes[2] = 0xff;
-    bytes[3] = 0xe0;
-    for (let i = 4; i < 6000; i++) {
-      bytes[i] = (i + index * 37) % 256;
+  // Generate authentic JPEG photos with simulated road infrastructure features via HTML5 Canvas
+  const createDiagnosticPhoto = (name: string, index: number) => {
+    let base64 = "";
+    if (typeof window !== "undefined") {
+      const canvas = document.createElement("canvas");
+      canvas.width = 320;
+      canvas.height = 240;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        // Road asphalt base
+        ctx.fillStyle = "#2c3437";
+        ctx.fillRect(0, 0, 320, 240);
+
+        // Asphalt texture grain
+        ctx.fillStyle = "#384347";
+        for (let i = 0; i < 40; i++) {
+          ctx.fillRect((i * 17) % 320, (i * 23) % 240, 4, 3);
+        }
+
+        // Road lane markings
+        ctx.fillStyle = "#f59e0b";
+        ctx.fillRect(150, 10, 15, 60);
+        ctx.fillRect(150, 120, 15, 60);
+
+        // Road hazard crater / pothole
+        ctx.fillStyle = "#151a1c";
+        ctx.beginPath();
+        ctx.ellipse(
+          120 + index * 18,
+          100 + index * 12,
+          45,
+          28,
+          (index * Math.PI) / 6,
+          0,
+          2 * Math.PI,
+        );
+        ctx.fill();
+
+        // Edge aggregate erosion
+        ctx.strokeStyle = "#475569";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Viewfinder telemetry overlay
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "10px monospace";
+        ctx.fillText(`JanSahayak Viewfinder ${index + 1} - ${new Date().toISOString()}`, 8, 230);
+      }
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      base64 = dataUrl.split(",")[1] || "";
     }
-    const base64 = btoa(String.fromCharCode.apply(null, Array.from(bytes)));
+
+    // Fallback minimal valid JPEG if canvas is unavailable
+    if (!base64) {
+      base64 =
+        "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=";
+    }
 
     return {
       filename: `${name}_${index + 1}.jpg`,
@@ -143,10 +187,10 @@ export default function PipelineInspectionPage() {
 
     try {
       const photos = [
-        createMockPhoto("pothole_angle_wide", 0),
-        createMockPhoto("pothole_depth_macro", 1),
-        createMockPhoto("pothole_curb_context", 2),
-        createMockPhoto("pothole_traffic_orientation", 3),
+        createDiagnosticPhoto("pothole_angle_wide", 0),
+        createDiagnosticPhoto("pothole_depth_macro", 1),
+        createDiagnosticPhoto("pothole_curb_context", 2),
+        createDiagnosticPhoto("pothole_traffic_orientation", 3),
       ];
 
       const res = await fetch("/api/pipeline/submit", {

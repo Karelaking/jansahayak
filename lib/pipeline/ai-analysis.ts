@@ -116,6 +116,7 @@ You must return a valid JSON object conforming exactly to this structure:
       } | null = null;
       let modelUsed = candidateModels[0] || "google/gemini-2.5-flash";
       let lastErrorMessage = "";
+      let imageDecodeFailed = false;
 
       for (const currentModel of candidateModels) {
         try {
@@ -151,7 +152,7 @@ You must return a valid JSON object conforming exactly to this structure:
             }
             lastErrorMessage = `OpenRouter API error ${response.status} (${response.statusText})${errorDetails}`;
 
-            // If 404 (model not found/deprecated) or 400 (model unsupported), retry with next fallback candidate
+            // If 404 (model not found/deprecated) or 400 (model unsupported or image decode failure), retry with next fallback candidate
             if (response.status === 404 || response.status === 400) {
               console.warn(
                 `[AI-Analysis] Model ${currentModel} returned ${response.status}. Attempting fallback...`,
@@ -176,6 +177,56 @@ You must return a valid JSON object conforming exactly to this structure:
         }
       }
 
+      // If all multimodal calls failed (e.g. invalid/corrupted image streams rejected by provider),
+      // perform a graceful text-based recovery pass per PRD §8 and flag evidence usability issues
+      if (!successfulResponse && imageParts.length > 0) {
+        console.warn(
+          "[AI-Analysis] Image vision stream rejected or unreadable. Initiating text-based recovery assessment...",
+        );
+        for (const currentModel of candidateModels) {
+          try {
+            const fallbackResponse = await fetch(`${baseUrl}/chat/completions`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+                "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+                "X-Title": "JanSahayak SafeStreets",
+              },
+              body: JSON.stringify({
+                model: currentModel,
+                response_format: { type: "json_object" },
+                messages: [
+                  {
+                    role: "user",
+                    content: [
+                      {
+                        type: "text",
+                        text: `${promptText}\n\nNotice: Attached evidence photographs could not be decoded by the vision engine. Generate preliminary hazard assessment from citizen description and mark usability as unusable.`,
+                      },
+                    ],
+                  },
+                ],
+                max_tokens: 1500,
+                temperature: 0.1,
+              }),
+            });
+
+            if (fallbackResponse.ok) {
+              successfulResponse = (await fallbackResponse.json()) as {
+                choices?: Array<{ message?: { content?: string } }>;
+                usage?: Record<string, unknown>;
+              };
+              modelUsed = currentModel;
+              imageDecodeFailed = true;
+              break;
+            }
+          } catch {
+            // Continue trying next candidate
+          }
+        }
+      }
+
       if (!successfulResponse) {
         throw new Error(
           lastErrorMessage || "All OpenRouter candidate models failed to return a response.",
@@ -193,18 +244,27 @@ You must return a valid JSON object conforming exactly to this structure:
       analysis = {
         predictedCategory: parsed.predictedCategory || report.category,
         severity: parsed.severity || "medium",
-        confidenceScore: Number(parsed.confidenceScore) || 0.88,
+        confidenceScore: imageDecodeFailed ? 0.65 : Number(parsed.confidenceScore) || 0.88,
         defectSummary: parsed.defectSummary || report.description,
         visualCharacteristics: Array.isArray(parsed.visualCharacteristics)
           ? parsed.visualCharacteristics
           : ["Asphalt fissure", "Unsafe roadway depression"],
-        usabilityAssessment: parsed.usabilityAssessment || {
-          isUsable: true,
-          issuesDetected: [],
-        },
+        usabilityAssessment: imageDecodeFailed
+          ? {
+              isUsable: false,
+              issuesDetected: [
+                "Submitted evidence image stream was unreadable or corrupted by vision engine",
+              ],
+            }
+          : parsed.usabilityAssessment || {
+              isUsable: true,
+              issuesDetected: [],
+            },
         embeddingVector: generateFeatureEmbedding(`${report.category} ${parsed.defectSummary}`),
         contradictionsDetected: Boolean(parsed.contradictionsDetected),
-        recommendedNextAction: parsed.recommendedNextAction || "create_new",
+        recommendedNextAction: imageDecodeFailed
+          ? "review_required"
+          : parsed.recommendedNextAction || "create_new",
         modelUsed,
       };
     } else if (process.env.NODE_ENV === "test") {
