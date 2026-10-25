@@ -33,7 +33,6 @@ import {
   EmptyDescription,
   EmptyContent,
 } from "@/components/ui/empty";
-import { SAMPLE_HAZARDS } from "@/lib/data";
 import type { HazardReport } from "@/lib/types/hazard";
 
 /** Status vs severity are separate vocabularies (Severity/Status Split). */
@@ -108,70 +107,65 @@ export default function ReportsPage() {
   const [selectedReport, setSelectedReport] = React.useState<HazardReport | null>(null);
 
   // Fetch real database reports on mount
-  React.useEffect(() => {
-    let active = true;
-    async function loadReports() {
-      try {
-        const [mapRes, reportsRes] = await Promise.all([
-          fetch("/api/map/incidents").catch(() => null),
-          fetch("/api/reports?limit=50").catch(() => null),
-        ]);
+  const loadReports = React.useCallback(async () => {
+    try {
+      const [mapRes, reportsRes] = await Promise.all([
+        fetch("/api/map/incidents").catch(() => null),
+        fetch("/api/reports?limit=50").catch(() => null),
+      ]);
 
-        const mapData = mapRes && mapRes.ok ? await mapRes.json() : null;
-        const reportsData = reportsRes && reportsRes.ok ? await reportsRes.json() : null;
+      const mapData = mapRes && mapRes.ok ? await mapRes.json() : null;
+      const reportsData = reportsRes && reportsRes.ok ? await reportsRes.json() : null;
 
-        const combined: HazardReport[] = [];
-        const seenIds = new Set<string>();
+      const combined: HazardReport[] = [];
+      const seenIds = new Set<string>();
 
-        if (mapData && Array.isArray(mapData.incidents)) {
-          for (const inc of mapData.incidents) {
-            combined.push(inc);
-            seenIds.add(inc.id);
-          }
+      if (mapData && Array.isArray(mapData.incidents)) {
+        for (const inc of mapData.incidents) {
+          combined.push(inc);
+          seenIds.add(inc.id);
         }
-
-        if (reportsData && Array.isArray(reportsData.reports)) {
-          for (const r of reportsData.reports) {
-            const rid = r.reportId || r._id;
-            if (rid && !seenIds.has(rid)) {
-              combined.push({
-                id: rid,
-                title: r.description ? r.description.slice(0, 60) : `${r.category} Report`,
-                description: r.description || "Citizen road safety report",
-                category: r.category || "road-surface",
-                severity: "medium",
-                status:
-                  r.status === "APPROVED" || r.status === "PUBLISHED" ? "resolved" : "under-review",
-                latitude: r.submissionLocation?.latitude || 28.4744,
-                longitude: r.submissionLocation?.longitude || 77.504,
-                landmark: "Greater Noida",
-                time: r.createdAt
-                  ? new Date(r.createdAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : "Recently",
-                reportedAt: r.createdAt
-                  ? new Date(r.createdAt).toLocaleDateString("en-IN")
-                  : "Recently",
-              });
-              seenIds.add(rid);
-            }
-          }
-        }
-
-        if (active && combined.length > 0) {
-          setReports(combined);
-        }
-      } catch (e) {
-        console.warn("Could not load database reports for registry:", e);
       }
+
+      if (reportsData && Array.isArray(reportsData.reports)) {
+        for (const r of reportsData.reports) {
+          const rid = r.reportId || r._id;
+          if (rid && !seenIds.has(rid)) {
+            combined.push({
+              id: rid,
+              title: r.description ? r.description.slice(0, 60) : `${r.category} Report`,
+              description: r.description || "Citizen road safety report",
+              category: r.category || "road-surface",
+              severity: "medium",
+              status:
+                r.status === "APPROVED" || r.status === "PUBLISHED" ? "resolved" : "under-review",
+              latitude: r.submissionLocation?.latitude || 28.4744,
+              longitude: r.submissionLocation?.longitude || 77.504,
+              landmark: "Greater Noida",
+              time: r.createdAt
+                ? new Date(r.createdAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "Recently",
+              reportedAt: r.createdAt
+                ? new Date(r.createdAt).toLocaleDateString("en-IN")
+                : "Recently",
+            });
+            seenIds.add(rid);
+          }
+        }
+      }
+
+      setReports(combined);
+    } catch (e) {
+      console.warn("Could not load database reports for registry:", e);
     }
-    loadReports();
-    return () => {
-      active = false;
-    };
   }, []);
+
+  React.useEffect(() => {
+    loadReports();
+  }, [loadReports]);
 
   // Filtered reports
   const filteredReports = React.useMemo(() => {
@@ -218,26 +212,15 @@ export default function ReportsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {reports.length > 0 ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 h-9 sm:h-8"
-              onClick={() => setReports([])}
-            >
-              <RotateCcw className="size-3.5" />
-              <span>Clear</span>
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 h-9 sm:h-8"
-              onClick={() => setReports(SAMPLE_HAZARDS)}
-            >
-              <span>Load Demo Data</span>
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 h-9 sm:h-8"
+            onClick={() => loadReports()}
+          >
+            <RotateCcw className="size-3.5" />
+            <span>Refresh</span>
+          </Button>
 
           <Button variant="outline" size="sm" className="gap-1.5 h-9 sm:h-8">
             <Download className="size-3.5" />
@@ -310,14 +293,6 @@ export default function ReportsPage() {
                 <Button size="sm" className="h-9" render={<Link href="/reports/new" />}>
                   <Plus className="mr-1.5 size-3.5" />
                   <span>Submit First Report</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9"
-                  onClick={() => setReports(SAMPLE_HAZARDS)}
-                >
-                  Load Centralized Demo Data
                 </Button>
               </EmptyContent>
             </Empty>

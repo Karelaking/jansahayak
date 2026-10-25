@@ -48,7 +48,6 @@ import {
   EmptyDescription,
   EmptyContent,
 } from "@/components/ui/empty";
-import { SAMPLE_MODERATION_QUEUE } from "@/lib/data";
 import type { ModerationQueueItem } from "@/lib/types/hazard";
 
 function getIcon(name: ModerationQueueItem["iconName"]) {
@@ -99,53 +98,47 @@ export default function ModerationPage() {
   const [unpublishReason, setUnpublishReason] = React.useState("");
 
   // Fetch live review queue on mount
-  React.useEffect(() => {
-    let active = true;
-    async function loadReviewQueue() {
-      try {
-        const res = await fetch("/api/admin/review-queue");
-        if (!res.ok) return;
-        const data = await res.json();
-        if (active && data.success && Array.isArray(data.items) && data.items.length > 0) {
-          // If items are raw database incidents, map them to ModerationQueueItem format
-          const mapped: ModerationQueueItem[] = data.items.map((rawRow: unknown) => {
-            const row = rawRow as Record<string, unknown>;
-            if (row.flagLabel) return row as unknown as ModerationQueueItem; // already mapped/seed
-            const meta = (row.metadata as Record<string, unknown>) || {};
-            return {
-              id: String(row.id || ""),
-              title: String(row.title || "Hazard Incident"),
-              type:
-                row.category === "lighting" || row.category === "crossing"
-                  ? "location"
-                  : "duplicate",
-              flagLabel: row.status === "under_review" ? "Awaiting Review" : "Unverified Incident",
-              detail: String(
-                row.summary || "Citizen submitted hazard awaiting municipal verification.",
-              ),
-              reporter: String(meta.reporter || "Verified Citizen"),
-              time: row.createdAt
-                ? new Date(String(row.createdAt)).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })
-                : "Recently",
-              badgeVariant: "secondary",
-              iconName: "alert",
-              status: "pending",
-            };
-          });
-          setItems(mapped);
-        }
-      } catch (err) {
-        console.warn("Could not fetch live review queue, offline mode active:", err);
+  const loadReviewQueue = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/review-queue");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success && Array.isArray(data.items)) {
+        const mapped: ModerationQueueItem[] = data.items.map((rawRow: unknown) => {
+          const row = rawRow as Record<string, unknown>;
+          if (row.flagLabel) return row as unknown as ModerationQueueItem;
+          const meta = (row.metadata as Record<string, unknown>) || {};
+          return {
+            id: String(row.id || ""),
+            title: String(row.title || "Hazard Incident"),
+            type:
+              row.category === "lighting" || row.category === "crossing" ? "location" : "duplicate",
+            flagLabel: row.status === "under_review" ? "Awaiting Review" : "Unverified Incident",
+            detail: String(
+              row.summary || "Citizen submitted hazard awaiting municipal verification.",
+            ),
+            reporter: String(meta.reporter || "Verified Citizen"),
+            time: row.createdAt
+              ? new Date(String(row.createdAt)).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "Recently",
+            badgeVariant: "secondary",
+            iconName: "alert",
+            status: "pending",
+          };
+        });
+        setItems(mapped);
       }
+    } catch (err) {
+      console.warn("Could not fetch live review queue:", err);
     }
-    loadReviewQueue();
-    return () => {
-      active = false;
-    };
   }, []);
+
+  React.useEffect(() => {
+    loadReviewQueue();
+  }, [loadReviewQueue]);
 
   const pendingItems = items.filter((i) => i.status === "pending");
 
@@ -322,49 +315,29 @@ export default function ModerationPage() {
     }
   };
 
-  const handleLoadDemo = () => {
-    setItems(SAMPLE_MODERATION_QUEUE);
-  };
-
-  const handleClear = () => {
-    setItems([]);
-  };
-
   return (
-    <div className="flex flex-col gap-6">
-      {/* ── Page Header ─── */}
+    <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-heading text-xl font-bold tracking-tight text-foreground sm:text-2xl md:text-3xl">
-              Moderation &amp; Verification
-            </h1>
-            <Badge variant="destructive" className="text-xs">
-              {pendingItems.length} Pending
-            </Badge>
-          </div>
-          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-            Audit citizen submissions for accuracy, deduplication, and appropriate civic
-            jurisdiction.
+          <h1 className="text-xl sm:text-2xl font-serif font-bold text-[#0e2b24] tracking-tight">
+            Moderation Queue
+          </h1>
+          <p className="text-xs sm:text-sm text-[#5c6f66]">
+            Review flagged hazards, merge spatial duplicates, resolve geo-fence ambiguities, and
+            audit incident scope.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {items.length > 0 ? (
-            <Button variant="outline" size="sm" className="gap-1 h-9 sm:h-8" onClick={handleClear}>
-              <RotateCcw className="size-3" />
-              <span>Clear</span>
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1 h-9 sm:h-8"
-              onClick={handleLoadDemo}
-            >
-              <span>Load Demo Queue</span>
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 h-9 sm:h-8"
+            onClick={() => loadReviewQueue()}
+          >
+            <RotateCcw className="size-3" />
+            <span>Refresh</span>
+          </Button>
 
           <div className="w-full overflow-x-auto no-scrollbar -mx-1 px-1 sm:w-auto">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -404,8 +377,9 @@ export default function ModerationPage() {
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
-                <Button variant="outline" size="sm" onClick={handleLoadDemo}>
-                  Load Centralized Demo Queue
+                <Button variant="outline" size="sm" onClick={() => loadReviewQueue()}>
+                  <RotateCcw className="size-3.5 mr-1.5" />
+                  Refresh Queue
                 </Button>
               </EmptyContent>
             </Empty>
@@ -427,9 +401,6 @@ export default function ModerationPage() {
               <EmptyContent>
                 <Button variant="outline" size="sm" onClick={() => setActiveTab("all")}>
                   View All Categories
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleLoadDemo}>
-                  Reset Demo Queue
                 </Button>
               </EmptyContent>
             </Empty>

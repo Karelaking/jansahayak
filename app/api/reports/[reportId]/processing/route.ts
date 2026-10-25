@@ -11,30 +11,23 @@ export async function GET(
 ) {
   try {
     const { reportId } = await params;
+    const logsColl = await getPipelineLogsCollection();
+    const jobLogs = await logsColl.find({ reportId }).sort({ stage: 1 }).toArray();
 
-    try {
-      const logsColl = await getPipelineLogsCollection();
-      const jobLogs = await logsColl.find({ reportId }).sort({ stage: 1 }).toArray();
-
-      return NextResponse.json({
-        success: true,
-        reportId,
-        stages: jobLogs,
-      });
-    } catch (mongoErr) {
-      const msg = mongoErr instanceof Error ? mongoErr.message : String(mongoErr);
-      if (msg.includes("ECONNREFUSED") || msg.includes("connect")) {
-        return NextResponse.json({
-          success: true,
-          reportId,
-          isOfflineFallback: true,
-          stages: [],
-        });
-      }
-      throw mongoErr;
-    }
+    return NextResponse.json({
+      success: true,
+      reportId,
+      stages: jobLogs,
+    });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    const isConnRefused = msg.includes("ECONNREFUSED") || msg.includes("connect");
+    return NextResponse.json(
+      {
+        error: isConnRefused ? "Database connection unavailable" : msg,
+        isRetryable: isConnRefused,
+      },
+      { status: isConnRefused ? 503 : 500 },
+    );
   }
 }

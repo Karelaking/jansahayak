@@ -1,47 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, incidents } from "@/lib/db";
 import { eq, and, desc } from "drizzle-orm";
-import { SAMPLE_HAZARDS } from "@/lib/data";
 
 /**
  * PRD §16 Public Map Incidents Endpoint
  * Returns sanitized, privacy-safe canonical incidents for public map display.
- * Fallbacks gracefully to baseline verified seed hazards when database is offline.
+ * Only published and moderation-approved incidents from PostgreSQL are returned.
  */
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
 
-    let rows: (typeof incidents.$inferSelect)[] = [];
+    const conditions = [eq(incidents.isPublished, true), eq(incidents.status, "approved")];
 
-    try {
-      const conditions = [eq(incidents.isPublished, true), eq(incidents.status, "approved")];
-
-      if (category && category !== "all") {
-        conditions.push(eq(incidents.category, category));
-      }
-
-      rows = await db
-        .select()
-        .from(incidents)
-        .where(and(...conditions))
-        .orderBy(desc(incidents.createdAt))
-        .limit(100);
-    } catch {
-      // Fallback to baseline verified seed hazards when database is offline/initializing
-      const filteredSeed =
-        category && category !== "all"
-          ? SAMPLE_HAZARDS.filter((h) => h.category === category)
-          : SAMPLE_HAZARDS;
-
-      return NextResponse.json({
-        success: true,
-        isOfflineFallback: true,
-        count: filteredSeed.length,
-        incidents: filteredSeed,
-      });
+    if (category && category !== "all") {
+      conditions.push(eq(incidents.category, category));
     }
+
+    const rows = await db
+      .select()
+      .from(incidents)
+      .where(and(...conditions))
+      .orderBy(desc(incidents.createdAt))
+      .limit(100);
 
     // Convert rows to sanitized map hazard format
     const publicIncidents = rows.map((inc) => ({
@@ -83,15 +65,11 @@ export async function GET(req: NextRequest) {
       landmark: ((inc.metadata as Record<string, unknown>)?.landmark as string) || "Greater Noida",
     }));
 
-    // If database has incidents, combine with baseline seed hazards so map is populated
-    const seedIds = new Set(publicIncidents.map((i) => i.id));
-    const combined = [...publicIncidents, ...SAMPLE_HAZARDS.filter((s) => !seedIds.has(s.id))];
-
     return NextResponse.json({
       success: true,
-      count: combined.length,
+      count: publicIncidents.length,
       liveCount: publicIncidents.length,
-      incidents: combined,
+      incidents: publicIncidents,
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

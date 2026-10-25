@@ -154,8 +154,8 @@ You must return a valid JSON object conforming exactly to this structure:
         recommendedNextAction: parsed.recommendedNextAction || "create_new",
         modelUsed: model,
       };
-    } else {
-      // Deterministic Local/Sandbox Vision Analyzer Fallback
+    } else if (process.env.NODE_ENV === "test") {
+      // Deterministic test-only mock provider (PRD §21 line 7: "Provide deterministic mock providers only for automated tests")
       provider = "mock";
       const catLower = report.category.toLowerCase();
       let severity: "low" | "medium" | "high" | "critical" = "medium";
@@ -195,13 +195,22 @@ You must return a valid JSON object conforming exactly to this structure:
         embeddingVector: generateFeatureEmbedding(`${report.category} ${summary}`),
         contradictionsDetected: false,
         recommendedNextAction: "create_new",
-        modelUsed: "local-deterministic-vision-analyzer",
+        modelUsed: "test-deterministic-vision-analyzer",
       };
 
       rawApiResponse = {
-        source: "local-vision-engine",
+        source: "test-vision-engine",
         status: "complete",
-        simulated: true,
+        testOnly: true,
+      };
+    } else {
+      return {
+        stage: 3,
+        stageName,
+        success: false,
+        error:
+          "AI vision analysis failed: Missing valid OPENROUTER_API_KEY. Mock data is disabled in runtime.",
+        isRetryable: true,
       };
     }
 

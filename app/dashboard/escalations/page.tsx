@@ -1,15 +1,7 @@
 "use client";
 
 import * as React from "react";
-import {
-  Building2,
-  Clock,
-  ExternalLink,
-  MessageSquare,
-  CheckCircle2,
-  Send,
-  RotateCcw,
-} from "lucide-react";
+import { Building2, Clock, ExternalLink, MessageSquare, CheckCircle2, Send } from "lucide-react";
 
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,9 +21,7 @@ import {
   EmptyMedia,
   EmptyTitle,
   EmptyDescription,
-  EmptyContent,
 } from "@/components/ui/empty";
-import { SAMPLE_ESCALATIONS } from "@/lib/data";
 import type { EscalationDocket } from "@/lib/types/hazard";
 
 export default function EscalationsPage() {
@@ -86,14 +76,6 @@ export default function EscalationsPage() {
     setActiveModalId(null);
   };
 
-  const handleLoadDemo = () => {
-    setEscalations(SAMPLE_ESCALATIONS);
-  };
-
-  const handleClear = () => {
-    setEscalations([]);
-  };
-
   return (
     <div className="flex flex-col gap-6">
       {/* ── Page Header ─── */}
@@ -111,29 +93,6 @@ export default function EscalationsPage() {
             Auditable trail of hazard files escalated to responsible municipal authorities and
             elected ward reps.
           </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {escalations.length > 0 ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 h-9 sm:h-8"
-              onClick={handleClear}
-            >
-              <RotateCcw className="size-3.5" />
-              <span>Clear</span>
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 h-9 sm:h-8"
-              onClick={handleLoadDemo}
-            >
-              <span>Load Demo Dockets</span>
-            </Button>
-          )}
         </div>
       </div>
 
@@ -154,11 +113,6 @@ export default function EscalationsPage() {
                   creation after SLA expiry.
                 </EmptyDescription>
               </EmptyHeader>
-              <EmptyContent>
-                <Button variant="outline" size="sm" onClick={handleLoadDemo}>
-                  Load Centralized Demo Dockets
-                </Button>
-              </EmptyContent>
             </Empty>
           </Card>
         ) : (

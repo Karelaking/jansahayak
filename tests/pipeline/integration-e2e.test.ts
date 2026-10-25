@@ -9,6 +9,7 @@ import {
   executeIncidentUnpublish,
 } from "@/lib/pipeline/moderation";
 import { executeStage1Intake } from "@/lib/pipeline/intake";
+import { executeStage2EvidenceValidation } from "@/lib/pipeline/evidence-validation";
 import { processOutboxBatch } from "@/lib/pipeline/worker";
 
 describe("PRD §19 End-to-End Integration Test Suite (20 Scenarios)", () => {
@@ -357,5 +358,96 @@ describe("PRD §19 End-to-End Integration Test Suite (20 Scenarios)", () => {
     expect(incidentMetadata.duplicateMatching.passedGates).toContain("temporal_recency");
     expect(incidentMetadata.duplicateMatching.failedGates).toContain("spatial_proximity");
     expect(incidentMetadata.duplicateMatching.matchedIncidentId).toBeNull();
+  });
+
+  // Scenario 21: Stage 1 Intake rejects submissions with fewer than 4 photographs (PRD §2, §6)
+  it("Scenario 21: Stage 1 Intake strictly rejects submissions with fewer than 4 photographs", async () => {
+    const res = await executeStage1Intake({
+      userId: "user_test_valid",
+      category: "Road Surface / Pothole",
+      description: "Severe crater on Noida-Greater Noida Expressway service road",
+      photos: [
+        {
+          buffer: Buffer.from("dummy-photo-1"),
+          filename: "p1.jpg",
+          contentType: "image/jpeg",
+          capturedAt: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [],
+        },
+        {
+          buffer: Buffer.from("dummy-photo-2"),
+          filename: "p2.jpg",
+          contentType: "image/jpeg",
+          capturedAt: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [],
+        },
+      ], // Only 2 photos provided (min 4 required)
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 6,
+        capturedAt: new Date().toISOString(),
+      },
+    });
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/minimum of 4 valid evidence photographs is required/i);
+  });
+
+  // Scenario 22: Stage 2 Evidence Validation rejects raw reports containing fewer than 4 photographs (PRD §2, §7)
+  it("Scenario 22: Stage 2 Evidence Validation rejects raw reports containing fewer than 4 photos", async () => {
+    const mockReport = {
+      reportId: "rep_test_evidence_01",
+      userId: "user_test_valid",
+      category: "Road Surface / Pothole",
+      description: "Test description",
+      status: "EVIDENCE_VALIDATION_PENDING" as const,
+      createdAt: new Date().toISOString(),
+      evidencePhotos: [
+        {
+          fileId: "file_01",
+          filename: "photo1.jpg",
+          contentType: "image/jpeg",
+          byteSize: 1024,
+          sha256Hash: "hash1",
+          captureTimestamp: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [],
+        },
+        {
+          fileId: "file_02",
+          filename: "photo2.jpg",
+          contentType: "image/jpeg",
+          byteSize: 1024,
+          sha256Hash: "hash2",
+          captureTimestamp: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [],
+        },
+        {
+          fileId: "file_03",
+          filename: "photo3.jpg",
+          contentType: "image/jpeg",
+          byteSize: 1024,
+          sha256Hash: "hash3",
+          captureTimestamp: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [],
+        },
+      ], // Only 3 photos (min 4 required)
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 6,
+        capturedAt: new Date().toISOString(),
+      },
+      auditLogs: [],
+    };
+    const res = await executeStage2EvidenceValidation(
+      mockReport as unknown as Parameters<typeof executeStage2EvidenceValidation>[0],
+    );
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/Minimum 4 evidence photographs required/i);
   });
 });

@@ -50,13 +50,14 @@ export async function executeStage1Intake(
       };
     }
 
-    // 3. Enforce Minimum 1 Evidence Photo
-    if (!payload.photos || payload.photos.length < 1) {
+    // 3. Enforce Minimum 4 Evidence Photographs (PRD §2, §6)
+    if (!payload.photos || payload.photos.length < 4) {
       return {
         stage: 1,
         stageName,
         success: false,
-        error: "Please attach at least one photograph of the road hazard.",
+        error:
+          "PRD §6 requirement: A minimum of 4 valid evidence photographs is required to submit a hazard report.",
         isRetryable: false,
       };
     }

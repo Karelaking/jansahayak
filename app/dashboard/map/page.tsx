@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ExternalLink, Plus, RotateCcw } from "lucide-react";
+import { ExternalLink, Plus } from "lucide-react";
 
 import { LiveHazardMap } from "@/components/map";
 import {
@@ -15,12 +15,8 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { SAMPLE_HAZARDS } from "@/lib/data";
-import type { HazardReport } from "@/lib/types/hazard";
 
 export default function DashboardMapPage() {
-  const [hazards, setHazards] = React.useState<HazardReport[]>([]);
-
   return (
     <div className="flex flex-col gap-6">
       {/* ── Page Header ─── */}
@@ -31,7 +27,7 @@ export default function DashboardMapPage() {
               Geospatial Operations Map
             </h1>
             <Badge variant="outline" className="text-xs">
-              {hazards.length > 0 ? `${hazards.length} Demo Pins` : "Clean Pilot Basemap"}
+              Live Published Incidents
             </Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -40,22 +36,6 @@ export default function DashboardMapPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {hazards.length > 0 ? (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setHazards([])}>
-              <RotateCcw className="size-3.5" />
-              <span>Clear Pins</span>
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => setHazards(SAMPLE_HAZARDS)}
-            >
-              <span>Load Centralized Demo Pins</span>
-            </Button>
-          )}
-
           <Button variant="outline" size="sm" className="gap-1.5" render={<Link href="/map" />}>
             <span>Full-Screen Map</span>
             <ExternalLink className="size-3.5" />
@@ -78,28 +58,18 @@ export default function DashboardMapPage() {
                 Interactive tiles centered on Pari Chowk and Knowledge Park corridor.
               </CardDescription>
             </div>
-
-            <div className="flex items-center gap-2">
-              <Badge variant={hazards.length > 0 ? "secondary" : "outline"} className="text-xs">
-                {hazards.length} Active Geotags
-              </Badge>
-            </div>
           </div>
         </CardHeader>
 
         <CardContent className="p-0">
           <div className="relative h-[640px] w-full">
-            <LiveHazardMap hazards={hazards} showHeroOverlay={false} />
+            <LiveHazardMap showHeroOverlay={false} />
           </div>
         </CardContent>
 
         <CardFooter className="border-t border-border px-6 py-3 bg-muted/20 text-xs text-muted-foreground">
           <div className="flex flex-wrap items-center justify-between gap-4 w-full">
-            <span>
-              {hazards.length > 0
-                ? "Click any marker to inspect incident history and authority dispatch status."
-                : "Pilot radar ready. Click 'Load Centralized Demo Pins' or submit a new report to place pins."}
-            </span>
+            <span>Click any pin to inspect incident history and authority dispatch status.</span>
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1.5">
                 <span className="size-2 rounded-full bg-[#e4876f]" />

@@ -21,9 +21,11 @@ import {
   EyeOff,
   Building2,
   Clock,
-  ImageIcon,
   Sparkles,
   FileText,
+  SwitchCamera,
+  Upload,
+  AlertCircle,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -219,54 +221,117 @@ export default function NewReportPage() {
     }
   };
 
-  // Generate a realistic sample road photo using HTML Canvas (for convenient mobile/desktop testing)
-  const handleAddSamplePhoto = () => {
-    if (typeof window === "undefined") return;
+  // Camera & Viewfinder Modal State
+  const [isCameraOpen, setIsCameraOpen] = React.useState(false);
+  const [cameraFacing, setCameraFacing] = React.useState<"environment" | "user">("environment");
+  const [cameraError, setCameraError] = React.useState<string | null>(null);
+  const [isCameraStarting, setIsCameraStarting] = React.useState(false);
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const streamRef = React.useRef<MediaStream | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Stop media stream tracks cleanly
+  const stopCameraStream = React.useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, []);
+
+  // Start media stream with current facing mode
+  const startCameraStream = React.useCallback(
+    async (facing: "environment" | "user") => {
+      stopCameraStream();
+      setCameraError(null);
+      setIsCameraStarting(true);
+
+      if (
+        typeof window === "undefined" ||
+        !navigator?.mediaDevices ||
+        typeof navigator.mediaDevices.getUserMedia !== "function"
+      ) {
+        setCameraError(
+          "Direct camera access is not supported in this browser. Please upload a photo file.",
+        );
+        setIsCameraStarting(false);
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: facing },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          try {
+            await videoRef.current.play();
+          } catch {
+            // Autoplay catch
+          }
+        }
+      } catch (err) {
+        console.warn("Camera stream initialization failed:", err);
+        setCameraError(
+          err instanceof Error && err.name === "NotAllowedError"
+            ? "Camera permission denied. Please allow camera permissions in your browser or select photo files from device."
+            : "Could not connect to camera hardware. Please check camera access or upload photos.",
+        );
+      } finally {
+        setIsCameraStarting(false);
+      }
+    },
+    [stopCameraStream],
+  );
+
+  // Synchronize camera state with modal lifecycle
+  React.useEffect(() => {
+    if (isCameraOpen) {
+      startCameraStream(cameraFacing);
+    } else {
+      stopCameraStream();
+    }
+    return () => {
+      stopCameraStream();
+    };
+  }, [isCameraOpen, cameraFacing, startCameraStream, stopCameraStream]);
+
+  // Flip camera between environment (rear) and user (selfie)
+  const handleToggleCameraFacing = () => {
+    const nextMode = cameraFacing === "environment" ? "user" : "environment";
+    setCameraFacing(nextMode);
+  };
+
+  // Capture snapshot from video frame to canvas
+  const handleSnapPhoto = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
     const canvas = document.createElement("canvas");
-    canvas.width = 400;
-    canvas.height = 300;
+    const width = video.videoWidth || 640;
+    const height = video.videoHeight || 480;
+    canvas.width = width;
+    canvas.height = height;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Asphalt road background
-    ctx.fillStyle = "#374151";
-    ctx.fillRect(0, 0, 400, 300);
-
-    // Road texture specks
-    ctx.fillStyle = "#4b5563";
-    for (let i = 0; i < 80; i++) {
-      ctx.fillRect(Math.random() * 400, Math.random() * 300, 3, 2);
-    }
-
-    // Yellow road lane line
-    ctx.fillStyle = "#eab308";
-    ctx.fillRect(350, 0, 16, 300);
-
-    // Pothole / defect crater
-    ctx.fillStyle = "#111827";
-    ctx.beginPath();
-    ctx.ellipse(180, 160, 90, 55, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Crater depth shadow
-    ctx.fillStyle = "#030712";
-    ctx.beginPath();
-    ctx.ellipse(175, 165, 60, 35, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Road marker stamp
-    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-    ctx.font = "bold 13px sans-serif";
-    ctx.fillText("JanSahayak Field Capture", 16, 30);
-    ctx.font = "11px monospace";
-    ctx.fillText(`${latitude.toFixed(4)}°N, ${longitude.toFixed(4)}°E`, 16, 48);
-
+    ctx.drawImage(video, 0, 0, width, height);
     const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
     const base64 = dataUrl.split(",")[1] || "";
 
     const newPhoto: PhotoItem = {
-      id: `sample_${Date.now()}_${photos.length}`,
-      filename: `road_hazard_${photos.length + 1}.jpg`,
+      id: `camera_${Date.now()}_${photos.length}`,
+      filename: `road_hazard_${Date.now()}_${photos.length + 1}.jpg`,
       base64,
       byteSize: Math.round((base64.length * 3) / 4),
       capturedAt: new Date().toISOString(),
@@ -276,7 +341,13 @@ export default function NewReportPage() {
       previewUrl: dataUrl,
     };
 
-    setPhotos((prev) => [...prev, newPhoto].slice(0, 4));
+    setPhotos((prev) => {
+      const nextPhotos = [...prev, newPhoto].slice(0, 4);
+      if (nextPhotos.length >= 4) {
+        setIsCameraOpen(false);
+      }
+      return nextPhotos;
+    });
     setErrorMsg(null);
   };
 
@@ -331,8 +402,11 @@ export default function NewReportPage() {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (photos.length < 1) {
-      setErrorMsg("Please attach at least 1 photo showing the road hazard.");
+    // Enforce 4-photo requirement per PRD §2, §6, §7
+    if (photos.length < 4) {
+      setErrorMsg(
+        `PRD §6 requirement: Please attach at least 4 photographs of the road hazard (${photos.length}/4 attached).`,
+      );
       return;
     }
 
@@ -896,36 +970,36 @@ export default function NewReportPage() {
             </CardContent>
           </Card>
 
-          {/* ── CARD 3: Photo Evidence ── */}
+          {/* ── CARD 3: Photo Evidence (PRD §2, §6, §7 Enforces 4 Photos) ── */}
           <Card className="bg-[#faf9f5] border border-[#cbd5cb] rounded-2xl shadow-xs overflow-hidden">
             <CardHeader className="p-4 pb-2 border-b border-[#eef1e9]">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold text-[#0e2b24] flex items-center gap-2">
                   <Camera className="h-4 w-4 text-emerald-800" />
-                  3. Photos of the Hazard
+                  3. Photographic Evidence (Min. 4 Required)
                 </CardTitle>
                 <Badge
                   variant="outline"
                   className={`text-[11px] font-medium ${
-                    photos.length >= 1
+                    photos.length >= 4
                       ? "bg-emerald-50 text-emerald-800 border-emerald-300"
                       : "bg-amber-50 text-amber-900 border-amber-300"
                   }`}
                 >
-                  {photos.length} / 4 Photos {photos.length >= 1 ? "✓ Attached" : "(Min. 1)"}
+                  {photos.length} / 4 Photos{" "}
+                  {photos.length >= 4 ? "✓ Complete" : `(${4 - photos.length} more needed)`}
                 </Badge>
               </div>
             </CardHeader>
 
             <CardContent className="p-4 space-y-3.5">
-              {/* Photo Previews Grid */}
+              {/* Photo Previews Grid - 4 Slots */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {photos.map((photo, idx) => (
                   <div
                     key={photo.id}
                     className="relative aspect-square rounded-xl overflow-hidden border border-[#cbd5cb] bg-white group shadow-2xs"
                   >
-                    {/* Real Image Preview */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={photo.previewUrl || `data:image/jpeg;base64,${photo.base64}`}
@@ -937,7 +1011,7 @@ export default function NewReportPage() {
                     <button
                       type="button"
                       onClick={() => handleRemovePhoto(photo.id)}
-                      className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/70 hover:bg-black text-white flex items-center justify-center transition-all"
+                      className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/70 hover:bg-black text-white flex items-center justify-center transition-all cursor-pointer"
                       aria-label="Remove photo"
                     >
                       <Trash2 className="h-3 w-3" />
@@ -952,45 +1026,198 @@ export default function NewReportPage() {
                   </div>
                 ))}
 
-                {/* Add Photo Slot (if under 4) */}
-                {photos.length < 4 && (
-                  <label className="aspect-square rounded-xl border-2 border-dashed border-[#cbd5cb] hover:border-[#0e2b24] bg-white/60 hover:bg-white transition-all cursor-pointer flex flex-col items-center justify-center p-2 text-center group active:scale-98">
-                    <div className="h-9 w-9 rounded-full bg-emerald-50 text-emerald-800 flex items-center justify-center group-hover:scale-110 transition-transform mb-1.5">
-                      <Camera className="h-4 w-4" />
+                {/* Empty placeholder slots for remaining required photos */}
+                {Array.from({ length: Math.max(0, 4 - photos.length) }).map((_, slotIndex) => {
+                  const actualSlotNumber = photos.length + slotIndex + 1;
+                  return (
+                    <div
+                      key={`empty-slot-${actualSlotNumber}`}
+                      className="aspect-square rounded-xl border border-dashed border-[#cbd5cb] bg-white/40 flex flex-col items-center justify-center p-2 text-center"
+                    >
+                      <Camera className="h-4 w-4 text-[#8b9b92] mb-1 opacity-60" />
+                      <span className="text-[11px] font-medium text-[#5c6f66]">
+                        Slot {actualSlotNumber}
+                      </span>
+                      <span className="text-[9px] text-[#8b9b92]">Required</span>
                     </div>
-                    <span className="text-xs font-semibold text-[#0e2b24]">
-                      {photos.length === 0 ? "Add Photo" : "Add Another"}
+                  );
+                })}
+              </div>
+
+              {/* Action Buttons to capture/upload */}
+              {photos.length < 4 ? (
+                <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                  <Button
+                    type="button"
+                    onClick={() => setIsCameraOpen(true)}
+                    className="flex-1 bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed]! text-xs h-10 rounded-xl font-medium flex items-center justify-center gap-2"
+                  >
+                    <Camera className="h-4 w-4 text-emerald-300" />
+                    <span>Open Live Camera</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-1 border-[#cbd5cb] bg-white text-[#0e2b24] hover:bg-[#faf9f5] text-xs h-10 rounded-xl font-medium flex items-center justify-center gap-2"
+                  >
+                    <Upload className="h-4 w-4 text-[#5c6f66]" />
+                    <span>Upload From Device</span>
+                  </Button>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                    All 4 required photographs attached
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setPhotos([])}
+                    className="text-[11px] text-emerald-800 underline hover:text-emerald-950 font-semibold"
+                  >
+                    Retake All
+                  </button>
+                </div>
+              )}
+
+              {/* Regulatory explanation per PRD §2 & §6 */}
+              <p className="text-[11px] text-[#5c6f66] pt-0.5 leading-relaxed">
+                PRD §6 Requirement: A minimum of 4 distinct angles/closeups is required to compute
+                stereoscopic depth estimation, verify road defect geometry, and prevent fraudulent
+                reports.
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Live In-App Camera Viewfinder Modal */}
+          <Dialog open={isCameraOpen} onOpenChange={setIsCameraOpen}>
+            <DialogContent className="sm:max-w-lg bg-[#0e2b24] border-stone-800 text-white p-4">
+              <DialogHeader>
+                <div className="flex items-center justify-between pr-6">
+                  <DialogTitle className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Camera className="h-4 w-4 text-emerald-400" />
+                    Live Camera Capture
+                  </DialogTitle>
+                  <Badge
+                    variant="outline"
+                    className="bg-emerald-950/80 text-emerald-300 border-emerald-700 text-[10px]"
+                  >
+                    Photo {photos.length + 1} of 4
+                  </Badge>
+                </div>
+                <DialogDescription className="text-xs text-stone-300">
+                  Point your camera at the road hazard. Capture 4 distinct angles/distances.
+                </DialogDescription>
+              </DialogHeader>
+
+              {/* Video Stream Area */}
+              <div className="relative aspect-4/3 w-full bg-black rounded-xl overflow-hidden border border-stone-800 flex items-center justify-center my-2">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+
+                {/* Viewfinder HUD overlay */}
+                <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-3">
+                  <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400/80 bg-black/40 px-2 py-0.5 rounded backdrop-blur-xs">
+                    <span>
+                      GPS: {latitude.toFixed(4)}°N, {longitude.toFixed(4)}°E
                     </span>
-                    <span className="text-[10px] text-[#5c6f66] mt-0.5">Camera or Gallery</span>
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                  </label>
+                    <span>±{accuracy}m</span>
+                  </div>
+
+                  {/* Center target mark */}
+                  <div className="self-center flex items-center justify-center">
+                    <div className="w-12 h-12 border border-white/30 rounded-full flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-white/70 bg-black/40 px-2 py-0.5 rounded backdrop-blur-xs text-center">
+                    Slot {photos.length + 1} of 4 &bull; Tap shutter to snap
+                  </div>
+                </div>
+
+                {/* Loading Spinner */}
+                {isCameraStarting && (
+                  <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-white gap-2 z-10">
+                    <RefreshCw className="h-6 w-6 animate-spin text-emerald-400" />
+                    <span className="text-xs text-stone-300">Initializing camera sensor...</span>
+                  </div>
+                )}
+
+                {/* Error Message */}
+                {cameraError && (
+                  <div className="absolute inset-0 bg-black/90 p-4 flex flex-col items-center justify-center text-center text-white gap-3 z-10">
+                    <AlertCircle className="h-8 w-8 text-rose-400" />
+                    <p className="text-xs text-rose-200 max-w-xs">{cameraError}</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setIsCameraOpen(false);
+                        fileInputRef.current?.click();
+                      }}
+                      className="bg-white text-stone-900 border-none text-xs rounded-lg mt-1"
+                    >
+                      <Upload className="h-3.5 w-3.5 mr-1.5" />
+                      Upload from Device Instead
+                    </Button>
+                  </div>
                 )}
               </div>
 
-              {/* Upload Helper Tips & Sample Action */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 text-[11px] text-[#5c6f66]">
-                <p>
-                  Tip: A clear shot of the defect and a wider shot of the road lane help crews
-                  locate it quickly.
-                </p>
+              <DialogFooter className="flex sm:flex-row items-center justify-between gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleToggleCameraFacing}
+                  disabled={isCameraStarting}
+                  className="border-stone-700 bg-stone-900 text-stone-200 hover:bg-stone-800 text-xs rounded-xl"
+                >
+                  <SwitchCamera className="h-3.5 w-3.5 mr-1.5" />
+                  Flip
+                </Button>
+
+                {/* Big Shutter Button */}
                 <button
                   type="button"
-                  onClick={handleAddSamplePhoto}
-                  className="inline-flex items-center gap-1 font-semibold text-emerald-900 hover:underline shrink-0"
+                  onClick={handleSnapPhoto}
+                  disabled={isCameraStarting || !!cameraError || photos.length >= 4}
+                  className="h-14 w-14 rounded-full border-4 border-white/80 bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all flex items-center justify-center text-white shadow-lg disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                  aria-label="Capture photograph"
                 >
-                  <ImageIcon className="h-3 w-3 text-emerald-700" />
-                  Add sample photo
+                  <Camera className="h-6 w-6" />
                 </button>
-              </div>
-            </CardContent>
-          </Card>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsCameraOpen(false)}
+                  className="text-stone-300 hover:text-white hover:bg-stone-800 text-xs rounded-xl"
+                >
+                  Done ({photos.length}/4)
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* ── CARD 4: Description ── */}
           <Card className="bg-[#faf9f5] border border-[#cbd5cb] rounded-2xl shadow-xs overflow-hidden">
@@ -1035,7 +1262,7 @@ export default function NewReportPage() {
 
             <Button
               type="submit"
-              disabled={isSubmitting || photos.length < 1 || description.trim().length < 10}
+              disabled={isSubmitting || photos.length < 4 || description.trim().length < 10}
               className="bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed]! text-sm h-11 px-7 rounded-xl font-bold shadow-sm transition-all"
             >
               {isSubmitting ? (
@@ -1056,20 +1283,20 @@ export default function NewReportPage() {
             <div className="flex items-center justify-between gap-3 max-w-md mx-auto">
               <div className="flex flex-col">
                 <span className="text-[11px] text-[#5c6f66]">
-                  {photos.length < 1
-                    ? "Add 1+ photo"
+                  {photos.length < 4
+                    ? `Add ${4 - photos.length} more photo${4 - photos.length > 1 ? "s" : ""}`
                     : description.trim().length < 10
                       ? "Add description"
                       : "Ready to submit"}
                 </span>
                 <span
                   className={`text-xs font-bold ${
-                    photos.length >= 1 && description.trim().length >= 10
+                    photos.length >= 4 && description.trim().length >= 10
                       ? "text-emerald-800"
                       : "text-amber-800"
                   }`}
                 >
-                  {photos.length >= 1 && description.trim().length >= 10
+                  {photos.length >= 4 && description.trim().length >= 10
                     ? "All details filled"
                     : "Fill required fields"}
                 </span>
@@ -1077,7 +1304,7 @@ export default function NewReportPage() {
 
               <Button
                 type="submit"
-                disabled={isSubmitting || photos.length < 1 || description.trim().length < 10}
+                disabled={isSubmitting || photos.length < 4 || description.trim().length < 10}
                 className="bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed]! text-xs sm:text-sm h-11 px-6 rounded-xl font-bold shadow-md active:scale-95 transition-all"
               >
                 {isSubmitting ? (

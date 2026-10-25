@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserSession } from "@/lib/auth/session";
 import { db, incidents } from "@/lib/db";
 import { eq, or, desc } from "drizzle-orm";
-import { SAMPLE_MODERATION_QUEUE } from "@/lib/data";
 
 /**
  * PRD §16 Admin Review Queue Endpoint
@@ -25,28 +24,18 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "50", 10);
 
-    try {
-      const rows = await db
-        .select()
-        .from(incidents)
-        .where(or(eq(incidents.status, "under_review"), eq(incidents.status, "open")))
-        .orderBy(desc(incidents.createdAt))
-        .limit(limit);
+    const rows = await db
+      .select()
+      .from(incidents)
+      .where(or(eq(incidents.status, "under_review"), eq(incidents.status, "open")))
+      .orderBy(desc(incidents.createdAt))
+      .limit(limit);
 
-      return NextResponse.json({
-        success: true,
-        count: rows.length,
-        items: rows,
-      });
-    } catch {
-      // Fallback to sample moderation queue when database is offline
-      return NextResponse.json({
-        success: true,
-        isOfflineFallback: true,
-        count: SAMPLE_MODERATION_QUEUE.length,
-        items: SAMPLE_MODERATION_QUEUE,
-      });
-    }
+    return NextResponse.json({
+      success: true,
+      count: rows.length,
+      items: rows,
+    });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: msg }, { status: 500 });

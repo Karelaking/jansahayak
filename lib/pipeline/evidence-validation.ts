@@ -42,12 +42,12 @@ export async function executeStage2EvidenceValidation(
   try {
     const photos = report.evidencePhotos;
 
-    if (!photos || photos.length < 1) {
+    if (!photos || photos.length < 4) {
       return {
         stage: 2,
         stageName,
         success: false,
-        error: `Please attach at least 1 photo of the road hazard.`,
+        error: `PRD §2/§7 validation failed: Minimum 4 evidence photographs required, received ${photos ? photos.length : 0}.`,
         isRetryable: false,
       };
     }

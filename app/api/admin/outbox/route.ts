@@ -21,35 +21,25 @@ export async function GET() {
       );
     }
 
-    try {
-      const recent = await db
-        .select()
-        .from(outboxEvents)
-        .orderBy(desc(outboxEvents.createdAt))
-        .limit(20);
+    const recent = await db
+      .select()
+      .from(outboxEvents)
+      .orderBy(desc(outboxEvents.createdAt))
+      .limit(20);
 
-      const counts = {
-        pending: recent.filter((e) => e.status === "pending").length,
-        processing: recent.filter((e) => e.status === "processing").length,
-        completed: recent.filter((e) => e.status === "completed").length,
-        failed: recent.filter((e) => e.status === "failed").length,
-        totalRecent: recent.length,
-      };
+    const counts = {
+      pending: recent.filter((e) => e.status === "pending").length,
+      processing: recent.filter((e) => e.status === "processing").length,
+      completed: recent.filter((e) => e.status === "completed").length,
+      failed: recent.filter((e) => e.status === "failed").length,
+      totalRecent: recent.length,
+    };
 
-      return NextResponse.json({
-        success: true,
-        counts,
-        events: recent,
-      });
-    } catch {
-      // Offline fallback
-      return NextResponse.json({
-        success: true,
-        isOfflineFallback: true,
-        counts: { pending: 0, processing: 0, completed: 0, failed: 0, totalRecent: 0 },
-        events: [],
-      });
-    }
+    return NextResponse.json({
+      success: true,
+      counts,
+      events: recent,
+    });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: msg }, { status: 500 });

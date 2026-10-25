@@ -18,50 +18,44 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "20", 10);
 
-    try {
-      const reportsColl = await getReportsCollection();
-      const query: Record<string, unknown> = {};
+    const reportsColl = await getReportsCollection();
+    const query: Record<string, unknown> = {};
 
-      if (session.isAuthenticated && session.userId) {
-        query.userId = session.userId;
-      }
-
-      const reports = await reportsColl
-        .find(query)
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .project({
-          _id: 1,
-          reportId: 1,
-          category: 1,
-          description: 1,
-          status: 1,
-          createdAt: 1,
-          submissionLocation: 1,
-          "photos.filename": 1,
-          "photos.byteSize": 1,
-        })
-        .toArray();
-
-      return NextResponse.json({
-        success: true,
-        count: reports.length,
-        reports,
-      });
-    } catch (mongoErr) {
-      const msg = mongoErr instanceof Error ? mongoErr.message : String(mongoErr);
-      if (msg.includes("ECONNREFUSED") || msg.includes("connect")) {
-        return NextResponse.json({
-          success: true,
-          isOfflineFallback: true,
-          count: 0,
-          reports: [],
-        });
-      }
-      throw mongoErr;
+    if (session.isAuthenticated && session.userId) {
+      query.userId = session.userId;
     }
+
+    const reports = await reportsColl
+      .find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .project({
+        _id: 1,
+        reportId: 1,
+        category: 1,
+        description: 1,
+        status: 1,
+        createdAt: 1,
+        submissionLocation: 1,
+        "photos.filename": 1,
+        "photos.byteSize": 1,
+      })
+      .toArray();
+
+    return NextResponse.json({
+      success: true,
+      count: reports.length,
+      reports,
+    });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    const isConnRefused = msg.includes("ECONNREFUSED") || msg.includes("connect");
+    return NextResponse.json(
+      {
+        error: isConnRefused ? "Database connection unavailable" : msg,
+        isRetryable: isConnRefused,
+      },
+      { status: isConnRefused ? 503 : 500 },
+    );
   }
 }

@@ -102,89 +102,24 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    try {
-      const summary = await runReportPipeline(payload);
+    const summary = await runReportPipeline(payload);
 
-      return NextResponse.json({
-        success: summary.stagesCompleted >= 6,
-        summary,
-      });
-    } catch (pipelineErr) {
-      const msg = pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr);
-      if (msg.includes("ECONNREFUSED") || msg.includes("connect")) {
-        // Fallback simulation when Docker containers are initializing or offline
-        const simReportId = `REP-${Date.now().toString(36).toUpperCase()}`;
-        const simIncId = `INC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-        return NextResponse.json({
-          success: true,
-          isSimulatedFallback: true,
-          notice:
-            "Local Docker database is starting up. Report simulated through 8-stage pipeline.",
-          summary: {
-            reportId: simReportId,
-            incidentId: `inc_${Date.now()}`,
-            incidentNumber: simIncId,
-            status: "COMMITTED_FOR_MODERATION",
-            stagesCompleted: 8,
-            isPublished: true,
-            durationMs: 480,
-            stageResults: [
-              {
-                stage: 1,
-                stageName: "Intake & MongoDB Storage",
-                success: true,
-                timestamp: new Date().toISOString(),
-              },
-              {
-                stage: 2,
-                stageName: "Evidence & Geodesic Validation",
-                success: true,
-                timestamp: new Date().toISOString(),
-              },
-              {
-                stage: 3,
-                stageName: "OpenRouter Vision Defect Analysis",
-                success: true,
-                timestamp: new Date().toISOString(),
-              },
-              {
-                stage: 4,
-                stageName: "PostGIS Spatial Geolocation Fix",
-                success: true,
-                timestamp: new Date().toISOString(),
-              },
-              {
-                stage: 5,
-                stageName: "Deduplication & Clustering (30m)",
-                success: true,
-                timestamp: new Date().toISOString(),
-              },
-              {
-                stage: 6,
-                stageName: "Postgres Canonical Incident Record",
-                success: true,
-                timestamp: new Date().toISOString(),
-              },
-              {
-                stage: 7,
-                stageName: "Staff Moderation Routing",
-                success: true,
-                timestamp: new Date().toISOString(),
-              },
-              {
-                stage: 8,
-                stageName: "Map Dispatch Publication",
-                success: true,
-                timestamp: new Date().toISOString(),
-              },
-            ],
-          },
-        });
-      }
-      throw pipelineErr;
-    }
+    return NextResponse.json({
+      success: summary.stagesCompleted >= 6,
+      summary,
+    });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    const isConnRefused = msg.includes("ECONNREFUSED") || msg.includes("connect");
+    return NextResponse.json(
+      {
+        success: false,
+        error: isConnRefused
+          ? "Database service is temporarily unavailable. Please verify database connectivity."
+          : msg,
+        isRetryable: isConnRefused,
+      },
+      { status: isConnRefused ? 503 : 500 },
+    );
   }
 }

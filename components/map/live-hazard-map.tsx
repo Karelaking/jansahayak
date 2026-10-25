@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/map";
 import { ArrowRight, ArrowUpRight } from "@/components/icons";
 import { Plus } from "lucide-react";
-import { GREATER_NOIDA_CENTER, SAMPLE_HAZARDS } from "@/lib/data";
+import { GREATER_NOIDA_CENTER } from "@/lib/data";
 import type { HazardReport, HazardCategoryKey } from "@/lib/types/hazard";
 import { HazardPin } from "./hazard-pin";
 import { MapCategoryFilter } from "./map-category-filter";
@@ -88,10 +88,7 @@ export interface LiveHazardMapProps {
   showHeroOverlay?: boolean;
 }
 
-export function LiveHazardMap({
-  hazards = SAMPLE_HAZARDS,
-  showHeroOverlay = true,
-}: LiveHazardMapProps) {
+export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHazardMapProps) {
   const mapRef = useRef<MapRef | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<HazardCategoryKey | "all">("all");
@@ -106,11 +103,11 @@ export function LiveHazardMap({
         const res = await fetch("/api/map/incidents");
         if (!res.ok) return;
         const data = await res.json();
-        if (active && data.success && Array.isArray(data.incidents) && data.incidents.length > 0) {
+        if (active && data.success && Array.isArray(data.incidents)) {
           setLiveHazards(data.incidents);
         }
       } catch (err) {
-        console.warn("Public map fallback to baseline:", err);
+        console.warn("Public map fetch error:", err);
       }
     }
 

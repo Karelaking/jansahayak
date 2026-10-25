@@ -73,14 +73,12 @@ export async function getCurrentUserSession(): Promise<UserSession> {
     }
   }
 
-  // Development / Local Sandbox Session Fallback
+  // Unauthenticated Session Default
   return {
-    userId: "dev_moderator_01",
-    email: "lead.moderator@jansahayak.in",
-    fullName: "Aditi Rao (Senior Inspector)",
-    role: "moderator",
-    avatarUrl: undefined,
-    isAuthenticated: true,
+    userId: "",
+    email: "",
+    role: "citizen",
+    isAuthenticated: false,
   };
 }
 

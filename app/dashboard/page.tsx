@@ -3,19 +3,17 @@
 import * as React from "react";
 import Link from "next/link";
 import {
+  Flame,
   Clock,
-  CheckCircle2,
   TrendingDown,
+  CheckCircle2,
+  FileText,
+  PieChart,
   ArrowUpRight,
   ShieldAlert,
   ChevronRight,
   Plus,
   MapPin,
-  Flame,
-  FileText,
-  PieChart,
-  Building2,
-  RotateCcw,
 } from "lucide-react";
 
 import {
@@ -24,8 +22,8 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
-  CardAction,
   CardFooter,
+  CardAction,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +35,6 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Empty,
@@ -47,13 +44,8 @@ import {
   EmptyDescription,
   EmptyContent,
 } from "@/components/ui/empty";
-import { SAMPLE_HAZARDS, SAMPLE_ESCALATIONS, SAMPLE_CIVIC_ANALYTICS } from "@/lib/data";
-import type { HazardReport, EscalationDocket } from "@/lib/types/hazard";
+import type { HazardReport } from "@/lib/types/hazard";
 
-const EMPTY_REPORTS: HazardReport[] = [];
-const EMPTY_ESCALATIONS: EscalationDocket[] = [];
-
-/** Status vs severity are separate vocabularies (Severity/Status Split). */
 function getStatusBadge(status: string) {
   switch (status) {
     case "open":
@@ -118,13 +110,44 @@ function getSeverityBadge(severity: string) {
 }
 
 export default function DashboardPage() {
-  // Empty state by default; centralized sample data previewable via button
-  const [isDemo, setIsDemo] = React.useState(false);
+  const [reports, setReports] = React.useState<HazardReport[]>([]);
+  const [pendingReviewCount, setPendingReviewCount] = React.useState(0);
   const [activeTab, setActiveTab] = React.useState("all");
 
-  const reports = isDemo ? SAMPLE_HAZARDS : EMPTY_REPORTS;
-  const escalations = isDemo ? SAMPLE_ESCALATIONS : EMPTY_ESCALATIONS;
-  const analytics = isDemo ? SAMPLE_CIVIC_ANALYTICS : null;
+  React.useEffect(() => {
+    let active = true;
+
+    async function fetchDashboardData() {
+      try {
+        const [incidentsRes, reviewRes] = await Promise.all([
+          fetch("/api/map/incidents"),
+          fetch("/api/admin/review-queue"),
+        ]);
+
+        if (incidentsRes.ok) {
+          const incData = await incidentsRes.json();
+          if (active && incData.success && Array.isArray(incData.incidents)) {
+            setReports(incData.incidents);
+          }
+        }
+
+        if (reviewRes.ok) {
+          const revData = await reviewRes.json();
+          if (active && revData.success && Array.isArray(revData.items)) {
+            setPendingReviewCount(revData.items.length);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load dashboard live data:", err);
+      }
+    }
+
+    fetchDashboardData();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filteredReports = React.useMemo(() => {
     if (activeTab === "all") return reports;
@@ -141,7 +164,7 @@ export default function DashboardPage() {
               Civic Operations Overview
             </h1>
             <Badge variant="outline" className="text-xs">
-              {isDemo ? "Demo Data" : "Empty State"}
+              Live Database
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
@@ -150,27 +173,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {isDemo ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 h-8"
-              onClick={() => setIsDemo(false)}
-            >
-              <RotateCcw className="size-3.5" />
-              <span>Clear</span>
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 h-8"
-              onClick={() => setIsDemo(true)}
-            >
-              <span>Load Demo Data</span>
-            </Button>
-          )}
-
           <Button size="sm" className="shrink-0 h-8" render={<Link href="/reports/new" />}>
             <Plus className="size-3.5" />
             <span>Report Hazard</span>
@@ -178,7 +180,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── KPI Telemetry Grid (2x2 on mobile for high scannability, 4-col on desktop) ─── */}
+      {/* ── KPI Telemetry Grid ─── */}
       <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
         <Card className="shadow-xs">
           <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
@@ -189,12 +191,12 @@ export default function DashboardPage() {
               <Flame className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
             </div>
             <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
-              {isDemo ? "142" : "0"}
+              {reports.length}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 sm:p-4 pt-0">
             <p className="text-[10px] sm:text-xs text-muted-foreground">
-              {isDemo ? "+8 in last 24h" : "No active hazards"}
+              {reports.length > 0 ? "Published on public map" : "No active hazards"}
             </p>
           </CardContent>
         </Card>
@@ -208,12 +210,12 @@ export default function DashboardPage() {
               <Clock className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
             </div>
             <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
-              {isDemo ? "24" : "0"}
+              {pendingReviewCount}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 sm:p-4 pt-0">
             <p className="text-[10px] sm:text-xs text-muted-foreground">
-              {isDemo ? "6 flagged for review" : "Queue clean"}
+              {pendingReviewCount > 0 ? "Awaiting moderator review" : "Review queue clean"}
             </p>
           </CardContent>
         </Card>
@@ -222,18 +224,16 @@ export default function DashboardPage() {
           <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
             <div className="flex items-center justify-between">
               <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
-                Avg. Resolution Time
+                Target Resolution SLA
               </CardDescription>
               <TrendingDown className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
             </div>
             <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
-              {isDemo ? "4.2d" : "—"}
+              7.0d
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 sm:p-4 pt-0">
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              {isDemo ? "-0.6d vs last sprint" : "SLA: 7.0 days"}
-            </p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Standard GNIDA civil SLA</p>
           </CardContent>
         </Card>
 
@@ -241,17 +241,19 @@ export default function DashboardPage() {
           <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
             <div className="flex items-center justify-between">
               <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
-                Resolved This Month
+                Resolved Incidents
               </CardDescription>
               <CheckCircle2 className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
             </div>
             <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
-              {isDemo ? "89" : "0"}
+              {reports.filter((r) => r.status === "resolved").length}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 sm:p-4 pt-0">
             <p className="text-[10px] sm:text-xs text-muted-foreground">
-              {isDemo ? "71% success rate" : "Awaiting closure"}
+              {reports.filter((r) => r.status === "resolved").length > 0
+                ? "Verified remediations"
+                : "Awaiting closure"}
             </p>
           </CardContent>
         </Card>
@@ -269,7 +271,7 @@ export default function DashboardPage() {
                     Recent Hazard Submissions
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Community reports awaiting triage or remediation
+                    Community reports registered in database
                   </CardDescription>
                 </div>
 
@@ -300,13 +302,12 @@ export default function DashboardPage() {
 
             <CardContent className="p-0">
               {reports.length === 0 ? (
-                /* Zatian / shadcn Empty State */
                 <Empty className="my-8 border-0 bg-transparent">
                   <EmptyHeader>
                     <EmptyMedia variant="icon">
                       <FileText className="size-6 text-muted-foreground" />
                     </EmptyMedia>
-                    <EmptyTitle>No recent reports logged</EmptyTitle>
+                    <EmptyTitle>No reports logged yet</EmptyTitle>
                     <EmptyDescription>
                       Citizen road-safety reports for Greater Noida will populate here with live
                       verification status.
@@ -316,9 +317,6 @@ export default function DashboardPage() {
                     <Button size="sm" render={<Link href="/reports/new" />}>
                       <Plus className="mr-1.5 size-3.5" />
                       <span>File First Report</span>
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => setIsDemo(true)}>
-                      Preview Demo Records
                     </Button>
                   </EmptyContent>
                 </Empty>
@@ -396,24 +394,26 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Right: Escalations, Moderation, & Breakdown (4 cols) */}
+        {/* Right: Moderation Queue Alert Card & Quick Links (4 cols) */}
         <div className="flex flex-col gap-6 lg:col-span-4">
-          {/* Moderation Queue Alert Card */}
-          <Card className="border-destructive/20 bg-destructive/5 shadow-xs">
+          <Card className="border-border shadow-xs">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <ShieldAlert className="size-4 text-destructive" />
-                  <CardTitle className="text-base text-destructive">Moderation Queue</CardTitle>
+                  <ShieldAlert className="size-4 text-emerald-800" />
+                  <CardTitle className="text-base text-[#0e2b24]">Moderation Queue</CardTitle>
                 </div>
-                <Badge variant="destructive" className="font-bold">
-                  {isDemo ? "5 Needs Review" : "0 Pending"}
+                <Badge
+                  variant={pendingReviewCount > 0 ? "destructive" : "outline"}
+                  className="font-bold text-xs"
+                >
+                  {pendingReviewCount > 0 ? `${pendingReviewCount} Needs Review` : "0 Pending"}
                 </Badge>
               </div>
               <CardDescription className="text-xs">
-                {isDemo
-                  ? "Potential duplicates, missing GPS tags, and out-of-scope reports awaiting triage."
-                  : "All citizen submissions have been audited. No pending duplicate flags."}
+                {pendingReviewCount > 0
+                  ? "Citizen reports awaiting moderator verification and official approval."
+                  : "All citizen submissions have been audited. Review queue is clean."}
               </CardDescription>
             </CardHeader>
             <CardFooter className="pt-0">
@@ -423,115 +423,37 @@ export default function DashboardPage() {
                 className="w-full justify-between text-xs"
                 render={<Link href="/dashboard/moderation" />}
               >
-                <span>Review Moderation Queue</span>
+                <span>Open Moderation Console</span>
                 <ChevronRight className="size-3.5" />
               </Button>
             </CardFooter>
           </Card>
 
-          {/* Active Escalations Card */}
           <Card className="shadow-xs">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base">Authority Escalations</CardTitle>
+                  <CardTitle className="text-base">System Telemetry</CardTitle>
                   <CardDescription className="text-xs">
-                    Cases forwarded to official municipal bodies.
+                    Pipeline health and outbox event queue status
                   </CardDescription>
                 </div>
-                <Badge variant={escalations.length > 0 ? "secondary" : "outline"}>
-                  {escalations.length} Active
-                </Badge>
               </div>
             </CardHeader>
-
-            <CardContent className="flex flex-col divide-y divide-border pt-0">
-              {escalations.length === 0 ? (
-                /* Zatian / shadcn Empty State */
-                <Empty className="my-4 border-0 bg-transparent py-6">
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <Building2 className="size-5 text-muted-foreground" />
-                    </EmptyMedia>
-                    <EmptyTitle className="text-sm font-medium">No active escalations</EmptyTitle>
-                    <EmptyDescription className="text-[11px]">
-                      No formal grievance dockets currently open with GNIDA, PWD, or municipal
-                      cells.
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              ) : (
-                escalations.map((escl) => (
-                  <div key={escl.id} className="py-3 first:pt-0 last:pb-0">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                      <span className="font-mono font-semibold">{escl.id}</span>
-                      <Badge variant="outline" className="text-[10px] text-destructive">
-                        {escl.daysOpen}d without action
-                      </Badge>
-                    </div>
-                    <h4 className="text-xs font-semibold text-foreground line-clamp-1">
-                      {escl.title}
-                    </h4>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Agency: {escl.authority}
-                    </p>
-                  </div>
-                ))
-              )}
+            <CardContent className="pt-0">
+              <Empty className="my-2 border-0 bg-transparent py-4">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <PieChart className="size-5 text-muted-foreground" />
+                  </EmptyMedia>
+                  <EmptyTitle className="text-sm font-medium">Live System Observability</EmptyTitle>
+                  <EmptyDescription className="text-[11px]">
+                    Detailed metrics for pipeline stages, AI latency, and outbox delivery are
+                    available in the analytics dashboard.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             </CardContent>
-
-            <CardFooter className="border-t border-border pt-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-between text-xs h-8"
-                render={<Link href="/dashboard/escalations" />}
-              >
-                <span>View escalation log</span>
-                <ChevronRight className="size-3.5" />
-              </Button>
-            </CardFooter>
-          </Card>
-
-          {/* Category Breakdown Card with shadcn Progress */}
-          <Card className="shadow-xs">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Hazards by Category</CardTitle>
-              <CardDescription className="text-xs">
-                Distribution across recorded road infrastructure incidents.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="flex flex-col gap-4 pt-1">
-              {!analytics ? (
-                /* Zatian / shadcn Empty State */
-                <Empty className="my-4 border-0 bg-transparent py-6">
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <PieChart className="size-5 text-muted-foreground" />
-                    </EmptyMedia>
-                    <EmptyTitle className="text-sm font-medium">No category breakdown</EmptyTitle>
-                    <EmptyDescription className="text-[11px]">
-                      Road surface, footpaths, lighting, and crossings will populate once reports
-                      are submitted.
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              ) : (
-                analytics.categoryDistribution.map((cat) => (
-                  <div key={cat.label} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-foreground">{cat.label}</span>
-                      <span className="font-semibold text-muted-foreground">
-                        {cat.count} ({cat.pct}%)
-                      </span>
-                    </div>
-                    <Progress value={cat.pct} className="w-full" />
-                  </div>
-                ))
-              )}
-            </CardContent>
-
             <CardFooter className="border-t border-border pt-3">
               <Button
                 variant="ghost"
@@ -539,7 +461,7 @@ export default function DashboardPage() {
                 className="w-full justify-between text-xs h-8"
                 render={<Link href="/dashboard/analytics" />}
               >
-                <span>Detailed Analytics</span>
+                <span>View Live Analytics</span>
                 <ArrowUpRight className="size-3.5" />
               </Button>
             </CardFooter>
