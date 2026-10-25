@@ -29,6 +29,17 @@ export async function executeStage7Moderation(
   try {
     const { incidentId, moderatorId, decision, reason, notes, correctedLocation } = params;
 
+    // 1. Mandatory Input Validation (PRD §12)
+    if (decision === "reject" && (!reason || reason.trim().length === 0)) {
+      return {
+        stage: 7,
+        stageName,
+        success: false,
+        error: "Rejection requires a documented reason for civic auditability.",
+        isRetryable: false,
+      };
+    }
+
     const [incident] = await db
       .select()
       .from(incidents)

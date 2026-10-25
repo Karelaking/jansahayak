@@ -7,6 +7,7 @@ import { executeStage5DuplicateMatching } from "./duplicate-matching";
 import { executeStage6CanonicalIncident } from "./canonical-incident";
 import { executeStage7Moderation, ModerationDecision } from "./moderation";
 import { executeStage8Publication } from "./publication";
+import { processOutboxBatch } from "./worker";
 import { getPipelineLogsCollection } from "@/lib/db/mongodb";
 
 export interface PipelineExecutionSummary {
@@ -143,6 +144,11 @@ export async function runReportPipeline(
 
   const { incidentId, incident } = s6.data;
 
+  // Asynchronously trigger transactional outbox processing post-commit (PRD §4)
+  void processOutboxBatch().catch((err) => {
+    console.warn("Asynchronous outbox dispatch caught error:", err);
+  });
+
   return {
     reportId,
     incidentId,
@@ -186,6 +192,13 @@ export async function reviewAndPublishIncident(params: {
       incidentId: params.incidentId,
       publishedBy: params.moderatorId,
     });
+
+    // Asynchronously trigger post-publication outbox dispatch (PRD §4)
+    if (s8.success) {
+      void processOutboxBatch().catch((err) => {
+        console.warn("Asynchronous outbox post-publication dispatch caught error:", err);
+      });
+    }
 
     return {
       stage7: s7,
