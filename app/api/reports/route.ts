@@ -21,8 +21,16 @@ export async function GET(req: NextRequest) {
     const reportsColl = await getReportsCollection();
     const query: Record<string, unknown> = {};
 
-    if (session.isAuthenticated && session.userId) {
-      query.userId = session.userId;
+    const isStaff = session.role === "moderator" || session.role === "admin";
+    const scope = searchParams.get("scope");
+
+    // PRD §2 & §16 Privacy Isolation & Staff Scope:
+    // Regular citizens are strictly isolated to their own filed reports.
+    // Authorized municipal staff can inspect all reports across Greater Noida unless scope=mine is specified.
+    if (!isStaff || scope === "mine") {
+      if (session.isAuthenticated && session.userId) {
+        query.userId = session.userId;
+      }
     }
 
     const reports = await reportsColl

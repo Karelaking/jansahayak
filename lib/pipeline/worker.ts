@@ -2,6 +2,7 @@ import { db, outboxEvents, moderationActions } from "@/lib/db";
 import { eq, and, lte, or, asc } from "drizzle-orm";
 import { processReportBackground } from "./background-processor";
 import { dispatchMunicipalReportEmail } from "@/lib/email/municipal-dispatcher";
+import { dispatchVoterProgressNotification } from "@/lib/email/voter-notifier";
 
 export interface OutboxProcessingSummary {
   processed: number;
@@ -108,7 +109,7 @@ export async function processOutboxBatch(batchSize: number = 20): Promise<Outbox
             break;
 
           case "incident.community_resolved": {
-            // PRD §14B: Audit logging for community consensus closure
+            // PRD §14B: Audit logging and notification dispatch for community consensus closure
             const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
               event.aggregateId,
             );
@@ -125,11 +126,16 @@ export async function processOutboxBatch(batchSize: number = 20): Promise<Outbox
                 metadata: event.payload as Record<string, unknown>,
               });
             }
+            await dispatchVoterProgressNotification({
+              incidentId: event.aggregateId,
+              eventType: "incident.community_resolved",
+              message: event.payload?.message as string | undefined,
+            });
             break;
           }
 
           case "incident.reopened_by_community": {
-            // PRD §14B: Audit logging for community dispute re-open and municipal re-escalation
+            // PRD §14B: Audit logging and notification dispatch for community dispute re-open and municipal re-escalation
             const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
               event.aggregateId,
             );
@@ -145,11 +151,22 @@ export async function processOutboxBatch(batchSize: number = 20): Promise<Outbox
                 metadata: event.payload as Record<string, unknown>,
               });
             }
+            await dispatchVoterProgressNotification({
+              incidentId: event.aggregateId,
+              eventType: "incident.reopened_by_community",
+              message: event.payload?.message as string | undefined,
+            });
             break;
           }
 
           case "voter.subscribed_to_updates": {
-            // PRD §14B: Notification subscription record for local voters
+            // PRD §14B: Confirmation notification for citizen milestone subscription
+            await dispatchVoterProgressNotification({
+              incidentId: event.aggregateId,
+              eventType: "voter.subscribed_to_updates",
+              voterEmail: event.payload?.voterEmail as string | undefined,
+              voterName: event.payload?.voterName as string | undefined,
+            });
             break;
           }
 

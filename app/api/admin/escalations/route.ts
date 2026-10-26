@@ -148,7 +148,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { incidentId, status, officialNote, officer } = body;
+    const incidentId = body.incidentId as string;
+    const status = (body.status || body.newStatus) as string | undefined;
+    const officialNote = (body.officialNote || body.officialReply) as string | undefined;
+    const officer = (body.officer || body.assignedOfficer) as string | undefined;
 
     if (!incidentId) {
       return NextResponse.json(

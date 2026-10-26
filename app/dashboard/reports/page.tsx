@@ -2,7 +2,17 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Plus, Search, Download, MapPin, Eye, FileText, RotateCcw } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Download,
+  MapPin,
+  Eye,
+  FileText,
+  RotateCcw,
+  Users,
+  ThumbsUp,
+} from "lucide-react";
 
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,6 +76,13 @@ function getStatusBadge(status: string) {
           Resolved
         </span>
       );
+    case "under-review":
+      return (
+        <span className="status-progress">
+          <i aria-hidden="true" />
+          Under Review
+        </span>
+      );
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
@@ -105,6 +122,18 @@ export default function ReportsPage() {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [activeTab, setActiveTab] = React.useState("all");
   const [selectedReport, setSelectedReport] = React.useState<HazardReport | null>(null);
+  const [isStaff, setIsStaff] = React.useState(false);
+
+  React.useEffect(() => {
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.session?.role === "moderator" || data?.session?.role === "admin") {
+          setIsStaff(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Fetch real database reports on mount
   const loadReports = React.useCallback(async () => {
@@ -139,12 +168,12 @@ export default function ReportsPage() {
               severity: "medium",
               status: (() => {
                 const norm = (r.status || "").toUpperCase();
-                if (norm === "APPROVED" || norm === "PUBLISHED" || norm === "RESOLVED")
-                  return "resolved";
+                if (norm === "RESOLVED") return "resolved";
                 if (norm === "IN_PROGRESS" || norm === "IN-PROGRESS" || norm === "ASSIGNED")
                   return "in-progress";
                 if (norm === "ESCALATED" || norm === "MUNICIPALLY_DISPATCHED") return "escalated";
                 if (norm === "REJECTED" || norm === "SUSPENDED") return "under-review";
+                // PRD §5 & §14B: A published report represents an active hazard on the map awaiting municipal resolution & public consensus
                 return "open";
               })(),
               latitude: r.submissionLocation?.latitude || 28.4744,
@@ -207,8 +236,8 @@ export default function ReportsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           incidentId: selectedReport.id,
-          newStatus: apiStatus,
-          officialReply: `Status updated to ${newStatus} via Reports Registry dashboard`,
+          status: apiStatus,
+          officialNote: `Status updated to ${newStatus} via Reports Registry dashboard`,
         }),
       }).catch((err) => console.warn("Failed to persist status to backend:", err));
 
@@ -552,12 +581,36 @@ export default function ReportsPage() {
         {selectedReport && (
           <DialogContent className="max-w-xl">
             <DialogHeader>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="font-mono text-xs font-bold text-muted-foreground">
                   {selectedReport.id}
                 </span>
                 {getStatusBadge(selectedReport.status)}
                 {getSeverityBadge(selectedReport.severity)}
+                {selectedReport.publicOpinionStatus && (
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] font-semibold border ${
+                      selectedReport.publicOpinionStatus === "community_resolved"
+                        ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                        : selectedReport.publicOpinionStatus === "public_disputed" ||
+                            selectedReport.publicOpinionStatus === "reopened_by_community"
+                          ? "bg-rose-100 text-rose-900 border-rose-300"
+                          : selectedReport.publicOpinionStatus === "under_repair"
+                            ? "bg-blue-100 text-blue-900 border-blue-300"
+                            : "bg-[#eaf1e9] text-[#1e4638] border-[#c5d8c3]"
+                    }`}
+                  >
+                    {selectedReport.publicOpinionStatus === "community_resolved"
+                      ? "Resolved by Community Consensus"
+                      : selectedReport.publicOpinionStatus === "public_disputed" ||
+                          selectedReport.publicOpinionStatus === "reopened_by_community"
+                        ? "Community Disputed (Defect Persists)"
+                        : selectedReport.publicOpinionStatus === "under_repair"
+                          ? "Under Repair (Awaiting Citizen Consensus)"
+                          : "Active Community Hazard"}
+                  </Badge>
+                )}
               </div>
               <DialogTitle className="mt-2 text-lg font-bold">{selectedReport.title}</DialogTitle>
               <DialogDescription className="text-xs">
@@ -590,44 +643,88 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              {/* Status transition controls */}
-              <div className="mt-2">
-                <p className="font-medium text-foreground mb-2">Update Lifecycle Status</p>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="xs"
-                    disabled={isUpdatingStatus}
-                    variant={selectedReport.status === "open" ? "default" : "outline"}
-                    onClick={() => handleStatusChange("open")}
-                  >
-                    Open
-                  </Button>
-                  <Button
-                    size="xs"
-                    disabled={isUpdatingStatus}
-                    variant={selectedReport.status === "in-progress" ? "default" : "outline"}
-                    onClick={() => handleStatusChange("in-progress")}
-                  >
-                    In Progress
-                  </Button>
-                  <Button
-                    size="xs"
-                    disabled={isUpdatingStatus}
-                    variant={selectedReport.status === "escalated" ? "default" : "outline"}
-                    onClick={() => handleStatusChange("escalated")}
-                  >
-                    Escalate to Authority
-                  </Button>
-                  <Button
-                    size="xs"
-                    disabled={isUpdatingStatus}
-                    variant={selectedReport.status === "resolved" ? "default" : "outline"}
-                    onClick={() => handleStatusChange("resolved")}
-                  >
-                    Mark Resolved
-                  </Button>
+              {/* Status transition controls (Role Gated) */}
+              {isStaff ? (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="font-medium text-foreground">
+                      Update Lifecycle Status (Staff Action)
+                    </p>
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      PRD §14B Consensus Gated
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="xs"
+                      disabled={isUpdatingStatus}
+                      variant={selectedReport.status === "open" ? "default" : "outline"}
+                      onClick={() => handleStatusChange("open")}
+                    >
+                      Open
+                    </Button>
+                    <Button
+                      size="xs"
+                      disabled={isUpdatingStatus}
+                      variant={selectedReport.status === "in-progress" ? "default" : "outline"}
+                      onClick={() => handleStatusChange("in-progress")}
+                    >
+                      In Progress
+                    </Button>
+                    <Button
+                      size="xs"
+                      disabled={isUpdatingStatus}
+                      variant={selectedReport.status === "escalated" ? "default" : "outline"}
+                      onClick={() => handleStatusChange("escalated")}
+                    >
+                      Escalate to Authority
+                    </Button>
+                    <Button
+                      size="xs"
+                      disabled={isUpdatingStatus}
+                      variant={selectedReport.status === "resolved" ? "default" : "outline"}
+                      onClick={() => handleStatusChange("resolved")}
+                    >
+                      Mark Resolved
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="mt-2 rounded-lg bg-[#faf9f5] border border-[#cbd5cb] p-3 text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-[#0e2b24] flex items-center gap-1.5">
+                      <Users className="size-3.5 text-[#17382f]" />
+                      <span>Citizen Governance &amp; Public Voice</span>
+                    </span>
+                    <span className="text-[10px] font-mono text-[#5c6f66]">PRD §14B Quorum</span>
+                  </div>
+                  <p className="text-[11px] text-[#486057] leading-relaxed">
+                    Under PRD §14B, repair progress strictly requires local resident verification.
+                    You can cast your verification vote or inspect the live public safety map.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <Link href={`/reports/${selectedReport.id}`}>
+                      <Button
+                        size="xs"
+                        className="bg-[#0e2b24] hover:bg-[#1c4b3e] text-white gap-1 text-[11px]"
+                      >
+                        <ThumbsUp className="size-3" />
+                        <span>Cast Verification Vote</span>
+                      </Button>
+                    </Link>
+                    <Link href={`/map?highlight=${selectedReport.id}`}>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        className="border-[#cbd5cb] text-[#0e2b24] gap-1 text-[11px]"
+                      >
+                        <MapPin className="size-3 text-emerald-800" />
+                        <span>View on Safety Map</span>
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              )}
             </div>
 
             <DialogFooter className="flex items-center justify-between gap-2 border-t border-border pt-3">
