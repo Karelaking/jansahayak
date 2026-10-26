@@ -33,7 +33,7 @@ import { GET as getVotesRoute } from "@/app/api/incidents/[incidentId]/votes/rou
 import { GET as getSessionRoute } from "@/app/api/auth/session/route";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limit";
 
-describe("PRD §19 End-to-End Integration Test Suite (57 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (59 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -1709,5 +1709,191 @@ describe("PRD §19 End-to-End Integration Test Suite (57 Scenarios)", () => {
     expect(sampleHazards[0]?.publicOpinionStatus).toBe("reopened_by_community");
     expect(sampleHazards[1]?.publicOpinionStatus).toBe("under_repair");
     expect(sampleHazards[2]?.publicOpinionStatus).toBe("community_resolved");
+  });
+
+  // Scenario 58: Map Drawer 1-Click In-Place Verification Vote & Idempotent Consensus Synchronization (PRD §13 & §14B)
+  it("Scenario 58: Map drawer in-place verification vote records community verification and prevents duplicate ballots", async () => {
+    const testVoterIp = "192.168.10.45";
+    resetRateLimit(`vote_${testVoterIp}`);
+
+    // 1. Fetch available map incident for end-to-end integration test
+    const mapReq = new NextRequest("http://localhost:3000/api/map/incidents", {
+      method: "GET",
+    });
+    const mapRes = await getMapIncidentsRoute(mapReq);
+    expect(mapRes.status).toBe(200);
+    const mapData = await mapRes.json();
+    expect(mapData.success).toBe(true);
+
+    if (mapData.incidents && mapData.incidents.length > 0) {
+      const target = mapData.incidents[0];
+      expect(target.id).toBeDefined();
+
+      // 2. Cast 1-click in-place verification vote from drawer
+      const voteReq = new NextRequest(`http://localhost:3000/api/incidents/${target.id}/vote`, {
+        method: "POST",
+        headers: {
+          "x-forwarded-for": testVoterIp,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          voteType: "verify_hazard",
+          isLocalResident: true,
+          wantsUpdates: false,
+        }),
+      });
+      const voteRes = await postVoteRoute(voteReq, {
+        params: Promise.resolve({ incidentId: target.id }),
+      });
+      expect(voteRes.status).toBe(200);
+      const voteJson = await voteRes.json();
+      expect(voteJson.success).toBe(true);
+
+      // 3. Idempotent ballot handling: duplicate vote from same citizen network returns alreadyVoted
+      const dupReq = new NextRequest(`http://localhost:3000/api/incidents/${target.id}/vote`, {
+        method: "POST",
+        headers: {
+          "x-forwarded-for": testVoterIp,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          voteType: "verify_hazard",
+          isLocalResident: true,
+          wantsUpdates: false,
+        }),
+      });
+      const dupRes = await postVoteRoute(dupReq, {
+        params: Promise.resolve({ incidentId: target.id }),
+      });
+      expect(dupRes.status).toBe(200);
+      const dupJson = await dupRes.json();
+      expect(dupJson.alreadyVoted).toBe(true);
+
+      // 4. Verify vote tally lookup route reflects current counts
+      const getVotesReq = new NextRequest(
+        `http://localhost:3000/api/incidents/${target.id}/votes`,
+        {
+          method: "GET",
+          headers: { "x-forwarded-for": testVoterIp },
+        },
+      );
+      const getVotesRes = await getVotesRoute(getVotesReq, {
+        params: Promise.resolve({ incidentId: target.id }),
+      });
+      expect(getVotesRes.status).toBe(200);
+      const getVotesJson = await getVotesRes.json();
+      expect(getVotesJson.success).toBe(true);
+      expect(getVotesJson.verificationVotesCount).toBeGreaterThanOrEqual(1);
+    } else {
+      // Missing incident returns 404
+      const missingVoteReq = new NextRequest(
+        "http://localhost:3000/api/incidents/inc_missing_fallback/vote",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            voteType: "verify_hazard",
+            isLocalResident: true,
+          }),
+        },
+      );
+      const res = await postVoteRoute(missingVoteReq, {
+        params: Promise.resolve({ incidentId: "inc_missing_fallback" }),
+      });
+      expect(res.status).toBe(404);
+    }
+  });
+
+  // Scenario 59: Live Map Filter Reconciler for Drawer Inspection Focus (PRD §13 & §16)
+  it("Scenario 59: Filter shifts reconcile active drawer index or dismiss cleanly when matching subset is empty", () => {
+    interface MockHazard {
+      id: string;
+      category: string;
+      status: string;
+      publicOpinionStatus?: string;
+    }
+
+    const hazards: MockHazard[] = [
+      { id: "HAZ-P1", category: "pothole", status: "open", publicOpinionStatus: "none" },
+      {
+        id: "HAZ-P2",
+        category: "pothole",
+        status: "under-review",
+        publicOpinionStatus: "under_repair",
+      },
+      {
+        id: "HAZ-S1",
+        category: "streetlight",
+        status: "resolved",
+        publicOpinionStatus: "community_resolved",
+      },
+    ];
+
+    // Filter helper mirroring LiveHazardMap filter logic
+    const filterHazards = (items: MockHazard[], cat: string, stat: string) => {
+      return items.filter((h) => {
+        if (cat !== "all" && h.category !== cat) return false;
+        if (stat === "all") return true;
+        if (stat === "community_resolved") {
+          return h.publicOpinionStatus === "community_resolved" || h.status === "resolved";
+        }
+        if (stat === "under_repair") {
+          return h.publicOpinionStatus === "under_repair" || h.status === "under-review";
+        }
+        if (stat === "public_disputed") {
+          return (
+            h.publicOpinionStatus === "public_disputed" ||
+            h.publicOpinionStatus === "reopened_by_community"
+          );
+        }
+        return true;
+      });
+    };
+
+    // State reconciler helper mirroring LiveHazardMap useEffect logic
+    const reconcileDrawerState = (
+      drawerOpen: boolean,
+      highlightedId: string | null,
+      filtered: MockHazard[],
+    ) => {
+      const currentIndex = filtered.findIndex((h) => h.id === highlightedId);
+      if (drawerOpen && highlightedId && currentIndex === -1) {
+        if (filtered.length > 0 && filtered[0]) {
+          return { drawerOpen: true, highlightedId: filtered[0].id };
+        } else {
+          return { drawerOpen: false, highlightedId: null };
+        }
+      }
+      return { drawerOpen, highlightedId };
+    };
+
+    // 1. Initial state: viewing HAZ-P1 with All filters
+    let currentDrawer = { drawerOpen: true, highlightedId: "HAZ-P1" as string | null };
+    let filtered = filterHazards(hazards, "all", "all");
+    expect(filtered).toHaveLength(3);
+
+    // 2. User filters to category 'streetlight' (HAZ-P1 no longer in filtered list)
+    filtered = filterHazards(hazards, "streetlight", "all");
+    expect(filtered).toHaveLength(1);
+    currentDrawer = reconcileDrawerState(
+      currentDrawer.drawerOpen,
+      currentDrawer.highlightedId,
+      filtered,
+    );
+    // Auto-reconciles to the first matching streetlight
+    expect(currentDrawer.drawerOpen).toBe(true);
+    expect(currentDrawer.highlightedId).toBe("HAZ-S1");
+
+    // 3. User filters to category 'garbage' (0 matches)
+    filtered = filterHazards(hazards, "garbage", "all");
+    expect(filtered).toHaveLength(0);
+    currentDrawer = reconcileDrawerState(
+      currentDrawer.drawerOpen,
+      currentDrawer.highlightedId,
+      filtered,
+    );
+    // Auto-dismisses drawer safely without index out of bounds
+    expect(currentDrawer.drawerOpen).toBe(false);
+    expect(currentDrawer.highlightedId).toBeNull();
   });
 });

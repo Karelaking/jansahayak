@@ -12,7 +12,15 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { HazardReport } from "@/lib/types/hazard";
-import { ArrowUpRight, ChevronLeft, ChevronRight, CheckCircle2, X } from "lucide-react";
+import {
+  ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  X,
+  ThumbsUp,
+  Check,
+} from "lucide-react";
 
 interface HazardCardDrawerProps {
   hazard: HazardReport | null;
@@ -21,6 +29,9 @@ interface HazardCardDrawerProps {
   onPrev: () => void;
   onNext: () => void;
   onClose?: () => void;
+  onVote?: (hazardId: string) => void;
+  isVoted?: boolean;
+  isVoting?: boolean;
 }
 
 export function HazardCardDrawer({
@@ -30,6 +41,9 @@ export function HazardCardDrawer({
   onPrev,
   onNext,
   onClose,
+  onVote,
+  isVoted = false,
+  isVoting = false,
 }: HazardCardDrawerProps) {
   if (!hazard) return null;
 
@@ -168,12 +182,40 @@ export function HazardCardDrawer({
         >
           <span>Community Progress</span> <ArrowUpRight className="size-3" />
         </Link>
-        <Link
-          href={`/reports/new?ref=${hazard.id}`}
-          className="rounded-full bg-[#0e2b24] px-3 py-1.5 text-[11px] font-medium text-[#f5f3ed]! shadow-xs transition hover:bg-[#1c4b3e]"
-        >
-          Confirm / Vote (+1)
-        </Link>
+        {onVote ? (
+          <Button
+            type="button"
+            size="xs"
+            disabled={isVoted || isVoting}
+            onClick={() => onVote(hazard.id)}
+            className={`rounded-full px-3 py-1.5 text-[11px] font-medium shadow-xs transition ${
+              isVoted
+                ? "bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-default"
+                : "bg-[#0e2b24] text-[#f5f3ed] hover:bg-[#1c4b3e] active:scale-95"
+            }`}
+          >
+            {isVoting ? (
+              <span>Recording...</span>
+            ) : isVoted ? (
+              <>
+                <Check className="size-3 stroke-[2.5] mr-1 text-emerald-700" />
+                <span>You Verified (+1)</span>
+              </>
+            ) : (
+              <>
+                <ThumbsUp className="size-3 stroke-[2.2] mr-1" />
+                <span>I See This Too (+1)</span>
+              </>
+            )}
+          </Button>
+        ) : (
+          <Link
+            href={`/reports/new?ref=${hazard.id}`}
+            className="rounded-full bg-[#0e2b24] px-3 py-1.5 text-[11px] font-medium text-[#f5f3ed]! shadow-xs transition hover:bg-[#1c4b3e]"
+          >
+            Confirm / Vote (+1)
+          </Link>
+        )}
       </CardFooter>
     </Card>
   );

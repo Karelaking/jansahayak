@@ -272,6 +272,18 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
   const currentDrawerIndex = filteredHazards.findIndex((h) => h.id === highlightedId);
   const currentDrawerHazard = currentDrawerIndex >= 0 ? filteredHazards[currentDrawerIndex] : null;
 
+  // PRD §13/§16: Reconcile drawer active docket when active filters shift
+  useEffect(() => {
+    if (drawerOpen && highlightedId && currentDrawerIndex === -1) {
+      if (filteredHazards.length > 0 && filteredHazards[0]) {
+        setHighlightedId(filteredHazards[0].id);
+      } else {
+        setDrawerOpen(false);
+        setHighlightedId(null);
+      }
+    }
+  }, [drawerOpen, highlightedId, currentDrawerIndex, filteredHazards]);
+
   if (!isMounted) {
     return (
       <div
@@ -600,6 +612,9 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
               setDrawerOpen(false);
               setHighlightedId(null);
             }}
+            onVote={handleVote}
+            isVoted={Boolean(currentDrawerHazard && votedIncidents[currentDrawerHazard.id])}
+            isVoting={Boolean(currentDrawerHazard && votingLoading[currentDrawerHazard.id])}
           />
         </div>
       )}
