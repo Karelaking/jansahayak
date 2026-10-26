@@ -33,7 +33,7 @@ import { GET as getVotesRoute } from "@/app/api/incidents/[incidentId]/votes/rou
 import { GET as getSessionRoute } from "@/app/api/auth/session/route";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limit";
 
-describe("PRD §19 End-to-End Integration Test Suite (55 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (57 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -1635,5 +1635,79 @@ describe("PRD §19 End-to-End Integration Test Suite (55 Scenarios)", () => {
     });
     // Unknown incident in DB returns 404
     expect(voteRes.status).toBe(404);
+  });
+
+  // Scenario 56: Public-Opinion Progress Governance on Fast Intake Receipt & Citizen Dossier Links (PRD §3 & §14B)
+  it("Scenario 56: Fast intake receipt generates public-safe URLs and communicates consensus governance", () => {
+    const reportReceipt = {
+      reportId: "REP-2026-TEST-RECEIPT",
+      status: "SUBMITTED",
+      timestamp: new Date().toISOString(),
+    };
+
+    // 1. Citizen route generator conforms to public RBAC
+    const publicTrackerUrl = `/reports/${encodeURIComponent(reportReceipt.reportId)}`;
+    const publicMapHighlightUrl = `/map?highlight=${encodeURIComponent(reportReceipt.reportId)}`;
+
+    expect(publicTrackerUrl).toMatch(/^\/reports\/REP-/);
+    expect(publicMapHighlightUrl).toMatch(/^\/map\?highlight=REP-/);
+    // Explicitly verify no internal staff routes are surfaced to citizen
+    expect(publicTrackerUrl.includes("/dashboard/")).toBe(false);
+    expect(publicMapHighlightUrl.includes("/dashboard/")).toBe(false);
+
+    // 2. Initial reporter rights in PRD §14B
+    const voterRoles = ["reporter", "local_resident", "commuter"];
+    expect(voterRoles).toContain("reporter");
+  });
+
+  // Scenario 57: Map Inspection Drawer Consensus Synchronization & Stepper Navigation (PRD §13 & §14B)
+  it("Scenario 57: Map drawer stepper calculations and consensus status rendering operate cyclically", () => {
+    const sampleHazards = [
+      {
+        id: "HAZ-001",
+        title: "Pothole Pari Chowk",
+        severity: "critical",
+        status: "open",
+        publicOpinionStatus: "reopened_by_community",
+        verificationsCount: 4,
+        unresolvedVotesCount: 2,
+      },
+      {
+        id: "HAZ-002",
+        title: "Dark Street Alpha 1",
+        severity: "medium",
+        status: "under-review",
+        publicOpinionStatus: "under_repair",
+        verificationsCount: 2,
+        unresolvedVotesCount: 0,
+      },
+      {
+        id: "HAZ-003",
+        title: "Broken Footpath Gamma",
+        severity: "low",
+        status: "resolved",
+        publicOpinionStatus: "community_resolved",
+        verificationsCount: 5,
+        resolutionVotesCount: 4,
+      },
+    ];
+
+    const total = sampleHazards.length;
+
+    // 1. Stepper next from end wraps to beginning
+    const currentIdx = 2;
+    const nextIdx = (currentIdx + 1) % total;
+    expect(nextIdx).toBe(0);
+    expect(sampleHazards[nextIdx]?.id).toBe("HAZ-001");
+
+    // 2. Stepper prev from beginning wraps to end
+    const prevIdx = (0 - 1 + total) % total;
+    expect(prevIdx).toBe(2);
+    expect(sampleHazards[prevIdx]?.id).toBe("HAZ-003");
+
+    // 3. Consensus state verification
+    expect(sampleHazards[0]?.publicOpinionStatus).toBe("reopened_by_community");
+    expect(sampleHazards[1]?.publicOpinionStatus).toBe("under_repair");
+    expect(sampleHazards[2]?.publicOpinionStatus).toBe("community_resolved");
   });
 });

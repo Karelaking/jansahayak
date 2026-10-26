@@ -4,7 +4,7 @@ import React from "react";
 
 export function MapLegend() {
   return (
-    <div className="hidden sm:flex items-center gap-3 rounded-lg border border-[#cbd5cb] bg-white/90 px-2.5 py-1 text-[10px] text-[#486057] shadow-xs backdrop-blur-xs">
+    <div className="flex flex-wrap items-center gap-2.5 rounded-lg border border-[#cbd5cb] bg-white/95 px-3 py-1.5 text-[10px] text-[#486057] shadow-xs backdrop-blur-md">
       <div className="flex items-center gap-1.5">
         <span className="size-2 rounded-full bg-[#e4876f]" />
         <span>Critical</span>
@@ -14,8 +14,12 @@ export function MapLegend() {
         <span>Moderate</span>
       </div>
       <div className="flex items-center gap-1.5">
-        <span className="size-2 rounded-full bg-[#78a37d]" />
-        <span>Verified / Logged</span>
+        <span className="size-2 rounded-full bg-[#059669]" />
+        <span>Community Resolved</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="size-2 rounded-full bg-[#e11d48] animate-pulse" />
+        <span className="font-medium text-rose-800">Citizen Disputed</span>
       </div>
     </div>
   );

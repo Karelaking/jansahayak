@@ -19,6 +19,8 @@ import { GREATER_NOIDA_CENTER } from "@/lib/data";
 import type { HazardReport, HazardCategoryKey } from "@/lib/types/hazard";
 import { HazardPin } from "./hazard-pin";
 import { MapCategoryFilter } from "./map-category-filter";
+import { HazardCardDrawer } from "./hazard-card-drawer";
+import { MapLegend } from "./map-legend";
 
 // Dynamically skin MapLibre vector layers to match the JanSahayak project theme:
 // Webpage Paper: #f5f3ed
@@ -139,6 +141,7 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
   const [votedIncidents, setVotedIncidents] = useState<Record<string, boolean>>({});
   const [votingLoading, setVotingLoading] = useState<Record<string, boolean>>({});
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -266,6 +269,9 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
     ).length,
   };
 
+  const currentDrawerIndex = filteredHazards.findIndex((h) => h.id === highlightedId);
+  const currentDrawerHazard = currentDrawerIndex >= 0 ? filteredHazards[currentDrawerIndex] : null;
+
   if (!isMounted) {
     return (
       <div
@@ -306,7 +312,10 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
         <Suspense fallback={null}>
           <MapHighlightController
             hazards={liveHazards}
-            onHighlightDetected={(id) => setHighlightedId(id)}
+            onHighlightDetected={(id) => {
+              setHighlightedId(id);
+              setDrawerOpen(true);
+            }}
           />
         </Suspense>
 
@@ -324,7 +333,15 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
         {filteredHazards.map((hazard) => {
           const isHighlighted = hazard.id === highlightedId;
           return (
-            <MapMarker key={hazard.id} longitude={hazard.longitude} latitude={hazard.latitude}>
+            <MapMarker
+              key={hazard.id}
+              longitude={hazard.longitude}
+              latitude={hazard.latitude}
+              onClick={() => {
+                setHighlightedId(hazard.id);
+                setDrawerOpen(true);
+              }}
+            >
               <MarkerContent>
                 <div
                   className={
@@ -530,7 +547,7 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
             )}
           </div>
 
-          <div className="pointer-events-auto absolute bottom-4 left-4 z-20 hidden sm:block">
+          <div className="pointer-events-auto absolute bottom-4 left-4 z-20 hidden sm:flex items-center gap-3">
             <Link
               href="/reports/new"
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[#0e2b24] text-[#faf9f5] font-semibold text-xs shadow-lg hover:bg-[#1c4b3e] active:scale-95 transition-all"
@@ -538,8 +555,53 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
               <Plus className="size-4 stroke-[2.5]" />
               <span>Report at Current Location</span>
             </Link>
+            <MapLegend />
           </div>
         </>
+      )}
+
+      {/* ── PRD §13 & §14B Citizen Inspection & Consensus Drawer ── */}
+      {drawerOpen && currentDrawerHazard && (
+        <div className="pointer-events-auto">
+          <HazardCardDrawer
+            hazard={currentDrawerHazard}
+            currentIndex={currentDrawerIndex}
+            totalCount={filteredHazards.length}
+            onPrev={() => {
+              const prevIdx =
+                (currentDrawerIndex - 1 + filteredHazards.length) % filteredHazards.length;
+              const target = filteredHazards[prevIdx];
+              if (target) {
+                setHighlightedId(target.id);
+                mapRef.current?.flyTo({
+                  center: [target.longitude, target.latitude],
+                  zoom: 16,
+                  pitch: 42,
+                  bearing: -8,
+                  essential: true,
+                });
+              }
+            }}
+            onNext={() => {
+              const nextIdx = (currentDrawerIndex + 1) % filteredHazards.length;
+              const target = filteredHazards[nextIdx];
+              if (target) {
+                setHighlightedId(target.id);
+                mapRef.current?.flyTo({
+                  center: [target.longitude, target.latitude],
+                  zoom: 16,
+                  pitch: 42,
+                  bearing: -8,
+                  essential: true,
+                });
+              }
+            }}
+            onClose={() => {
+              setDrawerOpen(false);
+              setHighlightedId(null);
+            }}
+          />
+        </div>
       )}
 
       {/* ── Empty Map State Notice when no hazards are mapped ── */}

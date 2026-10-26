@@ -26,6 +26,7 @@ import {
   SwitchCamera,
   Upload,
   AlertCircle,
+  Users,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -622,6 +623,36 @@ export default function NewReportPage() {
                 <p className="text-[11px] text-[#5c6f66]">{targetAuthority?.jurisdiction}</p>
               </div>
 
+              {/* PRD §14B Public-Opinion Progress Governance & Citizen Voting Callout */}
+              <div className="p-4 rounded-xl border border-emerald-300 bg-emerald-50/70 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-emerald-950 flex items-center gap-1.5 text-xs">
+                    <Users className="size-4 text-emerald-800 shrink-0" />
+                    Public-Opinion Progress Governance (PRD §14B)
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className="border-emerald-300 bg-emerald-100/60 text-[10px] text-emerald-900 font-medium"
+                  >
+                    Reporter + 500m Quorum
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-emerald-900/90 leading-relaxed">
+                  As the reporting citizen, your initial verification is registered. Once verified
+                  by our background pipeline and published to the safety map, your vote along with
+                  neighborhood residents within 500m will directly govern physical repair
+                  completion. No hazard can be marked resolved without local community consensus.
+                </p>
+                <div className="pt-1">
+                  <Link
+                    href={`/reports/${repId}`}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-950 underline underline-offset-2 hover:opacity-80"
+                  >
+                    <span>Open Case Dossier &amp; Voting Hub &rarr;</span>
+                  </Link>
+                </div>
+              </div>
+
               {/* Action Buttons */}
               <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
                 <Link
@@ -631,25 +662,16 @@ export default function NewReportPage() {
                       "w-full sm:w-auto bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed]! text-xs h-10 px-5 rounded-lg font-semibold",
                   })}
                 >
-                  <FileText className="h-4 w-4 mr-2" /> Track Case Progress
+                  <FileText className="h-4 w-4 mr-2" /> Track Case Progress &amp; Votes
                 </Link>
                 <Link
-                  href="/map"
+                  href={`/map?highlight=${encodeURIComponent(repId)}`}
                   className={buttonVariants({
                     variant: "outline",
                     className: "w-full sm:w-auto text-xs h-10 px-4 border-[#cbd5cb] rounded-lg",
                   })}
                 >
-                  <MapPin className="h-4 w-4 mr-2" /> View Public Map
-                </Link>
-                <Link
-                  href="/dashboard/reports"
-                  className={buttonVariants({
-                    variant: "outline",
-                    className: "w-full sm:w-auto text-xs h-10 px-4 border-[#cbd5cb] rounded-lg",
-                  })}
-                >
-                  View All Reports
+                  <MapPin className="h-4 w-4 mr-2" /> View on Live Safety Map
                 </Link>
                 <Button
                   onClick={() => {

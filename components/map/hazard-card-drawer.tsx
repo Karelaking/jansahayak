@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { HazardReport } from "@/lib/types/hazard";
-import { ArrowUpRight, ChevronLeft, ChevronRight, CheckCircle2 } from "lucide-react";
+import { ArrowUpRight, ChevronLeft, ChevronRight, CheckCircle2, X } from "lucide-react";
 
 interface HazardCardDrawerProps {
   hazard: HazardReport | null;
@@ -29,6 +29,7 @@ export function HazardCardDrawer({
   totalCount,
   onPrev,
   onNext,
+  onClose,
 }: HazardCardDrawerProps) {
   if (!hazard) return null;
 
@@ -87,6 +88,18 @@ export function HazardCardDrawer({
             >
               <ChevronRight className="size-3.5" />
             </Button>
+            {onClose && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                onClick={onClose}
+                aria-label="Close drawer"
+                className="size-6 text-[#17382f] hover:bg-black/5 ml-1"
+              >
+                <X className="size-3.5" />
+              </Button>
+            )}
           </div>
         </div>
 
