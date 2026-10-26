@@ -284,6 +284,24 @@ export async function processReportBackground(
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`[Background-Worker] Unhandled error processing report ${reportId}:`, msg);
+    try {
+      const reportsColl = await getReportsCollection();
+      await reportsColl.updateOne(
+        { reportId },
+        {
+          $set: {
+            status: "PROCESSING_FAILED",
+            rejectionReason: msg,
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      );
+    } catch (dbErr) {
+      console.error(
+        `[Background-Worker] Failed to record PROCESSING_FAILED in MongoDB for ${reportId}:`,
+        dbErr,
+      );
+    }
     return {
       success: false,
       reportId,

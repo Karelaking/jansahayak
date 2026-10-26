@@ -171,6 +171,39 @@ export default function NewReportPage() {
   );
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
+  // Authenticated citizen session state per PRD §3 & §6
+  const [session, setSession] = React.useState<{
+    userId: string;
+    email?: string;
+    fullName?: string;
+    role?: string;
+    isAuthenticated: boolean;
+  } | null>(null);
+  const [authLoading, setAuthLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    let active = true;
+    async function fetchSession() {
+      try {
+        const res = await fetch("/api/auth/session");
+        if (res.ok) {
+          const data = await res.json();
+          if (active && data.success && data.session) {
+            setSession(data.session);
+          }
+        }
+      } catch {
+        // Fallback for offline/unauthenticated state
+      } finally {
+        if (active) setAuthLoading(false);
+      }
+    }
+    fetchSession();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Modals state
   const [isLocationModalOpen, setIsLocationModalOpen] = React.useState(false);
 
@@ -441,7 +474,7 @@ export default function NewReportPage() {
       const idempotencyKey = idempotencyKeyRef.current;
 
       const payload = {
-        userId: "citizen_dev",
+        userId: session?.isAuthenticated && session.userId ? session.userId : "citizen_dev",
         category,
         description: description.trim(),
         idempotencyKey,
@@ -745,6 +778,61 @@ export default function NewReportPage() {
             </div>
           </div>
         )}
+
+        {/* Noticeboard Citizen Session Badge / Registration Notice (PRD §3 & §6) */}
+        {session?.isAuthenticated ? (
+          <div className="mb-5 p-3 rounded-xl bg-emerald-50/80 border border-[#cbd5cb] text-xs text-[#0e2b24] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-800 shrink-0" />
+              <span>
+                Filing as{" "}
+                <strong className="font-semibold">
+                  {session.fullName || session.email || session.userId}
+                </strong>
+              </span>
+            </div>
+            <Badge
+              variant="outline"
+              className="bg-white border-[#cbd5cb] text-[11px] text-emerald-900 font-medium"
+            >
+              Verified Citizen
+            </Badge>
+          </div>
+        ) : !authLoading ? (
+          <div className="mb-5 p-3.5 rounded-xl bg-[#faf9f5] border border-[#cbd5cb] text-xs space-y-2">
+            <div className="flex items-center gap-2 text-[#0e2b24] font-semibold">
+              <AlertCircle className="h-4 w-4 text-amber-700 shrink-0" />
+              <span>Citizen Account Recommended</span>
+            </div>
+            <p className="text-[#5c6f66] leading-relaxed text-[11px] sm:text-xs">
+              To track your report in your personal citizen docket and participate in community
+              consensus voting, please sign in.
+            </p>
+            <div className="flex items-center gap-2 pt-1">
+              <Link
+                href={`/sign-in?redirect_url=${encodeURIComponent("/reports/new")}`}
+                className={buttonVariants({
+                  size: "sm",
+                  className:
+                    "bg-[#0e2b24] hover:bg-[#1c4b3e] text-white text-xs h-7.5 px-3 rounded-lg font-medium",
+                })}
+              >
+                Sign In
+              </Link>
+              <Link
+                href={`/sign-up?redirect_url=${encodeURIComponent("/reports/new")}`}
+                className={buttonVariants({
+                  variant: "outline",
+                  size: "sm",
+                  className:
+                    "border-[#cbd5cb] bg-white text-[#0e2b24] hover:bg-[#faf9f5] text-xs h-7.5 px-3 rounded-lg font-medium",
+                })}
+              >
+                Create Account
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
           {/* ── CARD 1: Hazard Type & Severity ── */}
@@ -1095,6 +1183,7 @@ export default function NewReportPage() {
                     type="file"
                     multiple
                     accept="image/*"
+                    capture="environment"
                     onChange={handleFileUpload}
                     className="hidden"
                   />

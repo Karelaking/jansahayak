@@ -13,15 +13,16 @@ export async function GET(req: NextRequest) {
   try {
     const session = await getCurrentUserSession(req);
 
-    if (session.role !== "moderator" && session.role !== "admin") {
+    if (!session.isAuthenticated) {
       return NextResponse.json(
         {
-          error:
-            "Forbidden: Only designated moderators or administrators can access system analytics.",
+          error: "Unauthorized: Please sign in to view civic analytics.",
         },
-        { status: 403 },
+        { status: 401 },
       );
     }
+
+    const isStaff = session.role === "moderator" || session.role === "admin";
 
     // 1. PostgreSQL Incidents Aggregation
     const incidentRows = await db.select().from(incidents);
@@ -67,6 +68,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
+      isStaff,
       metrics: {
         totalIncidents,
         publishedIncidents,
@@ -76,7 +78,9 @@ export async function GET(req: NextRequest) {
         totalReports,
         severityCounts,
         categoryCounts,
-        outboxCounts,
+        outboxCounts: isStaff
+          ? outboxCounts
+          : { pending: 0, processing: 0, completed: 0, failed: 0, total: 0 },
       },
     });
   } catch (error) {

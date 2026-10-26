@@ -41,9 +41,13 @@ import { POST as reprocessRoute } from "@/app/api/reports/[reportId]/reprocess/r
 import { POST as postVoteRoute } from "@/app/api/incidents/[incidentId]/vote/route";
 import { GET as getVotesRoute } from "@/app/api/incidents/[incidentId]/votes/route";
 import { GET as getSessionRoute } from "@/app/api/auth/session/route";
+import { GET as getAnalyticsRoute } from "@/app/api/admin/analytics/route";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limit";
+import { db, incidents, moderationActions } from "@/lib/db";
+import { getReportsCollection } from "@/lib/db/mongodb";
+import { eq } from "drizzle-orm";
 
-describe("PRD §19 End-to-End Integration Test Suite (64 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (68 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -2282,5 +2286,233 @@ describe("PRD §19 End-to-End Integration Test Suite (64 Scenarios)", () => {
     expect(canAppointRole("admin", "moderator").allowed).toBe(true);
     expect(canAppointRole("admin", "admin").allowed).toBe(true);
     expect(canAppointRole("admin", "citizen").allowed).toBe(true);
+  });
+
+  // Scenario 65: Background Processor Atomic Persistence of PROCESSING_FAILED in MongoDB on Unhandled Exception (PRD §5 & §15)
+  it("Scenario 65: Background processor persists PROCESSING_FAILED status with error message in MongoDB upon unhandled exception", async () => {
+    const testReportId = `REP-EXCEPT-${Date.now()}`;
+    const reportsColl = await getReportsCollection();
+
+    // Insert document with invalid evidencePhotos causing an unhandled iterable error
+    await reportsColl.insertOne({
+      reportId: testReportId,
+      userId: "test_citizen_fail",
+      status: "PROCESSING",
+      category: "Road Surface / Pothole",
+      description: "Test unhandled exception recovery",
+      // @ts-expect-error Intentionally invalid structure to test catch handler resilience
+      evidencePhotos: null,
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 10,
+        capturedAt: new Date().toISOString(),
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      stagesCompleted: 1,
+    });
+
+    const bgRes = await processReportBackground(testReportId);
+    expect(bgRes.success).toBe(false);
+    expect(bgRes.status).toBe("PROCESSING_FAILED");
+    expect(bgRes.error).toBeDefined();
+
+    // Verify atomic MongoDB state transition
+    const failedDoc = await reportsColl.findOne({ reportId: testReportId });
+    expect(failedDoc).toBeDefined();
+    expect(failedDoc?.status).toBe("PROCESSING_FAILED");
+    expect(failedDoc?.rejectionReason).toBeDefined();
+    expect(typeof failedDoc?.rejectionReason).toBe("string");
+
+    // Clean up
+    await reportsColl.deleteOne({ reportId: testReportId });
+  });
+
+  // Scenario 66: Moderator Location Correction Preserves previousLocation in moderationActions.metadata (PRD §9, §12 & §19 Test 11)
+  it("Scenario 66: Moderator location correction archives previousLocation and correctedLocation in moderation_actions audit trail", async () => {
+    // 1. Seed incident in PostgreSQL
+    const [testInc] = await db
+      .insert(incidents)
+      .values({
+        incidentNumber: `INC-AUDIT-${Date.now()}`,
+        category: "Road Surface / Pothole",
+        severity: "high",
+        status: "under_review",
+        moderationStatus: "pending",
+        latitude: "28.474400",
+        longitude: "77.504000",
+        canonicalGeom: "SRID=4326;POINT(77.504000 28.474400)",
+        spatialUncertaintyMeters: "12.50",
+        title: "Audit Provenance Test",
+        summary: "Initial location before moderator correction",
+      })
+      .returning();
+    expect(testInc).toBeDefined();
+    if (!testInc) throw new Error("testInc not seeded");
+
+    // 2. Moderator performs location correction
+    const modResult = await executeStage7Moderation({
+      incidentId: testInc.id,
+      moderatorId: "mod_audit_inspector",
+      decision: "correct_location",
+      correctedLocation: {
+        latitude: 28.481234,
+        longitude: 77.515678,
+      },
+      reason: "Corrected road coordinates shifted from building compound to carriage center",
+    });
+    expect(modResult.success).toBe(true);
+
+    // 3. Verify updated incident in PostgreSQL
+    const [updatedInc] = await db.select().from(incidents).where(eq(incidents.id, testInc.id));
+    expect(updatedInc).toBeDefined();
+    if (!updatedInc) throw new Error("updatedInc not found");
+    expect(Number(updatedInc.latitude)).toBeCloseTo(28.481234, 4);
+    expect(Number(updatedInc.longitude)).toBeCloseTo(77.515678, 4);
+
+    // 4. Verify immutable audit action contains previousLocation
+    const actions = await db
+      .select()
+      .from(moderationActions)
+      .where(eq(moderationActions.incidentId, testInc.id));
+    expect(actions.length).toBeGreaterThan(0);
+    const lastAction = actions[actions.length - 1];
+    expect(lastAction).toBeDefined();
+    if (!lastAction) throw new Error("lastAction not found");
+    expect(lastAction.action).toBe("correct_location");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const meta = lastAction.metadata as any;
+    expect(meta.previousLocation).toBeDefined();
+    expect(meta.previousLocation.latitude).toBeCloseTo(28.4744, 4);
+    expect(meta.previousLocation.longitude).toBeCloseTo(77.504, 4);
+    expect(meta.previousLocation.spatialUncertaintyMeters).toBeCloseTo(12.5, 1);
+    expect(meta.correctedLocation.latitude).toBeCloseTo(28.481234, 4);
+    expect(meta.correctedLocation.longitude).toBeCloseTo(77.515678, 4);
+
+    // Clean up
+    await db.delete(incidents).where(eq(incidents.id, testInc.id));
+  });
+
+  // Scenario 67: Civic Analytics Tiered RBAC Verification (PRD §2, §14B, & §18)
+  it("Scenario 67: Civic analytics endpoint serves public summaries to citizens while gating pipeline telemetry to staff", async () => {
+    // 1. Unauthenticated request returns 401
+    const unauthReq = new NextRequest("http://localhost:3000/api/admin/analytics");
+    const unauthRes = await getAnalyticsRoute(unauthReq);
+    expect(unauthRes.status).toBe(401);
+    const unauthJson = await unauthRes.json();
+    expect(unauthJson.error).toContain("Unauthorized");
+
+    // 2. Citizen authenticated request returns 200 with civic metrics and zeroed operational telemetry
+    const citizenReq = new NextRequest("http://localhost:3000/api/admin/analytics", {
+      headers: {
+        "x-mock-user-id": "citizen_viewer_01",
+        "x-mock-role": "citizen",
+      },
+    });
+    const citizenRes = await getAnalyticsRoute(citizenReq);
+    expect(citizenRes.status).toBe(200);
+    const citizenJson = await citizenRes.json();
+    expect(citizenJson.success).toBe(true);
+    expect(citizenJson.isStaff).toBe(false);
+    expect(typeof citizenJson.metrics.totalIncidents).toBe("number");
+    expect(citizenJson.metrics.severityCounts).toBeDefined();
+    expect(citizenJson.metrics.categoryCounts).toBeDefined();
+    expect(citizenJson.metrics.outboxCounts.pending).toBe(0);
+    expect(citizenJson.metrics.outboxCounts.processing).toBe(0);
+    expect(citizenJson.metrics.outboxCounts.completed).toBe(0);
+    expect(citizenJson.metrics.outboxCounts.failed).toBe(0);
+
+    // 3. Moderator request returns 200 with isStaff: true and active operational telemetry
+    const staffReq = new NextRequest("http://localhost:3000/api/admin/analytics", {
+      headers: {
+        "x-mock-user-id": "mod_operator_01",
+        "x-mock-role": "moderator",
+      },
+    });
+    const staffRes = await getAnalyticsRoute(staffReq);
+    expect(staffRes.status).toBe(200);
+    const staffJson = await staffRes.json();
+    expect(staffJson.success).toBe(true);
+    expect(staffJson.isStaff).toBe(true);
+    expect(typeof staffJson.metrics.outboxCounts.total).toBe("number");
+  });
+
+  // Scenario 68: Citizen Intake Authentication Binding and Docket Isolation (PRD §3, §6, & §16)
+  it("Scenario 68: Citizen intake pipeline attaches authenticated user identifier and preserves strict ownership binding into citizen personal docket", async () => {
+    const alphaUserId = `citizen_alpha_${Date.now()}`;
+    const betaUserId = `citizen_beta_${Date.now()}`;
+
+    // 1. Submit report with citizen_alpha session
+    const submitPayload = {
+      userId: alphaUserId,
+      category: "Road Surface / Pothole",
+      description: "Severe crater on Surajpur Kasna road near Pari Chowk",
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 8,
+        capturedAt: new Date().toISOString(),
+      },
+      photos: [
+        { filename: "p1.jpg", base64: Buffer.from("test1").toString("base64") },
+        { filename: "p2.jpg", base64: Buffer.from("test2").toString("base64") },
+        { filename: "p3.jpg", base64: Buffer.from("test3").toString("base64") },
+        { filename: "p4.jpg", base64: Buffer.from("test4").toString("base64") },
+      ],
+    };
+
+    const submitReq = new NextRequest("http://localhost:3000/api/pipeline/submit", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-mock-user-id": alphaUserId,
+        "x-mock-role": "citizen",
+      },
+      body: JSON.stringify(submitPayload),
+    });
+    const submitRes = await submitRoute(submitReq);
+    expect(submitRes.status).toBe(200);
+    const submitJson = await submitRes.json();
+    expect(submitJson.success).toBe(true);
+    const reportId = submitJson.reportId;
+    expect(reportId).toBeDefined();
+
+    // 2. Query MongoDB collection to confirm userId was persisted correctly
+    const reportsColl = await getReportsCollection();
+    const stagedDoc = await reportsColl.findOne({ reportId });
+    expect(stagedDoc).toBeDefined();
+    expect(stagedDoc?.userId).toBe(alphaUserId);
+
+    // 3. citizen_alpha queries their personal docket and sees the report
+    const alphaGetReq = new NextRequest("http://localhost:3000/api/reports?scope=mine", {
+      headers: {
+        "x-mock-user-id": alphaUserId,
+        "x-mock-role": "citizen",
+      },
+    });
+    const alphaGetRes = await getReportsRoute(alphaGetReq);
+    expect(alphaGetRes.status).toBe(200);
+    const alphaGetJson = await alphaGetRes.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const alphaReportIds = alphaGetJson.reports.map((r: any) => r.reportId);
+    expect(alphaReportIds).toContain(reportId);
+
+    // 4. citizen_beta queries their personal docket and DOES NOT see citizen_alpha's report
+    const betaGetReq = new NextRequest("http://localhost:3000/api/reports?scope=mine", {
+      headers: {
+        "x-mock-user-id": betaUserId,
+        "x-mock-role": "citizen",
+      },
+    });
+    const betaGetRes = await getReportsRoute(betaGetReq);
+    expect(betaGetRes.status).toBe(200);
+    const betaGetJson = await betaGetRes.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const betaReportIds = betaGetJson.reports.map((r: any) => r.reportId);
+    expect(betaReportIds).not.toContain(reportId);
+
+    // Clean up
+    await reportsColl.deleteOne({ reportId });
   });
 });

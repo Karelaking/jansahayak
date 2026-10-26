@@ -135,6 +135,13 @@ export async function executeStage7Moderation(
       metadata: {
         previousStatus: incident.status,
         newStatus: nextStatus,
+        previousLocation: {
+          latitude: Number(incident.latitude),
+          longitude: Number(incident.longitude),
+          spatialUncertaintyMeters: incident.spatialUncertaintyMeters
+            ? Number(incident.spatialUncertaintyMeters)
+            : null,
+        },
         correctedLocation: correctedLocation || null,
       },
     });
