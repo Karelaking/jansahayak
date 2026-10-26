@@ -7,6 +7,7 @@ import {
   ExternalLink,
   MessageSquare,
   CheckCircle2,
+  AlertTriangle,
   Send,
   Loader2,
 } from "lucide-react";
@@ -240,6 +241,26 @@ export default function EscalationsPage() {
                 </CardHeader>
 
                 <CardContent className="pt-4 space-y-4">
+                  {(item.publicOpinionStatus === "reopened_by_community" ||
+                    item.publicOpinionStatus === "public_disputed" ||
+                    item.statusVariant === "destructive") &&
+                    item.unresolvedVotesCount !== undefined &&
+                    item.unresolvedVotesCount > 0 && (
+                      <div className="rounded-md border border-rose-300 bg-rose-50/90 p-3 text-xs text-rose-900 flex items-start gap-2.5 shadow-2xs">
+                        <AlertTriangle className="size-4 text-rose-600 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5">
+                          <strong className="font-semibold block text-rose-950">
+                            Active Citizen Dispute: Contractor Repair Rejected
+                          </strong>
+                          <span>
+                            {item.unresolvedVotesCount} local residents verified that this defect
+                            persists. Remediation has been automatically reopened in municipal
+                            queues per PRD §14B.
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                   <p className="text-xs text-foreground leading-relaxed">{item.summary}</p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">

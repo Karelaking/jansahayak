@@ -53,6 +53,9 @@ export async function GET(req: NextRequest) {
       const isResolved = inc.status === "resolved";
       const isUnderRepair =
         inc.status === "under_review" || inc.publicOpinionStatus === "under_repair";
+      const isDisputed =
+        inc.publicOpinionStatus === "reopened_by_community" ||
+        inc.publicOpinionStatus === "public_disputed";
 
       const resVotes = Number(inc.resolutionVotesCount) || 0;
       const unresVotes = Number(inc.unresolvedVotesCount) || 0;
@@ -63,7 +66,11 @@ export async function GET(req: NextRequest) {
       let statusLabel = "Awaiting Municipal Response";
       let statusVariant: EscalationDocket["statusVariant"] = "destructive";
 
-      if (isResolved) {
+      if (isDisputed) {
+        status = "in-progress";
+        statusLabel = "Community Dispute: Reopened for Re-repair";
+        statusVariant = "destructive";
+      } else if (isResolved) {
         status = "resolved";
         statusLabel = "Remediation Complete";
         statusVariant = "default";

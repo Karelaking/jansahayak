@@ -132,6 +132,9 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
   const mapRef = useRef<MapRef | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<HazardCategoryKey | "all">("all");
+  const [selectedStatus, setSelectedStatus] = useState<
+    "all" | "active" | "under_repair" | "community_resolved" | "public_disputed"
+  >("all");
   const [liveHazards, setLiveHazards] = useState<HazardReport[]>(hazards);
   const [votedIncidents, setVotedIncidents] = useState<Record<string, boolean>>({});
   const [votingLoading, setVotingLoading] = useState<Record<string, boolean>>({});
@@ -211,9 +214,57 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
     }
   };
 
-  const filteredHazards = liveHazards.filter(
-    (h) => selectedCategory === "all" || h.category === selectedCategory,
-  );
+  const filteredHazards = liveHazards.filter((h) => {
+    const categoryMatch = selectedCategory === "all" || h.category === selectedCategory;
+    if (!categoryMatch) return false;
+
+    if (selectedStatus === "all") return true;
+    if (selectedStatus === "community_resolved") {
+      return h.publicOpinionStatus === "community_resolved" || h.status === "resolved";
+    }
+    if (selectedStatus === "under_repair") {
+      return h.publicOpinionStatus === "under_repair" || h.status === "under-review";
+    }
+    if (selectedStatus === "public_disputed") {
+      return (
+        h.publicOpinionStatus === "public_disputed" ||
+        h.publicOpinionStatus === "reopened_by_community"
+      );
+    }
+    if (selectedStatus === "active") {
+      return (
+        h.publicOpinionStatus !== "community_resolved" &&
+        h.status !== "resolved" &&
+        h.publicOpinionStatus !== "under_repair" &&
+        h.publicOpinionStatus !== "reopened_by_community" &&
+        h.publicOpinionStatus !== "public_disputed"
+      );
+    }
+    return true;
+  });
+
+  const statusCounts = {
+    all: liveHazards.length,
+    active: liveHazards.filter(
+      (h) =>
+        h.publicOpinionStatus !== "community_resolved" &&
+        h.status !== "resolved" &&
+        h.publicOpinionStatus !== "under_repair" &&
+        h.publicOpinionStatus !== "reopened_by_community" &&
+        h.publicOpinionStatus !== "public_disputed",
+    ).length,
+    under_repair: liveHazards.filter(
+      (h) => h.publicOpinionStatus === "under_repair" || h.status === "under-review",
+    ).length,
+    community_resolved: liveHazards.filter(
+      (h) => h.publicOpinionStatus === "community_resolved" || h.status === "resolved",
+    ).length,
+    public_disputed: liveHazards.filter(
+      (h) =>
+        h.publicOpinionStatus === "public_disputed" ||
+        h.publicOpinionStatus === "reopened_by_community",
+    ).length,
+  };
 
   if (!isMounted) {
     return (
@@ -282,7 +333,12 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
                       : ""
                   }
                 >
-                  <HazardPin severity={hazard.severity} />
+                  <HazardPin
+                    severity={hazard.severity}
+                    status={hazard.status}
+                    publicOpinionStatus={hazard.publicOpinionStatus}
+                    isSelected={isHighlighted}
+                  />
                 </div>
               </MarkerContent>
 
@@ -414,6 +470,47 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
                 selectedCategory={selectedCategory}
                 onSelectCategory={setSelectedCategory}
               />
+            </div>
+
+            {/* PRD §13 & §14B Citizen Consensus Status Filter */}
+            <div className="bg-[#faf9f5]/95 backdrop-blur-md rounded-2xl p-1.5 border border-[#cbd5cb] shadow-sm">
+              <div className="no-scrollbar flex items-center gap-1 overflow-x-auto text-xs">
+                {(
+                  [
+                    { key: "all", label: "All" },
+                    { key: "active", label: "Active" },
+                    { key: "under_repair", label: "In Repair" },
+                    { key: "community_resolved", label: "Resolved" },
+                    { key: "public_disputed", label: "Disputed" },
+                  ] as const
+                ).map((tab) => {
+                  const isActive = selectedStatus === tab.key;
+                  const count = statusCounts[tab.key];
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setSelectedStatus(tab.key)}
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
+                        isActive
+                          ? "bg-[#0e2b24] text-[#f5f3ed] shadow-xs"
+                          : "border border-[#cbd5cb] bg-white/80 text-[#3a4f47] hover:bg-[#e9efe8] hover:text-[#0e2b24]"
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      <span
+                        className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
+                          isActive
+                            ? "bg-white/20 text-white"
+                            : "bg-[#eaf1e9] text-[#1e4638] font-semibold"
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             {highlightedId && (
               <div className="flex items-center justify-between gap-2 bg-emerald-50/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-emerald-300 text-xs text-emerald-950 shadow-xs">

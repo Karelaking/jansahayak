@@ -532,6 +532,7 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
                   report.canonicalIncident?.id || report.associatedIncidentId || report.reportId
                 }
                 incidentNumber={report.canonicalIncident?.incidentNumber}
+                incidentLocation={report.location}
                 initialStatus={report.canonicalIncident?.status || report.status.toLowerCase()}
                 initialOpinionStatus={
                   report.canonicalIncident?.publicOpinionStatus || "verified_hazard"

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserSession } from "@/lib/auth/session";
 import { db, incidents, incidentVotes, outboxEvents } from "@/lib/db";
 import { calculateGeodesicDistanceMeters } from "@/lib/pipeline/location-verification";
+import { checkRateLimit } from "@/lib/security/rate-limit";
 import { eq, and, sql } from "drizzle-orm";
 
 /**
@@ -23,6 +24,29 @@ export async function POST(
   try {
     const { incidentId } = await params;
     const session = await getCurrentUserSession(req);
+
+    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
+
+    // PRD §17 Rate Limiting for Community Voting Gateway (Anti-ballot stuffing)
+    const rateLimit = checkRateLimit(`vote_${clientIp}`, { limit: 30, windowMs: 60 * 1000 });
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error:
+            "Rate limit exceeded. Too many community votes submitted from this network. Please try again later.",
+          remaining: rateLimit.remaining,
+          resetMs: rateLimit.resetMs,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": Math.ceil(rateLimit.resetMs / 1000).toString(),
+            "X-RateLimit-Limit": rateLimit.limit.toString(),
+            "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+          },
+        },
+      );
+    }
 
     let body: Record<string, unknown> = {};
     try {
@@ -65,7 +89,6 @@ export async function POST(
     // 2. Resolve voter identity
     const voterEmail = (body.voterEmail as string) || session.email || undefined;
     const voterName = (body.voterName as string) || session.fullName || undefined;
-    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
     const voterIdentifier = session.isAuthenticated
       ? session.userId
       : voterEmail || `ip_${clientIp}`;

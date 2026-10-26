@@ -11,6 +11,10 @@ import {
   Check,
   RotateCcw,
   Sparkles,
+  Navigation,
+  MapPin,
+  Loader2,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +47,7 @@ interface VotesResponse {
 interface CommunityProgressVotingWidgetProps {
   incidentId: string;
   incidentNumber?: string;
+  incidentLocation?: { latitude: number; longitude: number };
   initialStatus?: string;
   initialOpinionStatus?: string;
   initialVerifications?: number;
@@ -54,6 +59,7 @@ interface CommunityProgressVotingWidgetProps {
 export function CommunityProgressVotingWidget({
   incidentId,
   incidentNumber,
+  incidentLocation,
   initialStatus = "open",
   initialOpinionStatus = "verified_hazard",
   initialVerifications = 1,
@@ -92,6 +98,54 @@ export function CommunityProgressVotingWidget({
   const [voterEmail, setVoterEmail] = React.useState("");
   const [voterName, setVoterName] = React.useState("");
   const [showNotificationOptions, setShowNotificationOptions] = React.useState(false);
+
+  // Client Geolocation state for PRD §14B 500m proximity verification
+  const [clientCoords, setClientCoords] = React.useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [geoStatus, setGeoStatus] = React.useState<"idle" | "requesting" | "acquired" | "denied">(
+    "idle",
+  );
+  const [geoDistanceMeters, setGeoDistanceMeters] = React.useState<number | null>(null);
+
+  const requestGeolocation = React.useCallback(() => {
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      setGeoStatus("denied");
+      return;
+    }
+    setGeoStatus("requesting");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        };
+        setClientCoords(coords);
+        setGeoStatus("acquired");
+
+        if (incidentLocation?.latitude && incidentLocation?.longitude) {
+          const R = 6371e3; // Earth radius in metres
+          const φ1 = (pos.coords.latitude * Math.PI) / 180;
+          const φ2 = (incidentLocation.latitude * Math.PI) / 180;
+          const Δφ = ((incidentLocation.latitude - pos.coords.latitude) * Math.PI) / 180;
+          const Δλ = ((incidentLocation.longitude - pos.coords.longitude) * Math.PI) / 180;
+          const a =
+            Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          const dist = Math.round(R * c);
+          setGeoDistanceMeters(dist);
+          setIsLocalResident(dist <= 500);
+        }
+      },
+      (err) => {
+        console.warn("Geolocation prompt was denied or failed:", err);
+        setGeoStatus("denied");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+  }, [incidentLocation]);
 
   // Local vote tracking to disable buttons immediately
   const [hasVerified, setHasVerified] = React.useState(false);
@@ -143,6 +197,8 @@ export function CommunityProgressVotingWidget({
           voteType,
           comment: comment.trim() || undefined,
           isLocalResident,
+          latitude: clientCoords?.latitude,
+          longitude: clientCoords?.longitude,
           wantsUpdates,
           voterEmail: wantsUpdates && voterEmail.trim() ? voterEmail.trim() : undefined,
           voterName: voterName.trim() || undefined,
@@ -162,8 +218,14 @@ export function CommunityProgressVotingWidget({
         setHasVotedResolution(voteType);
       }
 
+      const proximityNotice = json.vote?.isLocalResident
+        ? " (Verified local resident within 500m quorum)"
+        : " (Recorded as commuter observation)";
+
       setFeedback({
-        text: json.message || "Your community vote has been registered and verified.",
+        text:
+          (json.message || "Your community vote has been registered and verified.") +
+          proximityNotice,
         type: "success",
       });
 
@@ -436,6 +498,47 @@ export function CommunityProgressVotingWidget({
                   {showNotificationOptions ? "Hide Alert Settings" : "Receive Progress Updates"}
                 </span>
               </button>
+            </div>
+
+            {/* Geolocation 500m Residency Verification Bar (PRD §14B) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[#f5f3ed]/70 p-2.5 border border-[#eef1e9]">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <MapPin className="size-3.5 text-[#0e2b24] shrink-0" />
+                <span className="text-[11px] font-medium text-[#17382f]">
+                  PRD §14B 500m Quorum Proximity:
+                </span>
+                {geoStatus === "acquired" ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-900 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-300">
+                    <ShieldCheck className="size-3 text-emerald-700" />
+                    {geoDistanceMeters !== null
+                      ? `${geoDistanceMeters}m from centroid (${geoDistanceMeters <= 500 ? "Local Resident Quorum Qualified" : "Commuter Weight"})`
+                      : "GPS Coordinates Attached"}
+                  </span>
+                ) : geoStatus === "requesting" ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Loader2 className="size-3 animate-spin text-[#0e2b24]" />
+                    Acquiring device GPS...
+                  </span>
+                ) : geoStatus === "denied" ? (
+                  <span className="text-[11px] text-amber-800">
+                    GPS unavailable (relying on self-attestation)
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-[#5c6f66]">Browser location unverified</span>
+                )}
+              </div>
+
+              {geoStatus !== "acquired" && (
+                <button
+                  type="button"
+                  onClick={requestGeolocation}
+                  disabled={geoStatus === "requesting"}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0e2b24] bg-white hover:bg-[#eef1e9] border border-[#cbd5cb] px-2.5 py-1 rounded-md transition-colors shadow-2xs"
+                >
+                  <Navigation className="size-3 text-emerald-800" />
+                  <span>Verify My Proximity via GPS</span>
+                </button>
+              )}
             </div>
 
             {/* Optional field testimony text */}
