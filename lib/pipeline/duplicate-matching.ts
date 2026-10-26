@@ -123,11 +123,14 @@ export async function executeStage5DuplicateMatching(
       failedGates.push("Gate 1: Evidence validation failed");
     }
 
-    // Gate 2: Location quality compatible (< 25m uncertainty)
-    if (location.qualityBand === "HIGH" || location.qualityBand === "MEDIUM") {
-      passedGates.push("Gate 2: Location quality acceptable (<25m)");
+    // Gate 2: Location quality compatible (< 25m uncertainty and within pilot jurisdiction)
+    if (
+      (location.qualityBand === "HIGH" || location.qualityBand === "MEDIUM") &&
+      location.isWithinPilotBounds !== false
+    ) {
+      passedGates.push("Gate 2: Location quality acceptable (<25m within pilot bounds)");
     } else {
-      failedGates.push("Gate 2: Location quality low or rejected (>25m)");
+      failedGates.push("Gate 2: Location quality low, rejected, or outside pilot jurisdiction");
     }
 
     // Gate 3: Category and physical defect compatibility

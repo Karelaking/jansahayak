@@ -9,7 +9,7 @@ import { IngestedEvidencePhoto, ReportSubmissionPayload } from "@/lib/pipeline/t
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
   try {
-    const session = await getCurrentUserSession();
+    const session = await getCurrentUserSession(req);
     const contentType = req.headers.get("content-type") || "";
     const isSync = req.nextUrl.searchParams.get("sync") === "true";
 

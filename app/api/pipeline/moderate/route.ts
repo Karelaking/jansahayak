@@ -5,7 +5,7 @@ import { ModerationDecision } from "@/lib/pipeline/moderation";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getCurrentUserSession();
+    const session = await getCurrentUserSession(req);
 
     // Enforce moderator / admin permission
     if (session.role !== "moderator" && session.role !== "admin") {

@@ -28,14 +28,16 @@ export interface MunicipalDossier {
 }
 
 /**
- * PRD §14: Compiles an official Municipal Civic Grievance Dossier and dispatches it
- * to the competent local municipal corporation / urban local body via email.
+ * PRD §14: Compiles an official Municipal Civic Grievance Dossier snapshot and templates.
  */
-export async function dispatchMunicipalReportEmail(incidentId: string): Promise<{
+export async function compileMunicipalDossier(incidentId: string): Promise<{
   success: boolean;
   docketNumber?: string;
   recipient?: string;
   dossier?: MunicipalDossier;
+  htmlBody?: string;
+  textBody?: string;
+  incident?: typeof incidents.$inferSelect;
   error?: string;
 }> {
   try {
@@ -220,6 +222,46 @@ Public Safety Map: ${dossier.publicMapUrl}
 Please initiate civic maintenance intervention per municipal road safety protocols.
 `;
 
+    return {
+      success: true,
+      docketNumber,
+      recipient,
+      dossier,
+      htmlBody,
+      textBody,
+      incident,
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      error: `Failed to compile municipal dossier: ${msg}`,
+    };
+  }
+}
+
+/**
+ * PRD §14: Compiles an official Municipal Civic Grievance Dossier and dispatches it
+ * to the competent local municipal corporation / urban local body via email.
+ */
+export async function dispatchMunicipalReportEmail(incidentId: string): Promise<{
+  success: boolean;
+  docketNumber?: string;
+  recipient?: string;
+  dossier?: MunicipalDossier;
+  error?: string;
+}> {
+  try {
+    const compiled = await compileMunicipalDossier(incidentId);
+    if (!compiled.success || !compiled.dossier || !compiled.incident) {
+      return {
+        success: false,
+        error: compiled.error || `Incident ${incidentId} could not be compiled.`,
+      };
+    }
+
+    const { docketNumber, recipient, dossier, htmlBody, textBody, incident } = compiled;
+
     // 4. Send email or record dispatch
     console.log(`[Municipal-Dispatcher] Compiling dossier ${docketNumber} for ${recipient}`);
 
@@ -235,7 +277,7 @@ Please initiate civic maintenance intervention per municipal road safety protoco
           },
           body: JSON.stringify({
             from: process.env.EMAIL_FROM || "JanSahayak SafeStreets <reports@jansahayak.in>",
-            to: [recipient],
+            to: [recipient!],
             subject: `[ACTION REQUIRED] Road Hazard Redressal Docket ${docketNumber} (${dossier.category})`,
             html: htmlBody,
             text: textBody,

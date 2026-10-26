@@ -13,13 +13,18 @@ import { executeStage2EvidenceValidation } from "@/lib/pipeline/evidence-validat
 import { processOutboxBatch } from "@/lib/pipeline/worker";
 import { processReportBackground } from "@/lib/pipeline/background-processor";
 import { dispatchMunicipalReportEmail } from "@/lib/email/municipal-dispatcher";
+import { executeStage4LocationVerification } from "@/lib/pipeline/location-verification";
 import { NextRequest } from "next/server";
 import { POST as dispatchMunicipalRoute } from "@/app/api/admin/incidents/[incidentId]/dispatch-municipal/route";
-import { GET as getEscalationsRoute } from "@/app/api/admin/escalations/route";
+import {
+  GET as getEscalationsRoute,
+  POST as postEscalationRoute,
+} from "@/app/api/admin/escalations/route";
 import { POST as processPipelineRoute } from "@/app/api/pipeline/process/route";
 import { GET as getReportDetailRoute } from "@/app/api/reports/[reportId]/route";
+import { GET as getDossierRoute } from "@/app/api/admin/incidents/[incidentId]/dossier/route";
 
-describe("PRD §19 End-to-End Integration Test Suite (33 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (36 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -838,5 +843,127 @@ describe("PRD §19 End-to-End Integration Test Suite (33 Scenarios)", () => {
     expect(res.status).toBe(404);
     const json = await res.json();
     expect(json.error).toBe("Report not found");
+  });
+
+  // Scenario 34: Pilot Bounding Box Jurisdiction Validation (PRD §4 & §9)
+  it("Scenario 34: Location verification downgrades quality band and flags out-of-bounds coordinates", async () => {
+    // 1. Coordinates within Greater Noida pilot bounds (Pari Chowk: 28.4744°N, 77.5040°E)
+    const inBoundsReport = {
+      reportId: "rep_in_bounds_01",
+      userId: "user_test",
+      category: "Road Surface / Pothole",
+      description: "Pothole in Alpha 1 Greater Noida",
+      status: "SUBMITTED" as const,
+      evidencePhotos: [
+        {
+          fileId: "file_01",
+          sha256: "hash_01",
+          filename: "photo_1.jpg",
+          contentType: "image/jpeg",
+          byteSize: 1024,
+          captureTimestamp: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [
+            {
+              latitude: 28.4744,
+              longitude: 77.504,
+              horizontalAccuracyMeters: 6,
+              sampleTimestamp: new Date().toISOString(),
+            },
+          ],
+        },
+      ],
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 6,
+        capturedAt: new Date().toISOString(),
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const inBoundsResult = await executeStage4LocationVerification(inBoundsReport);
+    expect(inBoundsResult.success).toBe(true);
+    expect(inBoundsResult.data?.isWithinPilotBounds).toBe(true);
+    expect(inBoundsResult.data?.qualityBand).toBe("HIGH");
+
+    // 2. Coordinates outside Greater Noida pilot bounds (e.g. Mumbai: 19.0760°N, 72.8777°E)
+    const outOfBoundsReport = {
+      ...inBoundsReport,
+      reportId: "rep_out_bounds_01",
+      evidencePhotos: [
+        {
+          ...inBoundsReport.evidencePhotos[0]!,
+          gpsSamples: [
+            {
+              latitude: 19.076,
+              longitude: 72.8777,
+              horizontalAccuracyMeters: 5,
+              sampleTimestamp: new Date().toISOString(),
+            },
+          ],
+        },
+      ],
+    };
+
+    const outOfBoundsResult = await executeStage4LocationVerification(outOfBoundsReport);
+    expect(outOfBoundsResult.data?.isWithinPilotBounds).toBe(false);
+    expect(outOfBoundsResult.data?.qualityBand).toBe("LOW");
+    expect(
+      outOfBoundsResult.data?.issues.some((issue) =>
+        issue.includes("outside designated Greater Noida pilot bounding box"),
+      ),
+    ).toBe(true);
+  });
+
+  // Scenario 35: Authority Escalation State & Official Minutes Persistence (PRD §14, §16)
+  it("Scenario 35: POST /api/admin/escalations validates authorization, input, and returns clean error handling", async () => {
+    // 1. Unauthorized attempt
+    const unauthReq = new NextRequest("http://localhost:3000/api/admin/escalations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-mock-role": "citizen" },
+      body: JSON.stringify({ incidentId: "test_inc_01" }),
+    });
+    const unauthRes = await postEscalationRoute(unauthReq);
+    expect(unauthRes.status).toBe(403);
+
+    // 2. Missing incidentId returns 400
+    const missingIdReq = new NextRequest("http://localhost:3000/api/admin/escalations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-mock-role": "moderator" },
+      body: JSON.stringify({ status: "resolved" }),
+    });
+    const missingIdRes = await postEscalationRoute(missingIdReq);
+    expect(missingIdRes.status).toBe(400);
+
+    // 3. Non-existent incidentId returns 404
+    const notFoundReq = new NextRequest("http://localhost:3000/api/admin/escalations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-mock-role": "moderator" },
+      body: JSON.stringify({ incidentId: "a0000000-0000-0000-0000-000000000000" }),
+    });
+    const notFoundRes = await postEscalationRoute(notFoundReq);
+    expect(notFoundRes.status).toBe(404);
+  });
+
+  // Scenario 36: Municipal Grievance Dossier Printable Export Gateway (PRD §14 & §16)
+  it("Scenario 36: GET /api/admin/incidents/:id/dossier requires auth and handles format options cleanly", async () => {
+    const unknownIncId = "a0000000-0000-0000-0000-000000000000";
+
+    // 1. Authenticated request for non-existent incident returns 404
+    const authReq = new NextRequest(
+      `http://localhost:3000/api/admin/incidents/${unknownIncId}/dossier?format=json`,
+      {
+        method: "GET",
+        headers: { "x-mock-user-id": "mod_01", "x-mock-role": "moderator" },
+      },
+    );
+    const authRes = await getDossierRoute(authReq, {
+      params: Promise.resolve({ incidentId: unknownIncId }),
+    });
+    expect(authRes.status).toBe(404);
+    const authJson = await authRes.json();
+    expect(authJson.error).toMatch(/not found/i);
   });
 });

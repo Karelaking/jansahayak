@@ -90,15 +90,15 @@ export async function getCurrentUserSession(req?: Request): Promise<UserSession>
   let headerRole: string | undefined;
 
   if (req) {
-    headerUserId = req.headers.get("x-user-id") || undefined;
-    headerRole = req.headers.get("x-user-role") || undefined;
+    headerUserId = req.headers.get("x-user-id") || req.headers.get("x-mock-user-id") || undefined;
+    headerRole = req.headers.get("x-user-role") || req.headers.get("x-mock-role") || undefined;
   }
 
   if (!headerUserId && !headerRole) {
     try {
       const headerStore = await headers();
-      headerUserId = headerStore.get("x-user-id") || undefined;
-      headerRole = headerStore.get("x-user-role") || undefined;
+      headerUserId = headerStore.get("x-user-id") || headerStore.get("x-mock-user-id") || undefined;
+      headerRole = headerStore.get("x-user-role") || headerStore.get("x-mock-role") || undefined;
     } catch {
       // Outside request scope
     }

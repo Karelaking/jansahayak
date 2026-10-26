@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getCurrentUserSession();
+    const session = await getCurrentUserSession(req);
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "20", 10);
 

@@ -37,75 +37,118 @@ export default function EscalationsPage() {
   const [loading, setLoading] = React.useState(true);
   const [activeModalId, setActiveModalId] = React.useState<string | null>(null);
   const [officialNote, setOfficialNote] = React.useState("");
+  const [isUpdatingId, setIsUpdatingId] = React.useState<string | null>(null);
+  const [isSavingNote, setIsSavingNote] = React.useState(false);
+
+  const fetchEscalations = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/escalations");
+      if (!res.ok) throw new Error("Failed to fetch escalations");
+      const data = await res.json();
+      if (Array.isArray(data.escalations)) {
+        setEscalations(data.escalations);
+      }
+    } catch (err) {
+      console.error("Error loading escalations:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   React.useEffect(() => {
-    let active = true;
-    fetch("/api/admin/escalations")
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch escalations");
-        return res.json();
-      })
-      .then((data) => {
-        if (active && Array.isArray(data.escalations)) {
-          setEscalations(data.escalations);
-        }
-      })
-      .catch((err) => {
-        console.error("Error loading escalations:", err);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
+    fetchEscalations();
+  }, [fetchEscalations]);
 
   const activeEscalation = escalations.find((e) => e.id === activeModalId);
 
-  const handleUpdateStatus = (id: string, newStatus: EscalationDocket["status"]) => {
-    setEscalations((prev) =>
-      prev.map((e) => {
-        if (e.id !== id) return e;
-        let statusLabel = "In Progress";
-        let statusVariant: EscalationDocket["statusVariant"] = "default";
-        if (newStatus === "acknowledged") {
-          statusLabel = "Acknowledged by Dept";
-          statusVariant = "secondary";
-        } else if (newStatus === "resolved") {
-          statusLabel = "Remediation Complete";
-          statusVariant = "default";
-        } else if (newStatus === "awaiting-response") {
-          statusLabel = "Awaiting Response";
-          statusVariant = "destructive";
-        }
+  const handleUpdateStatus = async (id: string, newStatus: EscalationDocket["status"]) => {
+    setIsUpdatingId(id);
+    try {
+      // 1. Optimistic UI update
+      setEscalations((prev) =>
+        prev.map((e) => {
+          if (e.id !== id) return e;
+          let statusLabel = "In Progress";
+          let statusVariant: EscalationDocket["statusVariant"] = "default";
+          if (newStatus === "acknowledged") {
+            statusLabel = "Acknowledged by Dept";
+            statusVariant = "secondary";
+          } else if (newStatus === "resolved") {
+            statusLabel = "Remediation Complete";
+            statusVariant = "default";
+          } else if (newStatus === "awaiting-response") {
+            statusLabel = "Awaiting Response";
+            statusVariant = "destructive";
+          }
 
-        return {
-          ...e,
+          return {
+            ...e,
+            status: newStatus,
+            statusLabel,
+            statusVariant,
+            lastUpdate: `Just now — Status shifted to ${statusLabel}`,
+          };
+        }),
+      );
+
+      // 2. Persist to PostgreSQL backend & moderation audit trail
+      const res = await fetch("/api/admin/escalations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          incidentId: id,
           status: newStatus,
-          statusLabel,
-          statusVariant,
-          lastUpdate: `Just now — Status shifted to ${statusLabel}`,
-        };
-      }),
-    );
+        }),
+      });
+
+      if (!res.ok) {
+        console.warn("Failed to persist status change to PostgreSQL; refetching...");
+        await fetchEscalations();
+      }
+    } catch (err) {
+      console.error("Error updating escalation status:", err);
+      await fetchEscalations();
+    } finally {
+      setIsUpdatingId(null);
+    }
   };
 
-  const handleSaveNote = () => {
+  const handleSaveNote = async () => {
     if (!activeModalId || !officialNote.trim()) return;
-    setEscalations((prev) =>
-      prev.map((e) =>
-        e.id === activeModalId
-          ? {
-              ...e,
-              lastUpdate: `Just now — Official Note: ${officialNote}`,
-            }
-          : e,
-      ),
-    );
-    setOfficialNote("");
-    setActiveModalId(null);
+    setIsSavingNote(true);
+
+    try {
+      const noteContent = officialNote.trim();
+
+      // 1. Optimistic UI update
+      setEscalations((prev) =>
+        prev.map((e) =>
+          e.id === activeModalId
+            ? {
+                ...e,
+                lastUpdate: `Just now — Official Note: ${noteContent}`,
+              }
+            : e,
+        ),
+      );
+
+      // 2. Persist to PostgreSQL backend & moderation audit trail
+      await fetch("/api/admin/escalations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          incidentId: activeModalId,
+          officialNote: noteContent,
+        }),
+      });
+
+      setOfficialNote("");
+      setActiveModalId(null);
+    } catch (err) {
+      console.error("Error saving official note:", err);
+    } finally {
+      setIsSavingNote(false);
+    }
   };
 
   return (
@@ -215,13 +258,15 @@ export default function EscalationsPage() {
               </CardContent>
 
               <CardFooter className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-xs text-foreground hover:underline py-1 self-start"
+                <a
+                  href={`/api/admin/incidents/${encodeURIComponent(item.id)}/dossier`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-[#0e2b24] hover:underline py-1 self-start font-medium"
                 >
-                  <span>View Official PDF Docket</span>
+                  <span>View Official Printable Docket</span>
                   <ExternalLink className="size-3" />
-                </button>
+                </a>
 
                 {/* Action Buttons - Responsive thumb-friendly grid on mobile */}
                 <div className="grid grid-cols-1 sm:flex sm:items-center gap-2 w-full sm:w-auto">
@@ -238,19 +283,28 @@ export default function EscalationsPage() {
                   {item.status !== "resolved" ? (
                     <Button
                       size="sm"
+                      disabled={isUpdatingId === item.id}
                       className="h-10 sm:h-7 text-xs justify-center bg-emerald-800 hover:bg-emerald-900 text-white"
                       onClick={() => handleUpdateStatus(item.id, "resolved")}
                     >
-                      <CheckCircle2 className="size-3.5 mr-1" />
+                      {isUpdatingId === item.id ? (
+                        <Loader2 className="size-3.5 mr-1 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="size-3.5 mr-1" />
+                      )}
                       <span>Mark Remediated</span>
                     </Button>
                   ) : (
                     <Button
                       variant="outline"
                       size="sm"
+                      disabled={isUpdatingId === item.id}
                       className="h-10 sm:h-7 text-xs justify-center"
                       onClick={() => handleUpdateStatus(item.id, "in-progress")}
                     >
+                      {isUpdatingId === item.id ? (
+                        <Loader2 className="size-3.5 mr-1 animate-spin" />
+                      ) : null}
                       <span>Re-open Docket</span>
                     </Button>
                   )}
@@ -293,6 +347,7 @@ export default function EscalationsPage() {
                 <Button
                   size="xs"
                   variant="outline"
+                  disabled={isUpdatingId === activeEscalation.id}
                   onClick={() => handleUpdateStatus(activeEscalation.id, "acknowledged")}
                 >
                   Mark Acknowledged
@@ -300,6 +355,7 @@ export default function EscalationsPage() {
                 <Button
                   size="xs"
                   variant="outline"
+                  disabled={isUpdatingId === activeEscalation.id}
                   onClick={() => handleUpdateStatus(activeEscalation.id, "in-progress")}
                 >
                   Mark In-Progress
@@ -308,11 +364,25 @@ export default function EscalationsPage() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => setActiveModalId(null)}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isSavingNote}
+                onClick={() => setActiveModalId(null)}
+              >
                 Cancel
               </Button>
-              <Button size="sm" className="gap-1.5" onClick={handleSaveNote}>
-                <Send className="size-3" />
+              <Button
+                size="sm"
+                className="gap-1.5"
+                disabled={isSavingNote || !officialNote.trim()}
+                onClick={handleSaveNote}
+              >
+                {isSavingNote ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <Send className="size-3" />
+                )}
                 <span>Save to Audit Trail</span>
               </Button>
             </DialogFooter>

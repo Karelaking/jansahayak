@@ -1,5 +1,6 @@
 import { LocationQualityBand, LocationVerificationResult, StageExecutionResult } from "./types";
 import { RawReportDocument, getReportsCollection } from "@/lib/db/mongodb";
+import { PILOT_CONFIG } from "@/lib/data/constants";
 
 /**
  * Calculates geodesic distance between two coordinates in meters using the Haversine formula.
@@ -161,6 +162,23 @@ export async function executeStage4LocationVerification(
       );
     }
 
+    // PRD §4 & §9: Pilot Bounding Box Jurisdiction Validation
+    const isWithinPilotBounds =
+      centroidLongitude >= PILOT_CONFIG.bounds[0][0] &&
+      centroidLongitude <= PILOT_CONFIG.bounds[1][0] &&
+      centroidLatitude >= PILOT_CONFIG.bounds[0][1] &&
+      centroidLatitude <= PILOT_CONFIG.bounds[1][1];
+
+    if (!isWithinPilotBounds) {
+      issues.push(
+        `Coordinates (${centroidLatitude.toFixed(4)}, ${centroidLongitude.toFixed(4)}) fall outside designated Greater Noida pilot bounding box. Manual jurisdiction verification required.`,
+      );
+      // Downgrade quality band to LOW to mandate manual moderator review before public publication
+      if (qualityBand === "HIGH" || qualityBand === "MEDIUM") {
+        qualityBand = "LOW";
+      }
+    }
+
     const result: LocationVerificationResult = {
       isVerified: qualityBand !== "REJECTED",
       centroidLatitude,
@@ -169,6 +187,7 @@ export async function executeStage4LocationVerification(
       qualityBand,
       outlierCount,
       samplesEvaluated: rawSamples.length,
+      isWithinPilotBounds,
       issues,
     };
 

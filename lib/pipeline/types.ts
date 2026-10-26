@@ -98,6 +98,7 @@ export interface LocationVerificationResult {
   qualityBand: LocationQualityBand;
   outlierCount: number;
   samplesEvaluated: number;
+  isWithinPilotBounds?: boolean;
   issues: string[];
 }
 

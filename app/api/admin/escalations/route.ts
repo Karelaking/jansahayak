@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserSession } from "@/lib/auth/session";
-import { db, incidents } from "@/lib/db";
+import { db, incidents, moderationActions } from "@/lib/db";
 import { desc, or, eq, sql } from "drizzle-orm";
 import type { EscalationDocket } from "@/lib/types/hazard";
 
@@ -97,6 +97,120 @@ export async function GET(req: NextRequest) {
       success: true,
       count: escalations.length,
       escalations,
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
+
+/**
+ * PRD §14 & §16 Authority Escalations Update Gateway
+ * POST /api/admin/escalations
+ *
+ * Persists official correspondence, status transitions (e.g. resolved, in-progress, acknowledged),
+ * and assigned officer notes into PostgreSQL with an immutable audit trail.
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getCurrentUserSession(req);
+
+    if (session.role !== "moderator" && session.role !== "admin") {
+      return NextResponse.json(
+        {
+          error:
+            "Forbidden: Only designated moderators or administrators can update authority escalations.",
+        },
+        { status: 403 },
+      );
+    }
+
+    const body = await req.json();
+    const { incidentId, status, officialNote, officer } = body;
+
+    if (!incidentId) {
+      return NextResponse.json(
+        { error: "Missing required parameter: incidentId." },
+        { status: 400 },
+      );
+    }
+
+    // 1. Fetch current incident
+    const [existing] = await db
+      .select()
+      .from(incidents)
+      .where(eq(incidents.id, incidentId))
+      .limit(1);
+
+    if (!existing) {
+      return NextResponse.json({ error: `Incident ${incidentId} not found.` }, { status: 404 });
+    }
+
+    // 2. Prepare metadata updates
+    const currentMeta = (existing.metadata || {}) as Record<string, unknown>;
+    const escalationHistory = Array.isArray(currentMeta.escalationHistory)
+      ? [...currentMeta.escalationHistory]
+      : [];
+
+    const nowIso = new Date().toISOString();
+
+    if (officialNote) {
+      escalationHistory.push({
+        authorId: session.userId,
+        authorRole: session.role,
+        note: officialNote,
+        officer: officer || currentMeta.assignedOfficer || "Executive Engineer",
+        timestamp: nowIso,
+      });
+    }
+
+    let updatedIncidentStatus = existing.status;
+    if (status === "resolved") {
+      updatedIncidentStatus = "resolved";
+    } else if (status === "in-progress" || status === "in_progress") {
+      updatedIncidentStatus = "in_progress";
+    }
+
+    const updatedMetadata = {
+      ...currentMeta,
+      lastOfficialNote: officialNote || currentMeta.lastOfficialNote,
+      assignedOfficer: officer || currentMeta.assignedOfficer || "Executive Engineer",
+      lastEscalationUpdate: nowIso,
+      escalationHistory,
+    };
+
+    // 3. Atomically update PostgreSQL incident record
+    const [updated] = await db
+      .update(incidents)
+      .set({
+        status: updatedIncidentStatus,
+        metadata: updatedMetadata,
+        updatedAt: new Date(),
+      })
+      .where(eq(incidents.id, incidentId))
+      .returning();
+
+    // 4. Record immutable audit entry in moderation_actions
+    await db.insert(moderationActions).values({
+      incidentId,
+      moderatorId: session.userId,
+      action: status ? `escalation_status_${status}` : "escalation_officer_note",
+      reason: officialNote || `Escalation status shifted to ${status}`,
+      notes: officialNote || null,
+      metadata: {
+        previousStatus: existing.status,
+        newStatus: updatedIncidentStatus,
+        officer: officer || currentMeta.assignedOfficer,
+        updatedAt: nowIso,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      incidentId,
+      status: updatedIncidentStatus,
+      updatedAt: nowIso,
+      incident: updated,
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

@@ -360,6 +360,17 @@ export default function NewReportPage() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB limit per PRD §7
+    for (const file of Array.from(files)) {
+      if (file.size > MAX_FILE_SIZE) {
+        setErrorMsg(
+          `File "${file.name}" exceeds the 15MB limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Please select a compressed photo or use the in-app camera viewfinder.`,
+        );
+        e.target.value = "";
+        return;
+      }
+    }
+
     Array.from(files).forEach((file, index) => {
       const reader = new FileReader();
       reader.onload = () => {

@@ -20,7 +20,7 @@ export async function POST(
   { params }: { params: Promise<{ reportId: string }> },
 ) {
   try {
-    const session = await getCurrentUserSession();
+    const session = await getCurrentUserSession(req);
     const { reportId } = await params;
 
     const reportsColl = await getReportsCollection();
