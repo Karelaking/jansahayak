@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserSession } from "@/lib/auth/session";
 import { compileMunicipalDossier } from "@/lib/email/municipal-dispatcher";
+import { db, incidentReports } from "@/lib/db";
+import { getReportsCollection } from "@/lib/db/mongodb";
+import { eq, and } from "drizzle-orm";
 
 /**
  * PRD §14 & §16 Municipal Grievance Dossier Export & Print Gateway
@@ -34,6 +37,49 @@ export async function GET(
         { error: compiled.error || `Dossier for incident ${incidentId} could not be found.` },
         { status: 404 },
       );
+    }
+
+    // Role & Publication Status Gating (PRD §1 & §16)
+    const isStaff = session.role === "moderator" || session.role === "admin";
+    if (compiled.incident && !compiled.incident.isPublished && !isStaff) {
+      let isSubmitter = false;
+      if (session.userId) {
+        try {
+          const linked = await db
+            .select()
+            .from(incidentReports)
+            .where(
+              and(
+                eq(incidentReports.incidentId, incidentId),
+                eq(incidentReports.userId, session.userId),
+              ),
+            )
+            .limit(1);
+
+          if (linked.length > 0) {
+            isSubmitter = true;
+          } else {
+            const reportsColl = await getReportsCollection();
+            const userDoc = await reportsColl.findOne({
+              associatedIncidentId: incidentId,
+              userId: session.userId,
+            });
+            if (userDoc) isSubmitter = true;
+          }
+        } catch {
+          // Fallback to strict security rejection
+        }
+      }
+
+      if (!isSubmitter) {
+        return NextResponse.json(
+          {
+            error:
+              "Forbidden: You are not authorized to inspect unapproved or unpublished grievance dossiers.",
+          },
+          { status: 403 },
+        );
+      }
     }
 
     // Support JSON format for API consumers
@@ -100,7 +146,11 @@ export async function GET(
   <div class="action-bar">
     <div class="action-title">JanSahayak SafeStreets &bull; Official Municipal Docket</div>
     <div class="action-btns">
-      <a href="/dashboard/escalations" class="btn-back">&larr; Back to Escalations</a>
+      ${
+        isStaff
+          ? `<a href="/dashboard/escalations" class="btn-back">&larr; Back to Escalations</a>`
+          : `<a href="javascript:window.history.length > 1 ? window.history.back() : window.close()" class="btn-back">&larr; Back to Report</a>`
+      }
       <button onclick="window.print()" class="btn-print">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
         Print Dossier / Save PDF

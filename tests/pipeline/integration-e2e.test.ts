@@ -42,12 +42,14 @@ import { POST as postVoteRoute } from "@/app/api/incidents/[incidentId]/vote/rou
 import { GET as getVotesRoute } from "@/app/api/incidents/[incidentId]/votes/route";
 import { GET as getSessionRoute } from "@/app/api/auth/session/route";
 import { GET as getAnalyticsRoute } from "@/app/api/admin/analytics/route";
+import { GET as getPipelineReportRoute } from "@/app/api/pipeline/reports/[reportId]/route";
+import { GET as getPipelineIncidentsRoute } from "@/app/api/pipeline/incidents/route";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limit";
 import { db, incidents, incidentReports, moderationActions, outboxEvents, users } from "@/lib/db";
 import { getReportsCollection } from "@/lib/db/mongodb";
 import { eq } from "drizzle-orm";
 
-describe("PRD §19 End-to-End Integration Test Suite (76 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (80 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -3005,5 +3007,409 @@ describe("PRD §19 End-to-End Integration Test Suite (76 Scenarios)", () => {
     // Clean up
     await db.delete(incidents).where(eq(incidents.id, testInc.id));
     await db.delete(users).where(eq(users.id, testUserId));
+  });
+
+  // Scenario 77: GET /api/pipeline/reports/:reportId RBAC & Privacy Gating (PRD §8, §12, §16)
+  it("Scenario 77: GET /api/pipeline/reports/:reportId enforces strict authentication and owner/staff RBAC", async () => {
+    const reportsColl = await getReportsCollection();
+    const testRepId = `REP-SEC-${Date.now()}`;
+    const testOwnerId = `usr_owner_${Date.now()}`;
+
+    // 1. Seed test report in MongoDB
+    await reportsColl.insertOne({
+      reportId: testRepId,
+      userId: testOwnerId,
+      status: "AI_ANALYZED",
+      category: "Road Surface / Pothole",
+      description: "Confidential telemetry test report",
+      evidencePhotos: [],
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 8,
+        capturedAt: new Date().toISOString(),
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    try {
+      // Test A: Unauthenticated access returns 401
+      const unauthReq = new NextRequest(`http://localhost:3000/api/pipeline/reports/${testRepId}`);
+      const unauthRes = await getPipelineReportRoute(unauthReq, {
+        params: Promise.resolve({ reportId: testRepId }),
+      });
+      expect(unauthRes.status).toBe(401);
+      const unauthJson = await unauthRes.json();
+      expect(unauthJson.error).toContain("Unauthorized");
+
+      // Test B: Authenticated non-owner citizen returns 403
+      const nonOwnerReq = new NextRequest(
+        `http://localhost:3000/api/pipeline/reports/${testRepId}`,
+        {
+          headers: {
+            "x-mock-user-id": "usr_stranger_123",
+            "x-mock-role": "citizen",
+          },
+        },
+      );
+      const nonOwnerRes = await getPipelineReportRoute(nonOwnerReq, {
+        params: Promise.resolve({ reportId: testRepId }),
+      });
+      expect(nonOwnerRes.status).toBe(403);
+      const nonOwnerJson = await nonOwnerRes.json();
+      expect(nonOwnerJson.error).toContain("Forbidden");
+
+      // Test C: Report owner citizen returns 200 OK
+      const ownerReq = new NextRequest(`http://localhost:3000/api/pipeline/reports/${testRepId}`, {
+        headers: {
+          "x-mock-user-id": testOwnerId,
+          "x-mock-role": "citizen",
+        },
+      });
+      const ownerRes = await getPipelineReportRoute(ownerReq, {
+        params: Promise.resolve({ reportId: testRepId }),
+      });
+      expect(ownerRes.status).toBe(200);
+      const ownerJson = await ownerRes.json();
+      expect(ownerJson.success).toBe(true);
+      expect(ownerJson.report.reportId).toBe(testRepId);
+
+      // Test D: Moderator staff returns 200 OK
+      const modReq = new NextRequest(`http://localhost:3000/api/pipeline/reports/${testRepId}`, {
+        headers: {
+          "x-mock-user-id": "usr_moderator_staff",
+          "x-mock-role": "moderator",
+        },
+      });
+      const modRes = await getPipelineReportRoute(modReq, {
+        params: Promise.resolve({ reportId: testRepId }),
+      });
+      expect(modRes.status).toBe(200);
+      const modJson = await modRes.json();
+      expect(modJson.success).toBe(true);
+    } finally {
+      await reportsColl.deleteOne({ reportId: testRepId });
+    }
+  });
+
+  // Scenario 78: GET /api/pipeline/incidents Public Privacy Guard (PRD §1, §13, §16)
+  it("Scenario 78: GET /api/pipeline/incidents restricts unauthenticated and civilian callers strictly to published incidents", async () => {
+    const timestamp = Date.now();
+    const pubIncNumber = `INC-PUB-${timestamp}`;
+    const unpubIncNumber = `INC-UNPUB-${timestamp}`;
+
+    const [pubInc] = await db
+      .insert(incidents)
+      .values({
+        incidentNumber: pubIncNumber,
+        category: "Road Surface / Pothole",
+        severity: "medium",
+        status: "open",
+        moderationStatus: "approved",
+        latitude: "28.474400",
+        longitude: "77.504000",
+        canonicalGeom: "SRID=4326;POINT(77.504000 28.474400)",
+        spatialUncertaintyMeters: "8.00",
+        title: "Public Incident 78",
+        summary: "Publicly visible incident",
+        isPublished: true,
+      })
+      .returning();
+
+    const [unpubInc] = await db
+      .insert(incidents)
+      .values({
+        incidentNumber: unpubIncNumber,
+        category: "Drainage / Manhole",
+        severity: "high",
+        status: "under_review",
+        moderationStatus: "pending",
+        latitude: "28.474500",
+        longitude: "77.504100",
+        canonicalGeom: "SRID=4326;POINT(77.504100 28.474500)",
+        spatialUncertaintyMeters: "12.00",
+        title: "Unpublished Incident 78",
+        summary: "Internal review only incident",
+        isPublished: false,
+      })
+      .returning();
+
+    try {
+      // Test A: Unauthenticated call without published param only returns published incidents
+      const unauthReq = new NextRequest("http://localhost:3000/api/pipeline/incidents");
+      const unauthRes = await getPipelineIncidentsRoute(unauthReq);
+      expect(unauthRes.status).toBe(200);
+      const unauthJson = await unauthRes.json();
+      const unauthIds = unauthJson.incidents.map(
+        (i: { incidentNumber: string }) => i.incidentNumber,
+      );
+      expect(unauthIds).toContain(pubIncNumber);
+      expect(unauthIds).not.toContain(unpubIncNumber);
+
+      // Test B: Citizen caller attempting to request published=false is blocked with 403
+      const citizenReq = new NextRequest(
+        "http://localhost:3000/api/pipeline/incidents?published=false",
+        {
+          headers: {
+            "x-mock-user-id": "usr_citizen_78",
+            "x-mock-role": "citizen",
+          },
+        },
+      );
+      const citizenRes = await getPipelineIncidentsRoute(citizenReq);
+      expect(citizenRes.status).toBe(403);
+      const citizenJson = await citizenRes.json();
+      expect(citizenJson.error).toContain("Forbidden");
+
+      // Test C: Citizen caller attempting to query internal status is blocked with 403
+      const statusReq = new NextRequest(
+        "http://localhost:3000/api/pipeline/incidents?status=under_review",
+        {
+          headers: {
+            "x-mock-user-id": "usr_citizen_78",
+            "x-mock-role": "citizen",
+          },
+        },
+      );
+      const statusRes = await getPipelineIncidentsRoute(statusReq);
+      expect(statusRes.status).toBe(403);
+
+      // Test D: Staff caller can inspect under_review unpublished queue
+      const staffReq = new NextRequest(
+        "http://localhost:3000/api/pipeline/incidents?status=under_review",
+        {
+          headers: {
+            "x-mock-user-id": "usr_mod_78",
+            "x-mock-role": "moderator",
+          },
+        },
+      );
+      const staffRes = await getPipelineIncidentsRoute(staffReq);
+      expect(staffRes.status).toBe(200);
+      const staffJson = await staffRes.json();
+      const staffIncNumbers = staffJson.incidents.map(
+        (i: { incidentNumber: string }) => i.incidentNumber,
+      );
+      expect(staffIncNumbers).toContain(unpubIncNumber);
+    } finally {
+      if (pubInc) await db.delete(incidents).where(eq(incidents.id, pubInc.id));
+      if (unpubInc) await db.delete(incidents).where(eq(incidents.id, unpubInc.id));
+    }
+  });
+
+  // Scenario 79: GET /api/admin/incidents/:incidentId/dossier Gating & Format Fidelity (PRD §14, §16)
+  it("Scenario 79: GET /api/admin/incidents/:incidentId/dossier validates role and publication rules", async () => {
+    const timestamp = Date.now();
+    const docketNumber = `GRV-2026-${timestamp}`;
+
+    // Seed unpublished incident with municipal metadata
+    const [unpubInc] = await db
+      .insert(incidents)
+      .values({
+        incidentNumber: `INC-DOS-${timestamp}`,
+        category: "Road Surface / Pothole",
+        severity: "critical",
+        status: "open",
+        moderationStatus: "pending",
+        latitude: "28.474400",
+        longitude: "77.504000",
+        canonicalGeom: "SRID=4326;POINT(77.504000 28.474400)",
+        spatialUncertaintyMeters: "5.00",
+        title: "Critical Dossier Incident",
+        summary: "Deep roadway cavity near Pari Chowk",
+        isPublished: false,
+        metadata: {
+          municipalDocketNumber: docketNumber,
+          municipalDispatchedAt: new Date().toISOString(),
+          municipalRecipient: "pwd-roads@noida.gov.in",
+        },
+      })
+      .returning();
+
+    expect(unpubInc).toBeDefined();
+    if (!unpubInc) throw new Error("unpubInc not seeded");
+
+    try {
+      // Test A: Unauthenticated user receives 401
+      const unauthReq = new NextRequest(
+        `http://localhost:3000/api/admin/incidents/${unpubInc.id}/dossier`,
+      );
+      const unauthRes = await getDossierRoute(unauthReq, {
+        params: Promise.resolve({ incidentId: unpubInc.id }),
+      });
+      expect(unauthRes.status).toBe(401);
+
+      // Test B: Authenticated non-submitter citizen receives 403 on unpublished dossier
+      const nonSubReq = new NextRequest(
+        `http://localhost:3000/api/admin/incidents/${unpubInc.id}/dossier`,
+        {
+          headers: {
+            "x-mock-user-id": "usr_unrelated_citizen",
+            "x-mock-role": "citizen",
+          },
+        },
+      );
+      const nonSubRes = await getDossierRoute(nonSubReq, {
+        params: Promise.resolve({ incidentId: unpubInc.id }),
+      });
+      expect(nonSubRes.status).toBe(403);
+      const nonSubJson = await nonSubRes.json();
+      expect(nonSubJson.error).toContain("Forbidden");
+
+      // Test C: Moderator staff can inspect unpublished dossier in JSON format
+      const staffJsonReq = new NextRequest(
+        `http://localhost:3000/api/admin/incidents/${unpubInc.id}/dossier?format=json`,
+        {
+          headers: {
+            "x-mock-user-id": "usr_mod_79",
+            "x-mock-role": "moderator",
+          },
+        },
+      );
+      const staffJsonRes = await getDossierRoute(staffJsonReq, {
+        params: Promise.resolve({ incidentId: unpubInc.id }),
+      });
+      expect(staffJsonRes.status).toBe(200);
+      const staffData = await staffJsonRes.json();
+      expect(staffData.success).toBe(true);
+      expect(staffData.docketNumber).toContain(unpubInc.incidentNumber);
+      expect(staffData.dossier.category).toBe("Road Surface / Pothole");
+
+      // Test D: Moderator staff can inspect printable HTML
+      const staffHtmlReq = new NextRequest(
+        `http://localhost:3000/api/admin/incidents/${unpubInc.id}/dossier`,
+        {
+          headers: {
+            "x-mock-user-id": "usr_mod_79",
+            "x-mock-role": "moderator",
+          },
+        },
+      );
+      const staffHtmlRes = await getDossierRoute(staffHtmlReq, {
+        params: Promise.resolve({ incidentId: unpubInc.id }),
+      });
+      expect(staffHtmlRes.status).toBe(200);
+      const htmlText = await staffHtmlRes.text();
+      expect(htmlText).toContain("MUNICIPAL ROAD HAZARD NOTICE");
+      expect(htmlText).toContain(unpubInc.incidentNumber);
+
+      // Test E: Update incident to published, verify citizen can now inspect
+      await db.update(incidents).set({ isPublished: true }).where(eq(incidents.id, unpubInc.id));
+
+      const citizenPubReq = new NextRequest(
+        `http://localhost:3000/api/admin/incidents/${unpubInc.id}/dossier?format=json`,
+        {
+          headers: {
+            "x-mock-user-id": "usr_unrelated_citizen",
+            "x-mock-role": "citizen",
+          },
+        },
+      );
+      const citizenPubRes = await getDossierRoute(citizenPubReq, {
+        params: Promise.resolve({ incidentId: unpubInc.id }),
+      });
+      expect(citizenPubRes.status).toBe(200);
+      const citizenData = await citizenPubRes.json();
+      expect(citizenData.success).toBe(true);
+      expect(citizenData.docketNumber).toContain(unpubInc.incidentNumber);
+    } finally {
+      await db.delete(incidents).where(eq(incidents.id, unpubInc.id));
+    }
+  });
+
+  // Scenario 80: Citizen Tracking Dossier Exposes Municipal Docket Transparency (PRD §14, §16)
+  it("Scenario 80: Citizen tracking dossier exposes canonical incident ID and municipal docket for official review", async () => {
+    const timestamp = Date.now();
+    const docketNumber = `GRV-2026-TRANSP-${timestamp}`;
+    const testRepId = `REP-TRANSP-${timestamp}`;
+    const testUserId = `usr_transp_${timestamp}`;
+
+    // 1. Seed PostgreSQL canonical incident
+    const [testInc] = await db
+      .insert(incidents)
+      .values({
+        incidentNumber: `INC-TRANSP-${timestamp}`,
+        category: "Road Surface / Pothole",
+        severity: "high",
+        status: "open",
+        moderationStatus: "approved",
+        latitude: "28.474400",
+        longitude: "77.504000",
+        canonicalGeom: "SRID=4326;POINT(77.504000 28.474400)",
+        spatialUncertaintyMeters: "7.00",
+        title: "Dispatched Roadway Defect",
+        summary: "Pothole dispatched to GNIDA",
+        isPublished: true,
+        metadata: {
+          municipalDocketNumber: docketNumber,
+          municipalDispatchedAt: new Date().toISOString(),
+          municipalRecipient: "gnida-civil@up.gov.in",
+        },
+      })
+      .returning();
+
+    expect(testInc).toBeDefined();
+    if (!testInc) throw new Error("testInc not seeded");
+
+    // 2. Seed MongoDB report document
+    const reportsColl = await getReportsCollection();
+    await reportsColl.insertOne({
+      reportId: testRepId,
+      userId: testUserId,
+      status: "MUNICIPALLY_DISPATCHED",
+      associatedIncidentId: testInc.id,
+      category: "Road Surface / Pothole",
+      description: "Severe crater near roundabout",
+      evidencePhotos: [],
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 7,
+        capturedAt: new Date().toISOString(),
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    try {
+      // 3. Query GET /api/reports/:reportId
+      const repReq = new NextRequest(`http://localhost:3000/api/reports/${testRepId}`);
+      const repRes = await getReportDetailRoute(repReq, {
+        params: Promise.resolve({ reportId: testRepId }),
+      });
+
+      expect(repRes.status).toBe(200);
+      const repData = await repRes.json();
+      expect(repData.success).toBe(true);
+      expect(repData.status).toBe("MUNICIPALLY_DISPATCHED");
+
+      // Verify canonical incident payload carries docket and id for UI button generation
+      expect(repData.canonicalIncident).toBeDefined();
+      expect(repData.canonicalIncident.id).toBe(testInc.id);
+      expect(repData.canonicalIncident.municipalDocketNumber).toBe(docketNumber);
+      expect(repData.canonicalIncident.municipalRecipient).toBe("gnida-civil@up.gov.in");
+
+      // 4. Verify that the dossier link target resolves successfully
+      const dossierReq = new NextRequest(
+        `http://localhost:3000/api/admin/incidents/${testInc.id}/dossier?format=json`,
+        {
+          headers: {
+            "x-mock-user-id": testUserId,
+            "x-mock-role": "citizen",
+          },
+        },
+      );
+      const dossierRes = await getDossierRoute(dossierReq, {
+        params: Promise.resolve({ incidentId: testInc.id }),
+      });
+      expect(dossierRes.status).toBe(200);
+      const dossierData = await dossierRes.json();
+      expect(dossierData.success).toBe(true);
+      expect(dossierData.docketNumber).toContain(testInc.incidentNumber);
+    } finally {
+      await reportsColl.deleteOne({ reportId: testRepId });
+      await db.delete(incidents).where(eq(incidents.id, testInc.id));
+    }
   });
 });

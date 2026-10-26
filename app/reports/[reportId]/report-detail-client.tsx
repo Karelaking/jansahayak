@@ -17,6 +17,8 @@ import {
   ExternalLink,
   Cpu,
   FileCheck,
+  FileText,
+  Download,
   GitMerge,
   Database,
 } from "lucide-react";
@@ -583,6 +585,29 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
                   photo evidence has been emailed to the local urban local body for site repair
                   prioritization.
                 </p>
+
+                {/* PRD §14: View Official Municipal Dossier Action Buttons */}
+                <div className="pt-2 flex flex-wrap items-center gap-2">
+                  <a
+                    href={`/api/admin/incidents/${encodeURIComponent(report.canonicalIncident.id)}/dossier`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#0e2b24] hover:bg-[#1c4b3e] text-white transition-colors shadow-xs"
+                  >
+                    <FileText className="size-3.5 text-[#dce8d9]" />
+                    <span>View Official Municipal Dossier</span>
+                    <ExternalLink className="size-3 text-[#dce8d9]" />
+                  </a>
+                  <a
+                    href={`/api/admin/incidents/${encodeURIComponent(report.canonicalIncident.id)}/dossier?format=json`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#cbd5cb] bg-white hover:bg-[#faf9f5] text-[#17382f] transition-colors shadow-xs"
+                  >
+                    <Download className="size-3.5 text-[#486057]" />
+                    <span>Export JSON Data</span>
+                  </a>
+                </div>
               </div>
             )}
 
