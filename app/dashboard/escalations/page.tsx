@@ -30,6 +30,7 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
+import { RoleGuard } from "@/components/auth/role-guard";
 import type { EscalationDocket } from "@/lib/types/hazard";
 
 export default function EscalationsPage() {
@@ -61,7 +62,12 @@ export default function EscalationsPage() {
 
   const activeEscalation = escalations.find((e) => e.id === activeModalId);
 
-  const handleUpdateStatus = async (id: string, newStatus: EscalationDocket["status"]) => {
+  const handleUpdateStatus = async (
+    id: string,
+    newStatus: EscalationDocket["status"],
+    isEmergencyOverride?: boolean,
+    overrideReason?: string,
+  ) => {
     setIsUpdatingId(id);
     try {
       // 1. Optimistic UI update
@@ -74,8 +80,10 @@ export default function EscalationsPage() {
             statusLabel = "Acknowledged by Dept";
             statusVariant = "secondary";
           } else if (newStatus === "resolved") {
-            statusLabel = "Remediation Complete";
-            statusVariant = "default";
+            statusLabel = isEmergencyOverride
+              ? "Remediation Complete (Override)"
+              : "Under Repair (Awaiting Citizen Consensus)";
+            statusVariant = isEmergencyOverride ? "default" : "secondary";
           } else if (newStatus === "awaiting-response") {
             statusLabel = "Awaiting Response";
             statusVariant = "destructive";
@@ -98,13 +106,17 @@ export default function EscalationsPage() {
         body: JSON.stringify({
           incidentId: id,
           status: newStatus,
+          isEmergencyOverride,
+          overrideReason,
         }),
       });
 
       if (!res.ok) {
-        console.warn("Failed to persist status change to PostgreSQL; refetching...");
-        await fetchEscalations();
+        const errJson = await res.json().catch(() => ({}));
+        alert(errJson.error || "Failed to persist status change to PostgreSQL.");
       }
+
+      await fetchEscalations();
     } catch (err) {
       console.error("Error updating escalation status:", err);
       await fetchEscalations();
@@ -152,243 +164,253 @@ export default function EscalationsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* ── Page Header ─── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-heading text-xl font-bold tracking-tight text-foreground sm:text-2xl md:text-3xl">
-              Authority Escalation Tracker
-            </h1>
-            <Badge variant="outline" className="text-xs">
-              {escalations.length} Active Dockets
-            </Badge>
-          </div>
-          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-            Auditable trail of hazard files escalated to responsible municipal authorities and
-            elected ward reps.
-          </p>
-        </div>
-      </div>
-
-      {/* ── Escalation Dockets List ─── */}
-      <div className="grid grid-cols-1 gap-5">
-        {loading ? (
-          <Card className="shadow-xs p-8 flex items-center justify-center">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              <span>Loading municipal escalation dockets...</span>
+    <RoleGuard allowedRoles={["moderator", "admin", "field_official"]}>
+      <div className="flex flex-col gap-6">
+        {/* ── Page Header ─── */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="font-heading text-xl font-bold tracking-tight text-foreground sm:text-2xl md:text-3xl">
+                Authority Escalation Tracker
+              </h1>
+              <Badge variant="outline" className="text-xs">
+                {escalations.length} Active Dockets
+              </Badge>
             </div>
-          </Card>
-        ) : escalations.length === 0 ? (
-          /* Zatian / shadcn Empty State when no dockets exist */
-          <Card className="shadow-xs p-2">
-            <Empty className="my-8 border-0 bg-transparent">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <Building2 className="size-6 text-muted-foreground" />
-                </EmptyMedia>
-                <EmptyTitle>No active authority escalations</EmptyTitle>
-                <EmptyDescription>
-                  There are currently no formal grievance dockets open with GNIDA, PWD, or Municipal
-                  Drainage cells. Unresolved community hazards will trigger automated docket
-                  creation after SLA expiry.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          </Card>
-        ) : (
-          escalations.map((item) => (
-            <Card key={item.id} className="shadow-xs">
-              <CardHeader className="border-b border-border pb-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-muted-foreground">
-                        {item.id}
-                      </span>
-                      <Badge variant={item.statusVariant} className="text-xs">
-                        {item.statusLabel}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        Linked: <strong>{item.originReportId}</strong> (+{item.linkedReports}{" "}
-                        reports)
-                      </span>
+            <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
+              Auditable trail of hazard files escalated to responsible municipal authorities and
+              elected ward reps.
+            </p>
+          </div>
+        </div>
+
+        {/* ── Escalation Dockets List ─── */}
+        <div className="grid grid-cols-1 gap-5">
+          {loading ? (
+            <Card className="shadow-xs p-8 flex items-center justify-center">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                <span>Loading municipal escalation dockets...</span>
+              </div>
+            </Card>
+          ) : escalations.length === 0 ? (
+            /* Zatian / shadcn Empty State when no dockets exist */
+            <Card className="shadow-xs p-2">
+              <Empty className="my-8 border-0 bg-transparent">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Building2 className="size-6 text-muted-foreground" />
+                  </EmptyMedia>
+                  <EmptyTitle>No active authority escalations</EmptyTitle>
+                  <EmptyDescription>
+                    There are currently no formal grievance dockets open with GNIDA, PWD, or
+                    Municipal Drainage cells. Unresolved community hazards will trigger automated
+                    docket creation after SLA expiry.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            </Card>
+          ) : (
+            escalations.map((item) => (
+              <Card key={item.id} className="shadow-xs">
+                <CardHeader className="border-b border-border pb-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-muted-foreground">
+                          {item.id}
+                        </span>
+                        <Badge variant={item.statusVariant} className="text-xs">
+                          {item.statusLabel}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          Linked: <strong>{item.originReportId}</strong> (+{item.linkedReports}{" "}
+                          reports)
+                        </span>
+                      </div>
+
+                      <CardTitle className="text-base font-semibold">{item.title}</CardTitle>
                     </div>
 
-                    <CardTitle className="text-base font-semibold">{item.title}</CardTitle>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Clock className="size-3.5" />
+                      <span>Open for {item.daysOpen} days</span>
+                    </div>
                   </div>
+                </CardHeader>
 
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock className="size-3.5" />
-                    <span>Open for {item.daysOpen} days</span>
-                  </div>
-                </div>
-              </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                  <p className="text-xs text-foreground leading-relaxed">{item.summary}</p>
 
-              <CardContent className="pt-4 space-y-4">
-                <p className="text-xs text-foreground leading-relaxed">{item.summary}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="flex items-center gap-2 rounded-md bg-muted/40 p-2.5">
+                      <Building2 className="size-4 text-muted-foreground shrink-0" />
+                      <div>
+                        <span className="text-muted-foreground block text-[11px]">
+                          Forwarded To
+                        </span>
+                        <strong className="text-foreground">{item.authority}</strong>
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div className="flex items-center gap-2 rounded-md bg-muted/40 p-2.5">
-                    <Building2 className="size-4 text-muted-foreground shrink-0" />
-                    <div>
-                      <span className="text-muted-foreground block text-[11px]">Forwarded To</span>
-                      <strong className="text-foreground">{item.authority}</strong>
+                    <div className="flex items-center gap-2 rounded-md bg-muted/40 p-2.5">
+                      <MessageSquare className="size-4 text-muted-foreground shrink-0" />
+                      <div>
+                        <span className="text-muted-foreground block text-[11px]">
+                          Assigned Officer
+                        </span>
+                        <strong className="text-foreground">{item.officer}</strong>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 rounded-md bg-muted/40 p-2.5">
-                    <MessageSquare className="size-4 text-muted-foreground shrink-0" />
-                    <div>
-                      <span className="text-muted-foreground block text-[11px]">
-                        Assigned Officer
-                      </span>
-                      <strong className="text-foreground">{item.officer}</strong>
-                    </div>
+                  <div className="rounded-md border border-border p-3 text-xs bg-muted/20">
+                    <span className="font-medium text-foreground block mb-0.5">
+                      Latest Timeline Milestone
+                    </span>
+                    <span className="text-muted-foreground">{item.lastUpdate}</span>
                   </div>
-                </div>
+                </CardContent>
 
-                <div className="rounded-md border border-border p-3 text-xs bg-muted/20">
-                  <span className="font-medium text-foreground block mb-0.5">
-                    Latest Timeline Milestone
-                  </span>
-                  <span className="text-muted-foreground">{item.lastUpdate}</span>
-                </div>
-              </CardContent>
-
-              <CardFooter className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
-                <a
-                  href={`/api/admin/incidents/${encodeURIComponent(item.id)}/dossier`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-[#0e2b24] hover:underline py-1 self-start font-medium"
-                >
-                  <span>View Official Printable Docket</span>
-                  <ExternalLink className="size-3" />
-                </a>
-
-                {/* Action Buttons - Responsive thumb-friendly grid on mobile */}
-                <div className="grid grid-cols-1 sm:flex sm:items-center gap-2 w-full sm:w-auto">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-10 sm:h-7 text-xs justify-center"
-                    onClick={() => setActiveModalId(item.id)}
+                <CardFooter className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
+                  <a
+                    href={`/api/admin/incidents/${encodeURIComponent(item.id)}/dossier`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs text-[#0e2b24] hover:underline py-1 self-start font-medium"
                   >
-                    <MessageSquare className="size-3.5 mr-1" />
-                    <span>Log Officer Reply</span>
-                  </Button>
+                    <span>View Official Printable Docket</span>
+                    <ExternalLink className="size-3" />
+                  </a>
 
-                  {item.status !== "resolved" ? (
-                    <Button
-                      size="sm"
-                      disabled={isUpdatingId === item.id}
-                      className="h-10 sm:h-7 text-xs justify-center bg-emerald-800 hover:bg-emerald-900 text-white"
-                      onClick={() => handleUpdateStatus(item.id, "resolved")}
-                    >
-                      {isUpdatingId === item.id ? (
-                        <Loader2 className="size-3.5 mr-1 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="size-3.5 mr-1" />
-                      )}
-                      <span>Mark Remediated</span>
-                    </Button>
-                  ) : (
+                  {/* Action Buttons - Responsive thumb-friendly grid on mobile */}
+                  <div className="grid grid-cols-1 sm:flex sm:items-center gap-2 w-full sm:w-auto">
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={isUpdatingId === item.id}
                       className="h-10 sm:h-7 text-xs justify-center"
-                      onClick={() => handleUpdateStatus(item.id, "in-progress")}
+                      onClick={() => setActiveModalId(item.id)}
                     >
-                      {isUpdatingId === item.id ? (
-                        <Loader2 className="size-3.5 mr-1 animate-spin" />
-                      ) : null}
-                      <span>Re-open Docket</span>
+                      <MessageSquare className="size-3.5 mr-1" />
+                      <span>Log Officer Reply</span>
                     </Button>
-                  )}
+
+                    {item.status !== "resolved" ? (
+                      <Button
+                        size="sm"
+                        disabled={isUpdatingId === item.id}
+                        className="h-10 sm:h-7 text-xs justify-center bg-emerald-800 hover:bg-emerald-900 text-white"
+                        onClick={() => handleUpdateStatus(item.id, "resolved")}
+                      >
+                        {isUpdatingId === item.id ? (
+                          <Loader2 className="size-3.5 mr-1 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="size-3.5 mr-1" />
+                        )}
+                        <span>
+                          {item.consensusPercentage !== undefined &&
+                          item.consensusPercentage >= 75 &&
+                          (item.resolutionVotesCount || 0) >= 3
+                            ? "Close (Consensus Met)"
+                            : "Mark Repaired (Citizen Verification)"}
+                        </span>
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isUpdatingId === item.id}
+                        className="h-10 sm:h-7 text-xs justify-center"
+                        onClick={() => handleUpdateStatus(item.id, "in-progress")}
+                      >
+                        {isUpdatingId === item.id ? (
+                          <Loader2 className="size-3.5 mr-1 animate-spin" />
+                        ) : null}
+                        <span>Re-open Docket</span>
+                      </Button>
+                    )}
+                  </div>
+                </CardFooter>
+              </Card>
+            ))
+          )}
+        </div>
+
+        {/* ── Log Officer Reply Dialog ─── */}
+        <Dialog open={!!activeModalId} onOpenChange={(open) => !open && setActiveModalId(null)}>
+          {activeEscalation && (
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-base font-bold">
+                  Log Official Authority Reply
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Record correspondence, reference dispatch number, or field inspection notes for
+                  docket {activeEscalation.id}.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="py-2 space-y-3">
+                <label htmlFor="official-response" className="text-xs font-medium block">
+                  Official Response / Minutes:
+                </label>
+                <Textarea
+                  id="official-response"
+                  placeholder="e.g. Work order #GN-WO-401 issued to contractor. Inspection scheduled for Oct 28..."
+                  className="text-xs"
+                  rows={4}
+                  value={officialNote}
+                  onChange={(e) => setOfficialNote(e.target.value)}
+                />
+
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-xs text-muted-foreground">Quick Status:</span>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    disabled={isUpdatingId === activeEscalation.id}
+                    onClick={() => handleUpdateStatus(activeEscalation.id, "acknowledged")}
+                  >
+                    Mark Acknowledged
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    disabled={isUpdatingId === activeEscalation.id}
+                    onClick={() => handleUpdateStatus(activeEscalation.id, "in-progress")}
+                  >
+                    Mark In-Progress
+                  </Button>
                 </div>
-              </CardFooter>
-            </Card>
-          ))
-        )}
-      </div>
-
-      {/* ── Log Officer Reply Dialog ─── */}
-      <Dialog open={!!activeModalId} onOpenChange={(open) => !open && setActiveModalId(null)}>
-        {activeEscalation && (
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="text-base font-bold">
-                Log Official Authority Reply
-              </DialogTitle>
-              <DialogDescription className="text-xs">
-                Record correspondence, reference dispatch number, or field inspection notes for
-                docket {activeEscalation.id}.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="py-2 space-y-3">
-              <label htmlFor="official-response" className="text-xs font-medium block">
-                Official Response / Minutes:
-              </label>
-              <Textarea
-                id="official-response"
-                placeholder="e.g. Work order #GN-WO-401 issued to contractor. Inspection scheduled for Oct 28..."
-                className="text-xs"
-                rows={4}
-                value={officialNote}
-                onChange={(e) => setOfficialNote(e.target.value)}
-              />
-
-              <div className="flex items-center gap-2 pt-1">
-                <span className="text-xs text-muted-foreground">Quick Status:</span>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  disabled={isUpdatingId === activeEscalation.id}
-                  onClick={() => handleUpdateStatus(activeEscalation.id, "acknowledged")}
-                >
-                  Mark Acknowledged
-                </Button>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  disabled={isUpdatingId === activeEscalation.id}
-                  onClick={() => handleUpdateStatus(activeEscalation.id, "in-progress")}
-                >
-                  Mark In-Progress
-                </Button>
               </div>
-            </div>
 
-            <DialogFooter>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={isSavingNote}
-                onClick={() => setActiveModalId(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                className="gap-1.5"
-                disabled={isSavingNote || !officialNote.trim()}
-                onClick={handleSaveNote}
-              >
-                {isSavingNote ? (
-                  <Loader2 className="size-3 animate-spin" />
-                ) : (
-                  <Send className="size-3" />
-                )}
-                <span>Save to Audit Trail</span>
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        )}
-      </Dialog>
-    </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isSavingNote}
+                  onClick={() => setActiveModalId(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  disabled={isSavingNote || !officialNote.trim()}
+                  onClick={handleSaveNote}
+                >
+                  {isSavingNote ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
+                    <Send className="size-3" />
+                  )}
+                  <span>Save to Audit Trail</span>
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          )}
+        </Dialog>
+      </div>
+    </RoleGuard>
   );
 }

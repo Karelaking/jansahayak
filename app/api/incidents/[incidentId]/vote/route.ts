@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserSession } from "@/lib/auth/session";
 import { db, incidents, incidentVotes, outboxEvents } from "@/lib/db";
+import { calculateGeodesicDistanceMeters } from "@/lib/pipeline/location-verification";
 import { eq, and, sql } from "drizzle-orm";
 
 /**
@@ -77,6 +78,30 @@ export async function POST(
     const latitude = body.latitude ? String(body.latitude) : null;
     const longitude = body.longitude ? String(body.longitude) : null;
 
+    // PRD §14B Geodesic Proximity Qualification (500m radius):
+    let isLocalResident = true;
+    if (body.isLocalResident !== undefined) {
+      isLocalResident = Boolean(body.isLocalResident);
+    }
+
+    if (latitude && longitude && incident.latitude && incident.longitude) {
+      const vLat = parseFloat(latitude);
+      const vLng = parseFloat(longitude);
+      const incLat = parseFloat(String(incident.latitude));
+      const incLng = parseFloat(String(incident.longitude));
+
+      if (
+        Number.isFinite(vLat) &&
+        Number.isFinite(vLng) &&
+        Number.isFinite(incLat) &&
+        Number.isFinite(incLng)
+      ) {
+        const distanceMeters = calculateGeodesicDistanceMeters(vLat, vLng, incLat, incLng);
+        // Residents and commuters within 500m of the centroid qualify for local consensus quorum
+        isLocalResident = distanceMeters <= 500;
+      }
+    }
+
     // 3. Idempotency Check: Prevent duplicate votes of the same type by the same voter
     const [existingVote] = await db
       .select()
@@ -120,7 +145,7 @@ export async function POST(
         sectorName,
         latitude,
         longitude,
-        isLocalResident: true,
+        isLocalResident,
         wantsUpdates,
         voterEmail: voterEmail || null,
       })

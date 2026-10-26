@@ -1,5 +1,6 @@
 import { MongoClient, Db, GridFSBucket, ObjectId } from "mongodb";
 import { createHash } from "crypto";
+import type { GPSSample, ProcessingStatus } from "@/lib/pipeline/types";
 
 // Global cache for MongoClient across Next.js dev reloads
 declare global {
@@ -159,14 +160,7 @@ export interface PhotoCaptureRecord {
   byteSize: number;
   captureTimestamp: string;
   isCameraCapture?: boolean;
-  gpsSamples: Array<{
-    latitude: number;
-    longitude: number;
-    horizontalAccuracyMeters: number;
-    sampleTimestamp: string;
-    altitudeMeters?: number;
-    headingDegrees?: number;
-  }>;
+  gpsSamples: GPSSample[];
 }
 
 export interface RawReportDocument {
@@ -176,28 +170,7 @@ export interface RawReportDocument {
   category: string;
   description: string;
   idempotencyKey?: string;
-  status:
-    | "DRAFT"
-    | "SUBMITTED"
-    | "PROCESSING"
-    | "EVIDENCE_VALIDATED"
-    | "EVIDENCE_VALIDATION_FAILED"
-    | "AI_ANALYSIS_PENDING"
-    | "AI_ANALYSIS_FAILED"
-    | "LOCATION_VERIFICATION_PENDING"
-    | "LOCATION_VERIFICATION_FAILED"
-    | "MATCHING_PENDING"
-    | "MATCH_REVIEW_REQUIRED"
-    | "INCIDENT_ASSOCIATED"
-    | "MODERATION_PENDING"
-    | "ADDITIONAL_EVIDENCE_REQUIRED"
-    | "APPROVED"
-    | "REJECTED"
-    | "SUSPENDED"
-    | "PUBLICATION_PENDING"
-    | "PUBLISHED"
-    | "MUNICIPALLY_DISPATCHED"
-    | "PROCESSING_FAILED";
+  status: ProcessingStatus;
   rejectionReason?: string | null;
   evidencePhotos: PhotoCaptureRecord[];
   submissionLocation: {

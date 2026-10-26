@@ -49,6 +49,7 @@ const NAV_ITEMS: NavItem[] = [
     href: "/dashboard/moderation",
     label: "Moderation",
     icon: ShieldCheck,
+    badge: "Staff",
   },
   {
     href: "/dashboard/analytics",
@@ -59,22 +60,45 @@ const NAV_ITEMS: NavItem[] = [
     href: "/dashboard/escalations",
     label: "Escalations",
     icon: AlertTriangle,
+    badge: "Staff",
   },
   {
     href: "/dashboard/pipeline",
     label: "PRD Pipeline",
     icon: Workflow,
-    badge: "8-Stage",
+    badge: "Staff",
   },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [userRole, setUserRole] = React.useState<string>("citizen");
 
   React.useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  React.useEffect(() => {
+    let active = true;
+    async function loadRole() {
+      try {
+        const res = await fetch("/api/auth/session");
+        if (res.ok) {
+          const data = await res.json();
+          if (active && data.success && data.session?.role) {
+            setUserRole(data.session.role);
+          }
+        }
+      } catch {
+        // non-blocking
+      }
+    }
+    loadRole();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const navContent = (
     <div className="flex h-full flex-col justify-between py-5">
@@ -87,6 +111,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
             <Brand />
           </Link>
+          <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/60 pt-2">
+            <span>Access Tier:</span>
+            <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider">
+              {userRole}
+            </Badge>
+          </div>
         </div>
 
         <div className="px-2">

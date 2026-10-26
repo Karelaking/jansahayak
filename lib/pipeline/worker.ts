@@ -1,4 +1,4 @@
-import { db, outboxEvents } from "@/lib/db";
+import { db, outboxEvents, moderationActions } from "@/lib/db";
 import { eq, and, lte, or, asc } from "drizzle-orm";
 import { processReportBackground } from "./background-processor";
 import { dispatchMunicipalReportEmail } from "@/lib/email/municipal-dispatcher";
@@ -106,6 +106,52 @@ export async function processOutboxBatch(batchSize: number = 20): Promise<Outbox
           case "incident.split":
             // Notify reporters of newly partitioned incident assignment
             break;
+
+          case "incident.community_resolved": {
+            // PRD §14B: Audit logging for community consensus closure
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              event.aggregateId,
+            );
+            if (isUuid) {
+              await db.insert(moderationActions).values({
+                incidentId: event.aggregateId,
+                moderatorId: "community_consensus_engine",
+                action: "community_resolved",
+                reason:
+                  "Community verification consensus reached (>=3 local confirmations, >=75% ratio)",
+                notes:
+                  (event.payload?.message as string) ||
+                  "Hazard marked resolved by community consensus",
+                metadata: event.payload as Record<string, unknown>,
+              });
+            }
+            break;
+          }
+
+          case "incident.reopened_by_community": {
+            // PRD §14B: Audit logging for community dispute re-open and municipal re-escalation
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              event.aggregateId,
+            );
+            if (isUuid) {
+              await db.insert(moderationActions).values({
+                incidentId: event.aggregateId,
+                moderatorId: "community_consensus_engine",
+                action: "community_dispute_reopen",
+                reason: "Community dispute quorum reached (2+ local unresolved votes)",
+                notes:
+                  (event.payload?.message as string) ||
+                  "Hazard reopened due to community dispute votes",
+                metadata: event.payload as Record<string, unknown>,
+              });
+            }
+            break;
+          }
+
+          case "voter.subscribed_to_updates": {
+            // PRD §14B: Notification subscription record for local voters
+            break;
+          }
 
           default:
             // Generic outbox event handling

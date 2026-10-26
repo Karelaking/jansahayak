@@ -275,6 +275,10 @@ You must return a valid JSON object conforming exactly to this structure:
           ? "review_required"
           : parsed.recommendedNextAction || "create_new",
         modelUsed,
+        modelVersion: parsed.modelVersion || "1.0.0",
+        schemaVersion: "1.0.0",
+        promptVersion: "1.0.0",
+        processedAt: new Date().toISOString(),
       };
     } else if (process.env.NODE_ENV === "test") {
       // Deterministic test-only mock provider (PRD §21 line 7: "Provide deterministic mock providers only for automated tests")
@@ -318,6 +322,10 @@ You must return a valid JSON object conforming exactly to this structure:
         contradictionsDetected: false,
         recommendedNextAction: "create_new",
         modelUsed: "test-deterministic-vision-analyzer",
+        modelVersion: "1.0.0-test",
+        schemaVersion: "1.0.0",
+        promptVersion: "1.0.0",
+        processedAt: new Date().toISOString(),
       };
 
       rawApiResponse = {

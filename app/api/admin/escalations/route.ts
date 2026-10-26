@@ -51,6 +51,13 @@ export async function GET(req: NextRequest) {
 
       const hasDispatched = Boolean(meta.municipalDocketNumber);
       const isResolved = inc.status === "resolved";
+      const isUnderRepair =
+        inc.status === "under_review" || inc.publicOpinionStatus === "under_repair";
+
+      const resVotes = Number(inc.resolutionVotesCount) || 0;
+      const unresVotes = Number(inc.unresolvedVotesCount) || 0;
+      const totalVotes = resVotes + unresVotes;
+      const consensusPercentage = totalVotes > 0 ? Math.round((resVotes / totalVotes) * 100) : 0;
 
       let status: EscalationDocket["status"] = "awaiting-response";
       let statusLabel = "Awaiting Municipal Response";
@@ -60,6 +67,10 @@ export async function GET(req: NextRequest) {
         status = "resolved";
         statusLabel = "Remediation Complete";
         statusVariant = "default";
+      } else if (isUnderRepair) {
+        status = "in-progress";
+        statusLabel = `Under Repair (${consensusPercentage}% Community Consensus)`;
+        statusVariant = "secondary";
       } else if (hasDispatched) {
         status = "acknowledged";
         statusLabel = `Docket: ${meta.municipalDocketNumber}`;
@@ -90,6 +101,10 @@ export async function GET(req: NextRequest) {
         linkedReports: inc.reportCount || 1,
         lastUpdate,
         originReportId: inc.incidentNumber,
+        resolutionVotesCount: resVotes,
+        unresolvedVotesCount: unresVotes,
+        publicOpinionStatus: inc.publicOpinionStatus || "verified_hazard",
+        consensusPercentage,
       };
     });
 
@@ -135,11 +150,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Fetch current incident
+    // 1. Fetch current incident (support either UUID id or incidentNumber)
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      incidentId,
+    );
+
     const [existing] = await db
       .select()
       .from(incidents)
-      .where(eq(incidents.id, incidentId))
+      .where(isUuid ? eq(incidents.id, incidentId) : eq(incidents.incidentNumber, incidentId))
       .limit(1);
 
     if (!existing) {
@@ -165,9 +184,54 @@ export async function POST(req: NextRequest) {
     }
 
     let updatedIncidentStatus = existing.status;
+    let newPublicOpinionStatus = existing.publicOpinionStatus;
+    let isEmergencyOverride = false;
+    let transitionMessage = `Status updated to ${status}`;
+
     if (status === "resolved") {
-      updatedIncidentStatus = "resolved";
+      isEmergencyOverride = Boolean(body.isEmergencyOverride);
+      const overrideReason = (body.overrideReason as string)?.trim() || "";
+
+      if (isEmergencyOverride) {
+        if (!overrideReason || overrideReason.length < 10) {
+          return NextResponse.json(
+            {
+              error:
+                "Emergency administrative override requires a documented reason of at least 10 characters.",
+            },
+            { status: 400 },
+          );
+        }
+        updatedIncidentStatus = "resolved";
+        newPublicOpinionStatus = "community_resolved";
+        transitionMessage = "Emergency administrative override: Incident marked resolved by staff.";
+      } else {
+        // PRD §14B Public-Opinion Consensus Gating Check
+        const resVotes = Number(existing.resolutionVotesCount) || 0;
+        const unresVotes = Number(existing.unresolvedVotesCount) || 0;
+        const totalVotes = resVotes + unresVotes;
+        const ratio = totalVotes > 0 ? resVotes / totalVotes : 0;
+        const consensusMet = resVotes >= 3 && ratio >= 0.75;
+
+        if (consensusMet) {
+          updatedIncidentStatus = "resolved";
+          newPublicOpinionStatus = "community_resolved";
+          transitionMessage =
+            "Community consensus threshold met: Hazard confirmed resolved by local residents.";
+        } else {
+          // Gated by PRD §14B: Municipal department marks completion -> transitions to under_review / under_repair to invite resident consensus
+          updatedIncidentStatus = "under_review";
+          newPublicOpinionStatus = "under_repair";
+          transitionMessage =
+            "Municipal repair reported. Transitioned to Community Verification stage; awaiting citizen consensus.";
+        }
+      }
     } else if (status === "in-progress" || status === "in_progress") {
+      updatedIncidentStatus = "in_progress";
+      if (existing.publicOpinionStatus === "community_resolved") {
+        newPublicOpinionStatus = "public_disputed";
+      }
+    } else if (status === "acknowledged") {
       updatedIncidentStatus = "in_progress";
     }
 
@@ -184,6 +248,7 @@ export async function POST(req: NextRequest) {
       .update(incidents)
       .set({
         status: updatedIncidentStatus,
+        publicOpinionStatus: newPublicOpinionStatus,
         metadata: updatedMetadata,
         updatedAt: new Date(),
       })
@@ -194,13 +259,22 @@ export async function POST(req: NextRequest) {
     await db.insert(moderationActions).values({
       incidentId,
       moderatorId: session.userId,
-      action: status ? `escalation_status_${status}` : "escalation_officer_note",
-      reason: officialNote || `Escalation status shifted to ${status}`,
-      notes: officialNote || null,
+      action: isEmergencyOverride
+        ? "emergency_resolution_override"
+        : status
+          ? `escalation_status_${status}`
+          : "escalation_officer_note",
+      reason:
+        officialNote ||
+        (isEmergencyOverride
+          ? (body.overrideReason as string)
+          : `Escalation status shifted to ${status}`),
+      notes: officialNote || transitionMessage,
       metadata: {
         previousStatus: existing.status,
         newStatus: updatedIncidentStatus,
         officer: officer || currentMeta.assignedOfficer,
+        transitionMessage,
         updatedAt: nowIso,
       },
     });
@@ -209,6 +283,7 @@ export async function POST(req: NextRequest) {
       success: true,
       incidentId,
       status: updatedIncidentStatus,
+      message: transitionMessage,
       updatedAt: nowIso,
       incident: updated,
     });

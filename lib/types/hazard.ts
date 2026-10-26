@@ -77,6 +77,10 @@ export interface EscalationDocket {
   linkedReports: number;
   lastUpdate: string;
   originReportId: string;
+  resolutionVotesCount?: number;
+  unresolvedVotesCount?: number;
+  publicOpinionStatus?: string;
+  consensusPercentage?: number;
 }
 
 export interface CivicAnalytics {

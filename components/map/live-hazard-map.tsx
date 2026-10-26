@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Map,
   MapMarker,
@@ -13,7 +14,7 @@ import {
   type MapRef,
 } from "@/components/ui/map";
 import { ArrowRight, ArrowUpRight } from "@/components/icons";
-import { Plus, Check, ThumbsUp } from "lucide-react";
+import { Plus, Check, ThumbsUp, MapPin, X } from "lucide-react";
 import { GREATER_NOIDA_CENTER } from "@/lib/data";
 import type { HazardReport, HazardCategoryKey } from "@/lib/types/hazard";
 import { HazardPin } from "./hazard-pin";
@@ -83,6 +84,45 @@ function MapThemeCustomizer() {
   return null;
 }
 
+function MapHighlightController({
+  hazards,
+  onHighlightDetected,
+}: {
+  hazards: HazardReport[];
+  onHighlightDetected: (id: string | null) => void;
+}) {
+  const { map, isLoaded } = useMap();
+  const searchParams = useSearchParams();
+  const highlightParam = searchParams ? searchParams.get("highlight") : null;
+  const hasFlownRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!map || !isLoaded || !highlightParam || hazards.length === 0) return;
+    if (hasFlownRef.current === highlightParam) return;
+
+    const target = hazards.find(
+      (h) =>
+        h.id === highlightParam ||
+        (h as unknown as { incidentNumber?: string }).incidentNumber === highlightParam ||
+        (h as unknown as { originReportId?: string }).originReportId === highlightParam,
+    );
+
+    if (target) {
+      hasFlownRef.current = highlightParam;
+      onHighlightDetected(target.id);
+      map.flyTo({
+        center: [target.longitude, target.latitude],
+        zoom: 16,
+        pitch: 42,
+        bearing: -8,
+        essential: true,
+      });
+    }
+  }, [highlightParam, map, isLoaded, hazards, onHighlightDetected]);
+
+  return null;
+}
+
 export interface LiveHazardMapProps {
   hazards?: HazardReport[];
   showHeroOverlay?: boolean;
@@ -95,6 +135,7 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
   const [liveHazards, setLiveHazards] = useState<HazardReport[]>(hazards);
   const [votedIncidents, setVotedIncidents] = useState<Record<string, boolean>>({});
   const [votingLoading, setVotingLoading] = useState<Record<string, boolean>>({});
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -210,6 +251,14 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
         {/* Dynamic theme matching to webpage #f5f3ed Paper background */}
         <MapThemeCustomizer />
 
+        {/* PRD §13/§16 Deep-link camera focus controller */}
+        <Suspense fallback={null}>
+          <MapHighlightController
+            hazards={liveHazards}
+            onHighlightDetected={(id) => setHighlightedId(id)}
+          />
+        </Suspense>
+
         {/* Minimal clean zoom controls tucked in bottom-right */}
         <MapControls
           position="bottom-right"
@@ -221,112 +270,130 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
         />
 
         {/* Live hazard markers on the map */}
-        {filteredHazards.map((hazard) => (
-          <MapMarker key={hazard.id} longitude={hazard.longitude} latitude={hazard.latitude}>
-            <MarkerContent>
-              <HazardPin severity={hazard.severity} />
-            </MarkerContent>
-
-            {/* Hover tooltip for quick glance */}
-            <MarkerTooltip className="text-[11px] font-medium">
-              {hazard.title} ({hazard.reportedAt || hazard.time || "Recently"})
-            </MarkerTooltip>
-
-            {/* Click popup anchored to the pin */}
-            <MarkerPopup>
-              <div className="w-72 rounded-xl bg-white p-3.5 text-[#17382f] shadow-2xl border border-[#e5e9e2]">
-                <div className="flex items-center justify-between text-[10px] text-[#63736b]">
-                  <span className="font-mono font-semibold text-[#0e2b24]">{hazard.id}</span>
-                  <span
-                    className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold border ${
-                      hazard.publicOpinionStatus === "community_resolved"
-                        ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                        : hazard.publicOpinionStatus === "public_disputed"
-                          ? "bg-amber-50 text-amber-900 border-amber-200"
-                          : hazard.publicOpinionStatus === "under_repair"
-                            ? "bg-blue-50 text-blue-800 border-blue-200"
-                            : "bg-[#eaf1e9] text-[#1e4638] border-[#c5d8c3]"
-                    }`}
-                  >
-                    {hazard.publicOpinionStatus === "community_resolved"
-                      ? "Community Resolved"
-                      : hazard.publicOpinionStatus === "public_disputed"
-                        ? "Public Disputed"
-                        : hazard.publicOpinionStatus === "under_repair"
-                          ? "Under Repair"
-                          : "Community Verified"}
-                  </span>
+        {filteredHazards.map((hazard) => {
+          const isHighlighted = hazard.id === highlightedId;
+          return (
+            <MapMarker key={hazard.id} longitude={hazard.longitude} latitude={hazard.latitude}>
+              <MarkerContent>
+                <div
+                  className={
+                    isHighlighted
+                      ? "relative rounded-full ring-4 ring-emerald-600 ring-offset-2 ring-offset-white animate-pulse"
+                      : ""
+                  }
+                >
+                  <HazardPin severity={hazard.severity} />
                 </div>
-                <p className="mt-1.5 font-semibold text-xs leading-snug text-[#0e2b24]">
-                  {hazard.title}
-                </p>
-                <p className="mt-0.5 text-[11px] text-[#486057]">
-                  {hazard.landmark || hazard.location}
-                </p>
+              </MarkerContent>
 
-                {/* Community Verification & Public Opinion Bar */}
-                <div className="mt-2.5 rounded-lg bg-[#fafbf9] border border-[#ebeee8] p-2">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="font-semibold text-[#17382f] flex items-center gap-1.5">
-                      <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-                      {hazard.verificationsCount || hazard.votes || 1} local verifications
-                    </span>
-                    {hazard.resolutionVotesCount !== undefined &&
-                      hazard.resolutionVotesCount > 0 && (
-                        <span className="text-[10px] text-[#486057] font-medium">
-                          {hazard.resolutionVotesCount} fixed / {hazard.unresolvedVotesCount || 0}{" "}
-                          open
+              {/* Hover tooltip for quick glance */}
+              <MarkerTooltip className="text-[11px] font-medium">
+                {hazard.title} ({hazard.reportedAt || hazard.time || "Recently"})
+              </MarkerTooltip>
+
+              {/* Click popup anchored to the pin */}
+              <MarkerPopup>
+                <div className="w-72 rounded-xl bg-white p-3.5 text-[#17382f] shadow-2xl border border-[#e5e9e2]">
+                  <div className="flex items-center justify-between text-[10px] text-[#63736b]">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-semibold text-[#0e2b24]">{hazard.id}</span>
+                      {isHighlighted && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          Target
                         </span>
                       )}
-                  </div>
-
-                  {/* 1-click citizen verification */}
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={votedIncidents[hazard.id] || votingLoading[hazard.id]}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleVote(hazard.id);
-                      }}
-                      className={`w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-md text-[11px] font-semibold transition-all ${
-                        votedIncidents[hazard.id]
-                          ? "bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-default"
-                          : "bg-[#0e2b24] text-[#faf9f5] hover:bg-[#1c4b3e] active:scale-95 shadow-xs"
+                    </div>
+                    <span
+                      className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold border ${
+                        hazard.publicOpinionStatus === "community_resolved"
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                          : hazard.publicOpinionStatus === "public_disputed"
+                            ? "bg-amber-50 text-amber-900 border-amber-200"
+                            : hazard.publicOpinionStatus === "under_repair"
+                              ? "bg-blue-50 text-blue-800 border-blue-200"
+                              : "bg-[#eaf1e9] text-[#1e4638] border-[#c5d8c3]"
                       }`}
                     >
-                      {votingLoading[hazard.id] ? (
-                        <span>Recording...</span>
-                      ) : votedIncidents[hazard.id] ? (
-                        <>
-                          <Check className="size-3.5 stroke-[2.5]" />
-                          <span>You Verified This Hazard (+1)</span>
-                        </>
-                      ) : (
-                        <>
-                          <ThumbsUp className="size-3 stroke-[2.2]" />
-                          <span>I See This Too (+1)</span>
-                        </>
-                      )}
-                    </button>
+                      {hazard.publicOpinionStatus === "community_resolved"
+                        ? "Community Resolved"
+                        : hazard.publicOpinionStatus === "public_disputed"
+                          ? "Public Disputed"
+                          : hazard.publicOpinionStatus === "under_repair"
+                            ? "Under Repair"
+                            : "Community Verified"}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 font-semibold text-xs leading-snug text-[#0e2b24]">
+                    {hazard.title}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-[#486057]">
+                    {hazard.landmark || hazard.location}
+                  </p>
+
+                  {/* Community Verification & Public Opinion Bar */}
+                  <div className="mt-2.5 rounded-lg bg-[#fafbf9] border border-[#ebeee8] p-2">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-semibold text-[#17382f] flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                        {hazard.verificationsCount || hazard.votes || 1} local verifications
+                      </span>
+                      {hazard.resolutionVotesCount !== undefined &&
+                        hazard.resolutionVotesCount > 0 && (
+                          <span className="text-[10px] text-[#486057] font-medium">
+                            {hazard.resolutionVotesCount} fixed / {hazard.unresolvedVotesCount || 0}{" "}
+                            open
+                          </span>
+                        )}
+                    </div>
+
+                    {/* 1-click citizen verification */}
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={votedIncidents[hazard.id] || votingLoading[hazard.id]}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleVote(hazard.id);
+                        }}
+                        className={`w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-md text-[11px] font-semibold transition-all ${
+                          votedIncidents[hazard.id]
+                            ? "bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-default"
+                            : "bg-[#0e2b24] text-[#faf9f5] hover:bg-[#1c4b3e] active:scale-95 shadow-xs"
+                        }`}
+                      >
+                        {votingLoading[hazard.id] ? (
+                          <span>Recording...</span>
+                        ) : votedIncidents[hazard.id] ? (
+                          <>
+                            <Check className="size-3.5 stroke-[2.5]" />
+                            <span>You Verified This Hazard (+1)</span>
+                          </>
+                        ) : (
+                          <>
+                            <ThumbsUp className="size-3 stroke-[2.2]" />
+                            <span>I See This Too (+1)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-2.5 flex items-center justify-between border-t border-[#eef1e9] pt-2 text-[10px]">
+                    <span className="text-[#63736b]">
+                      {hazard.reportedAt || hazard.time || "Recently"}
+                    </span>
+                    <Link
+                      href={`/reports/${hazard.id}`}
+                      className="font-semibold text-[#0e2b24] underline underline-offset-2 hover:opacity-80 inline-flex items-center gap-0.5"
+                    >
+                      <span>Community Progress &rarr;</span>
+                    </Link>
                   </div>
                 </div>
-
-                <div className="mt-2.5 flex items-center justify-between border-t border-[#eef1e9] pt-2 text-[10px]">
-                  <span className="text-[#63736b]">
-                    {hazard.reportedAt || hazard.time || "Recently"}
-                  </span>
-                  <Link
-                    href={`/reports/${hazard.id}`}
-                    className="font-semibold text-[#0e2b24] underline underline-offset-2 hover:opacity-80 inline-flex items-center gap-0.5"
-                  >
-                    <span>Community Progress &rarr;</span>
-                  </Link>
-                </div>
-              </div>
-            </MarkerPopup>
-          </MapMarker>
-        ))}
+              </MarkerPopup>
+            </MapMarker>
+          );
+        })}
       </Map>
 
       {/* ── Floating Controls for Dedicated Map View ── */}
@@ -348,6 +415,22 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
                 onSelectCategory={setSelectedCategory}
               />
             </div>
+            {highlightedId && (
+              <div className="flex items-center justify-between gap-2 bg-emerald-50/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-emerald-300 text-xs text-emerald-950 shadow-xs">
+                <span className="flex items-center gap-1.5 font-semibold text-[11px]">
+                  <MapPin className="size-3.5 text-emerald-800 shrink-0" />
+                  <span>Target Incident: {highlightedId.slice(0, 12)}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setHighlightedId(null)}
+                  className="rounded p-0.5 text-emerald-800 hover:bg-emerald-200/50"
+                  aria-label="Clear highlight"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="pointer-events-auto absolute bottom-4 left-4 z-20 hidden sm:block">

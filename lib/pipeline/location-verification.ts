@@ -1,214 +1,424 @@
-import { LocationQualityBand, LocationVerificationResult, StageExecutionResult } from "./types";
+import {
+  GPSSample,
+  LocationQualityBand,
+  LocationSampleAssessment,
+  LocationVerificationResult,
+} from "./types";
 import { RawReportDocument, getReportsCollection } from "@/lib/db/mongodb";
 import { PILOT_CONFIG } from "@/lib/data/constants";
+import { calculateGeodesicDistanceMeters, isValidWGS84Coordinate } from "./geo";
 
-/**
- * Calculates geodesic distance between two coordinates in meters using the Haversine formula.
- */
-export function calculateGeodesicDistanceMeters(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number,
-): number {
-  const R = 6371000; // Earth radius in meters
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
+export { calculateGeodesicDistanceMeters } from "./geo";
+
+export const LOCATION_ALGORITHM_VERSION = "location-geodesic-v2";
+
+export interface LocationAnalysisPolicy {
+  /** Samples farther than this from the robust centre are outliers. */
+  outlierRadiusMeters: number;
+  /** Valid samples within this radius form one spatial cluster. */
+  clusterRadiusMeters: number;
+  /** Two clusters farther apart than this represent possible distinct hazards. */
+  multiClusterSeparationMeters: number;
+  /** Accuracy values are clamped into this range to cap sample influence. */
+  minAccuracyMeters: number;
+  maxAccuracyMeters: number;
+  /** Quality bands from PRD §9. */
+  highBandMaxMeters: number;
+  mediumBandMaxMeters: number;
+  lowBandMaxMeters: number;
 }
 
-/**
- * Stage 4: Geodesic Location Verification & Outlier Clustering Worker
- * Aggregates capture-time GPS samples, removes spatial outliers, computes sensor-weighted
- * centroid, and assigns PRD quality bands.
- */
-export async function executeStage4LocationVerification(
-  report: RawReportDocument,
-): Promise<StageExecutionResult<LocationVerificationResult>> {
-  const stageName = "Location Verification & Geodesic Clustering";
-  const issues: string[] = [];
+export const DEFAULT_LOCATION_POLICY: LocationAnalysisPolicy = {
+  outlierRadiusMeters: 100,
+  clusterRadiusMeters: 25,
+  multiClusterSeparationMeters: 40,
+  minAccuracyMeters: 5,
+  maxAccuracyMeters: 250,
+  highBandMaxMeters: 10,
+  mediumBandMaxMeters: 25,
+  lowBandMaxMeters: 50,
+};
 
-  try {
-    const rawSamples: Array<{
-      latitude: number;
-      longitude: number;
-      accuracy: number;
-    }> = [];
+export interface LocationAnalysisPhoto {
+  gpsSamples: GPSSample[];
+}
 
-    // Collect all capture-time GPS samples across all evidence photos
-    for (const photo of report.evidencePhotos) {
-      if (photo.gpsSamples && photo.gpsSamples.length > 0) {
-        for (const sample of photo.gpsSamples) {
-          if (
-            Number.isFinite(sample.latitude) &&
-            Number.isFinite(sample.longitude) &&
-            sample.latitude >= -90 &&
-            sample.latitude <= 90 &&
-            sample.longitude >= -180 &&
-            sample.longitude <= 180
-          ) {
-            // Cap horizontal accuracy between 2m (optimistic phone GPS) and 100m
-            const acc = Math.max(2, Math.min(100, sample.horizontalAccuracyMeters || 15));
-            rawSamples.push({
-              latitude: sample.latitude,
-              longitude: sample.longitude,
-              accuracy: acc,
-            });
-          }
+export interface LocationAnalysisInput {
+  photos: LocationAnalysisPhoto[];
+  policy?: Partial<LocationAnalysisPolicy>;
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return Number.NaN;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[middle - 1]! + sorted[middle]!) / 2 : sorted[middle]!;
+}
+
+function countClusters(
+  samples: Array<{ latitude: number; longitude: number }>,
+  radiusMeters: number,
+): number {
+  const visited = new Set<number>();
+  let clusters = 0;
+
+  for (let i = 0; i < samples.length; i++) {
+    if (visited.has(i)) continue;
+    clusters += 1;
+    const queue = [i];
+    visited.add(i);
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const currentSample = samples[current]!;
+      for (let j = 0; j < samples.length; j++) {
+        if (visited.has(j)) continue;
+        const other = samples[j]!;
+        const distance = calculateGeodesicDistanceMeters(
+          currentSample.latitude,
+          currentSample.longitude,
+          other.latitude,
+          other.longitude,
+        );
+        if (distance <= radiusMeters) {
+          visited.add(j);
+          queue.push(j);
         }
       }
     }
+  }
 
-    if (rawSamples.length === 0) {
-      issues.push("No valid capture-time GPS coordinates found in submitted evidence.");
-      return {
-        stage: 4,
-        stageName,
-        success: false,
-        error: "Location verification failed: Zero valid GPS samples.",
-        isRetryable: false,
-      };
-    }
+  return clusters;
+}
 
-    // Preliminary Median/Centroid for Outlier Detection
-    const medLat = rawSamples.reduce((s, p) => s + p.latitude, 0) / rawSamples.length;
-    const medLng = rawSamples.reduce((s, p) => s + p.longitude, 0) / rawSamples.length;
+/**
+ * Pure geodesic location verification (PRD §9, §11).
+ *
+ * - Rejects non-finite / out-of-range coordinates.
+ * - Distinguishes missing accuracy values from high accuracy values.
+ * - Ignores submission-time fallback samples for verification.
+ * - Uses inverse-variance weighting with capped influence per photo.
+ * - Detects outlier samples and multiple spatial clusters.
+ * - Assigns PRD quality bands and records estimated uncertainty.
+ */
+export function analyzeLocationSamples(input: LocationAnalysisInput): {
+  result?: LocationVerificationResult;
+  error?: string;
+} {
+  const policy: LocationAnalysisPolicy = { ...DEFAULT_LOCATION_POLICY, ...input.policy };
+  const issues: string[] = [];
+  const assessments: LocationSampleAssessment[] = [];
 
-    // Reject samples with distance > 100m from cluster median (likely GPS teleport/glitch)
-    const validSamples: typeof rawSamples = [];
-    let outlierCount = 0;
+  const usable: Array<{
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+    photoIndex: number;
+  }> = [];
+  let fallbackSamples = 0;
+  let validFiniteCoordinateCount = 0;
 
-    for (const sample of rawSamples) {
-      const dist = calculateGeodesicDistanceMeters(
-        medLat,
-        medLng,
-        sample.latitude,
-        sample.longitude,
-      );
-      if (dist <= 100) {
-        validSamples.push(sample);
-      } else {
-        outlierCount++;
+  input.photos.forEach((photo, photoIndex) => {
+    (photo.gpsSamples || []).forEach((sample) => {
+      const source = sample.source === "submission_fallback" ? "submission_fallback" : "capture";
+      const coordinateValid = isValidWGS84Coordinate(sample.latitude, sample.longitude);
+      const accuracyValid =
+        Number.isFinite(sample.horizontalAccuracyMeters) && sample.horizontalAccuracyMeters > 0;
+
+      if (!coordinateValid) {
+        assessments.push({
+          latitude: sample.latitude,
+          longitude: sample.longitude,
+          horizontalAccuracyMeters: sample.horizontalAccuracyMeters,
+          source,
+          distanceFromCentroidMeters: Number.NaN,
+          includedInCentroid: false,
+          exclusionReason: "Coordinate is non-finite or outside WGS84 range.",
+        });
+        return;
       }
-    }
 
-    if (validSamples.length === 0) {
-      return {
-        stage: 4,
-        stageName,
-        success: false,
-        error: "All GPS samples were rejected as inconsistent or dispersed spatial outliers.",
-        isRetryable: false,
-      };
-    }
+      if (!accuracyValid) {
+        assessments.push({
+          latitude: sample.latitude,
+          longitude: sample.longitude,
+          horizontalAccuracyMeters: sample.horizontalAccuracyMeters,
+          source,
+          distanceFromCentroidMeters: Number.NaN,
+          includedInCentroid: false,
+          exclusionReason:
+            "Horizontal accuracy is missing or non-positive; accuracy cannot be assumed.",
+        });
+        return;
+      }
 
-    // Inverse-variance weighting: w_i = 1 / (accuracy_i ^ 2)
-    let totalWeight = 0;
-    let weightedLatSum = 0;
-    let weightedLngSum = 0;
+      validFiniteCoordinateCount += 1;
 
-    for (const s of validSamples) {
-      const weight = 1 / (s.accuracy * s.accuracy);
-      totalWeight += weight;
-      weightedLatSum += s.latitude * weight;
-      weightedLngSum += s.longitude * weight;
-    }
+      if (source === "submission_fallback") {
+        fallbackSamples += 1;
+        assessments.push({
+          latitude: sample.latitude,
+          longitude: sample.longitude,
+          horizontalAccuracyMeters: sample.horizontalAccuracyMeters,
+          source,
+          distanceFromCentroidMeters: Number.NaN,
+          includedInCentroid: false,
+          exclusionReason: "Submission-time fallback location cannot verify capture-time position.",
+        });
+        return;
+      }
 
-    const centroidLatitude = Number((weightedLatSum / totalWeight).toFixed(7));
-    const centroidLongitude = Number((weightedLngSum / totalWeight).toFixed(7));
+      usable.push({
+        latitude: sample.latitude,
+        longitude: sample.longitude,
+        accuracy: sample.horizontalAccuracyMeters,
+        photoIndex,
+      });
+    });
+  });
 
-    // Calculate maximum spread (radius in meters) from centroid among valid samples
-    let maxSpreadMeters = 0;
-    let avgAccuracy = 0;
+  if (validFiniteCoordinateCount === 0) {
+    return {
+      error: "Location verification failed: no finite WGS84 GPS samples were supplied.",
+    };
+  }
 
-    for (const s of validSamples) {
-      const dist = calculateGeodesicDistanceMeters(
-        centroidLatitude,
-        centroidLongitude,
-        s.latitude,
-        s.longitude,
-      );
-      if (dist > maxSpreadMeters) maxSpreadMeters = dist;
-      avgAccuracy += s.accuracy;
-    }
+  if (usable.length === 0) {
+    return {
+      error:
+        fallbackSamples > 0
+          ? "Location verification failed: only submission-time fallback coordinates are available; capture-time GPS is required for a verified pin."
+          : "Location verification failed: no valid capture-time GPS samples with accuracy are available.",
+    };
+  }
 
-    avgAccuracy /= validSamples.length;
+  // Robust centre for outlier detection: component-wise median resists teleports.
+  const medianLat = median(usable.map((sample) => sample.latitude));
+  const medianLng = median(usable.map((sample) => sample.longitude));
 
-    // Combined spatial uncertainty = max sample spread + average sensor horizontal accuracy
-    const spatialUncertaintyMeters = Number(
-      Math.max(avgAccuracy, maxSpreadMeters + avgAccuracy * 0.5).toFixed(2),
+  const inlierSamples: typeof usable = [];
+  for (const sample of usable) {
+    const distance = calculateGeodesicDistanceMeters(
+      medianLat,
+      medianLng,
+      sample.latitude,
+      sample.longitude,
     );
-
-    // Quality Band Evaluation (PRD Section 9)
-    let qualityBand: LocationQualityBand = "HIGH";
-    if (spatialUncertaintyMeters <= 10) {
-      qualityBand = "HIGH";
-    } else if (spatialUncertaintyMeters <= 25) {
-      qualityBand = "MEDIUM";
-    } else if (spatialUncertaintyMeters <= 50) {
-      qualityBand = "LOW";
-      issues.push("Medium/Low GPS precision requires manual location verification.");
+    if (distance <= policy.outlierRadiusMeters) {
+      inlierSamples.push(sample);
     } else {
-      qualityBand = "REJECTED";
+      assessments.push({
+        latitude: sample.latitude,
+        longitude: sample.longitude,
+        horizontalAccuracyMeters: sample.accuracy,
+        source: "capture",
+        distanceFromCentroidMeters: Number(distance.toFixed(2)),
+        includedInCentroid: false,
+        exclusionReason: `Sample is ${distance.toFixed(1)}m from the robust centre (outlier threshold ${policy.outlierRadiusMeters}m).`,
+      });
       issues.push(
-        `High spatial uncertainty (${spatialUncertaintyMeters}m > 50m). Automatic public pin prohibited.`,
+        `GPS sample at (${sample.latitude.toFixed(5)}, ${sample.longitude.toFixed(5)}) rejected as an outlier.`,
       );
     }
+  }
 
-    // PRD §4 & §9: Pilot Bounding Box Jurisdiction Validation
-    const isWithinPilotBounds =
-      centroidLongitude >= PILOT_CONFIG.bounds[0][0] &&
-      centroidLongitude <= PILOT_CONFIG.bounds[1][0] &&
-      centroidLatitude >= PILOT_CONFIG.bounds[0][1] &&
-      centroidLatitude <= PILOT_CONFIG.bounds[1][1];
+  if (inlierSamples.length === 0) {
+    return {
+      error: "Location verification failed: every GPS sample was rejected as a spatial outlier.",
+    };
+  }
 
-    if (!isWithinPilotBounds) {
-      issues.push(
-        `Coordinates (${centroidLatitude.toFixed(4)}, ${centroidLongitude.toFixed(4)}) fall outside designated Greater Noida pilot bounding box. Manual jurisdiction verification required.`,
-      );
-      // Downgrade quality band to LOW to mandate manual moderator review before public publication
-      if (qualityBand === "HIGH" || qualityBand === "MEDIUM") {
-        qualityBand = "LOW";
-      }
-    }
+  // Correlated samples from the same photo must not dominate the centroid.
+  const samplesPerPhoto = new Map<number, number>();
+  for (const sample of inlierSamples) {
+    samplesPerPhoto.set(sample.photoIndex, (samplesPerPhoto.get(sample.photoIndex) || 0) + 1);
+  }
 
-    const result: LocationVerificationResult = {
-      isVerified: qualityBand !== "REJECTED",
+  let totalWeight = 0;
+  let weightedLatSum = 0;
+  let weightedLngSum = 0;
+  let weightedAccuracy = 0;
+
+  for (const sample of inlierSamples) {
+    const cappedAccuracy = Math.min(
+      policy.maxAccuracyMeters,
+      Math.max(policy.minAccuracyMeters, sample.accuracy),
+    );
+    const correlationWeight = 1 / (samplesPerPhoto.get(sample.photoIndex) || 1);
+    const weight = (1 / (cappedAccuracy * cappedAccuracy)) * correlationWeight;
+    totalWeight += weight;
+    weightedLatSum += sample.latitude * weight;
+    weightedLngSum += sample.longitude * weight;
+    weightedAccuracy += cappedAccuracy * weight;
+  }
+
+  const centroidLatitude = Number((weightedLatSum / totalWeight).toFixed(7));
+  const centroidLongitude = Number((weightedLngSum / totalWeight).toFixed(7));
+  const effectiveAccuracy = weightedAccuracy / totalWeight;
+
+  let maxSpreadMeters = 0;
+  for (const sample of inlierSamples) {
+    const distance = calculateGeodesicDistanceMeters(
       centroidLatitude,
       centroidLongitude,
-      spatialUncertaintyMeters,
-      qualityBand,
-      outlierCount,
-      samplesEvaluated: rawSamples.length,
-      isWithinPilotBounds,
-      issues,
-    };
+      sample.latitude,
+      sample.longitude,
+    );
+    maxSpreadMeters = Math.max(maxSpreadMeters, distance);
+    assessments.push({
+      latitude: sample.latitude,
+      longitude: sample.longitude,
+      horizontalAccuracyMeters: sample.accuracy,
+      source: "capture",
+      distanceFromCentroidMeters: Number(distance.toFixed(2)),
+      includedInCentroid: true,
+    });
+  }
 
-    // Update report status in MongoDB
+  const spatialUncertaintyMeters = Number(
+    Math.max(effectiveAccuracy, maxSpreadMeters + effectiveAccuracy * 0.5).toFixed(2),
+  );
+
+  const clustersDetected = countClusters(inlierSamples, policy.clusterRadiusMeters);
+  let requiresLocationReview = false;
+
+  if (clustersDetected > 1) {
+    requiresLocationReview = true;
+    issues.push(
+      `Possible multiple hazards: ${clustersDetected} distinct GPS clusters separated beyond ${policy.multiClusterSeparationMeters}m were detected in one submission. Manual segmentation review is required.`,
+    );
+  }
+
+  let qualityBand: LocationQualityBand;
+  if (spatialUncertaintyMeters <= policy.highBandMaxMeters) {
+    qualityBand = "HIGH";
+  } else if (spatialUncertaintyMeters <= policy.mediumBandMaxMeters) {
+    qualityBand = "MEDIUM";
+  } else if (spatialUncertaintyMeters <= policy.lowBandMaxMeters) {
+    qualityBand = "LOW";
+    requiresLocationReview = true;
+    issues.push("Low GPS precision requires manual location verification.");
+  } else {
+    qualityBand = "REJECTED";
+    requiresLocationReview = true;
+    issues.push(
+      `High spatial uncertainty (${spatialUncertaintyMeters}m > ${policy.lowBandMaxMeters}m). Automatic public pin is prohibited.`,
+    );
+  }
+
+  // A multi-cluster submission can never be auto-published as one precise pin.
+  if (clustersDetected > 1 && qualityBand !== "REJECTED") {
+    qualityBand = qualityBand === "HIGH" ? "MEDIUM" : qualityBand;
+    requiresLocationReview = true;
+  }
+
+  const isWithinPilotBounds =
+    centroidLongitude >= PILOT_CONFIG.bounds[0][0] &&
+    centroidLongitude <= PILOT_CONFIG.bounds[1][0] &&
+    centroidLatitude >= PILOT_CONFIG.bounds[0][1] &&
+    centroidLatitude <= PILOT_CONFIG.bounds[1][1];
+
+  if (!isWithinPilotBounds) {
+    requiresLocationReview = true;
+    issues.push(
+      `Coordinates (${centroidLatitude.toFixed(4)}, ${centroidLongitude.toFixed(4)}) fall outside designated Greater Noida pilot bounding box. Manual jurisdiction verification is required.`,
+    );
+    if (qualityBand === "HIGH" || qualityBand === "MEDIUM") {
+      qualityBand = "LOW";
+    }
+  }
+
+  const result: LocationVerificationResult = {
+    isVerified: qualityBand !== "REJECTED",
+    centroidLatitude,
+    centroidLongitude,
+    spatialUncertaintyMeters,
+    qualityBand,
+    outlierCount: usable.length - inlierSamples.length,
+    samplesEvaluated: assessments.length,
+    sampleAssessments: assessments,
+    clustersDetected,
+    requiresLocationReview,
+    algorithmVersion: LOCATION_ALGORITHM_VERSION,
+    usedFallbackSamples: fallbackSamples > 0,
+    isWithinPilotBounds,
+    issues,
+  };
+
+  return { result };
+}
+
+/**
+ * Stage 4 worker wrapper. Persists the outcome while preserving every original
+ * capture coordinate (raw samples remain untouched in the raw report document).
+ */
+export async function executeStage4LocationVerification(report: RawReportDocument): Promise<
+  | {
+      stage: 4;
+      stageName: string;
+      success: false;
+      data?: LocationVerificationResult;
+      error: string;
+      isRetryable: boolean;
+    }
+  | {
+      stage: 4;
+      stageName: string;
+      success: true;
+      data: LocationVerificationResult;
+      error?: undefined;
+      isRetryable?: false;
+    }
+> {
+  const stageName = "Location Verification & Geodesic Clustering";
+
+  try {
+    const { result, error } = analyzeLocationSamples({
+      photos: report.evidencePhotos.map((photo) => ({ gpsSamples: photo.gpsSamples || [] })),
+    });
+
     const reportsColl = await getReportsCollection();
+
+    if (!result || error) {
+      await reportsColl.updateOne(
+        { reportId: report.reportId },
+        { $set: { status: "LOCATION_VERIFICATION_FAILED", updatedAt: new Date().toISOString() } },
+      );
+      return {
+        stage: 4,
+        stageName,
+        success: false,
+        error: error || "Location verification failed.",
+        isRetryable: false,
+      };
+    }
+
     await reportsColl.updateOne(
       { reportId: report.reportId },
       {
         $set: {
-          status: result.isVerified ? "MATCHING_PENDING" : "LOCATION_VERIFICATION_FAILED",
+          status: result.isVerified ? "LOCATION_VERIFIED" : "LOCATION_VERIFICATION_FAILED",
           updatedAt: new Date().toISOString(),
         },
       },
     );
 
+    if (result.isVerified) {
+      return {
+        stage: 4,
+        stageName,
+        success: true,
+        data: result,
+      };
+    }
+
     return {
       stage: 4,
       stageName,
-      success: result.isVerified,
+      success: false,
       data: result,
-      error: !result.isVerified ? issues.join("; ") : undefined,
+      error: result.issues.join("; "),
+      isRetryable: false,
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -217,7 +427,7 @@ export async function executeStage4LocationVerification(
       stageName,
       success: false,
       error: `Stage 4 location verification failed: ${msg}`,
-      isRetryable: false,
+      isRetryable: true,
     };
   }
 }
