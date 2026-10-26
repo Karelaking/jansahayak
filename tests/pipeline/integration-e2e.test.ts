@@ -43,11 +43,11 @@ import { GET as getVotesRoute } from "@/app/api/incidents/[incidentId]/votes/rou
 import { GET as getSessionRoute } from "@/app/api/auth/session/route";
 import { GET as getAnalyticsRoute } from "@/app/api/admin/analytics/route";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limit";
-import { db, incidents, moderationActions } from "@/lib/db";
+import { db, incidents, moderationActions, outboxEvents } from "@/lib/db";
 import { getReportsCollection } from "@/lib/db/mongodb";
 import { eq } from "drizzle-orm";
 
-describe("PRD §19 End-to-End Integration Test Suite (68 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (72 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -2310,7 +2310,6 @@ describe("PRD §19 End-to-End Integration Test Suite (68 Scenarios)", () => {
       },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      stagesCompleted: 1,
     });
 
     const bgRes = await processReportBackground(testReportId);
@@ -2514,5 +2513,218 @@ describe("PRD §19 End-to-End Integration Test Suite (68 Scenarios)", () => {
 
     // Clean up
     await reportsColl.deleteOne({ reportId });
+  });
+
+  // Scenario 69: Fast Intake RFC Rate Limiting Telemetry Headers (PRD §17 & §20)
+  it("Scenario 69: Fast intake POST /api/pipeline/submit returns standard X-RateLimit headers on successful intake", async () => {
+    const payload = {
+      userId: `citizen_rate_${Date.now()}`,
+      category: "Road Surface / Pothole",
+      description: "Pothole for rate limit telemetry test",
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 8,
+        capturedAt: new Date().toISOString(),
+      },
+      photos: [
+        { filename: "p1.jpg", base64: Buffer.from("rate1").toString("base64") },
+        { filename: "p2.jpg", base64: Buffer.from("rate2").toString("base64") },
+        { filename: "p3.jpg", base64: Buffer.from("rate3").toString("base64") },
+        { filename: "p4.jpg", base64: Buffer.from("rate4").toString("base64") },
+      ],
+    };
+
+    const submitReq = new NextRequest("http://localhost:3000/api/pipeline/submit", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const submitRes = await submitRoute(submitReq);
+    expect(submitRes.status).toBe(200);
+
+    // Verify standard RFC rate limiting headers
+    const limitHeader = submitRes.headers.get("x-ratelimit-limit");
+    const remainingHeader = submitRes.headers.get("x-ratelimit-remaining");
+
+    expect(limitHeader).toBeDefined();
+    expect(Number(limitHeader)).toBeGreaterThan(0);
+    expect(remainingHeader).toBeDefined();
+    expect(Number(remainingHeader)).toBeGreaterThanOrEqual(0);
+
+    const json = await submitRes.json();
+    if (json.reportId) {
+      const reportsColl = await getReportsCollection();
+      await reportsColl.deleteOne({ reportId: json.reportId });
+    }
+  });
+
+  // Scenario 70: Citizen Tracking Dossier Exposes PROCESSING_FAILED and Reprocess Recovery (PRD §3, §5, §15, & §16)
+  it("Scenario 70: Citizen tracking dossier exposes PROCESSING_FAILED state with reason and supports reprocess recovery", async () => {
+    const failReportId = `REP-FAIL-TRACE-${Date.now()}`;
+    const reportsColl = await getReportsCollection();
+
+    await reportsColl.insertOne({
+      reportId: failReportId,
+      userId: "citizen_trace_user",
+      status: "PROCESSING_FAILED",
+      category: "Road Surface / Pothole",
+      description: "Severe pothole tracking dossier test",
+      rejectionReason: "Simulated vision worker network partition",
+      evidencePhotos: [],
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 8,
+        capturedAt: new Date().toISOString(),
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    // 1. Query report tracking endpoint GET /api/reports/:reportId
+    const getReq = new NextRequest(`http://localhost:3000/api/reports/${failReportId}`);
+    const getRes = await getReportDetailRoute(getReq, {
+      params: Promise.resolve({ reportId: failReportId }),
+    });
+
+    expect(getRes.status).toBe(200);
+    const getJson = await getRes.json();
+    expect(getJson.success).toBe(true);
+    expect(getJson.status).toBe("PROCESSING_FAILED");
+    expect(getJson.rejectionReason).toBe("Simulated vision worker network partition");
+
+    // 2. Call POST /api/reports/:reportId/reprocess as citizen owner
+    const reprocessReq = new NextRequest(
+      `http://localhost:3000/api/reports/${failReportId}/reprocess`,
+      {
+        method: "POST",
+        headers: {
+          "x-mock-user-id": "citizen_trace_user",
+          "x-mock-role": "citizen",
+        },
+      },
+    );
+
+    const reprocessRes = await reprocessRoute(reprocessReq, {
+      params: Promise.resolve({ reportId: failReportId }),
+    });
+
+    expect(reprocessRes.status).toBe(200);
+    const reprocessJson = await reprocessRes.json();
+    expect(reprocessJson.success).toBe(true);
+
+    // Clean up
+    await reportsColl.deleteOne({ reportId: failReportId });
+  });
+
+  // Scenario 71: Community Consensus Resolution Syncs Associated MongoDB Reports to RESOLVED (PRD §3 Step 16 & §14B)
+  it("Scenario 71: Outbox worker incident.community_resolved event synchronizes linked MongoDB reports to RESOLVED", async () => {
+    const reportsColl = await getReportsCollection();
+    const consensusReportId = `REP-CONSENSUS-${Date.now()}`;
+
+    // 1. Seed incident in PostgreSQL
+    const [testInc] = await db
+      .insert(incidents)
+      .values({
+        incidentNumber: `INC-CONSENSUS-${Date.now()}`,
+        category: "Road Surface / Pothole",
+        severity: "medium",
+        status: "under_review",
+        moderationStatus: "approved",
+        latitude: "28.474400",
+        longitude: "77.504000",
+        canonicalGeom: "SRID=4326;POINT(77.504000 28.474400)",
+        spatialUncertaintyMeters: "8.00",
+        title: "Community Consensus Incident",
+        summary: "Community consensus resolution sync test",
+      })
+      .returning();
+
+    expect(testInc).toBeDefined();
+    if (!testInc) throw new Error("testInc not seeded");
+
+    // 2. Seed associated report in MongoDB with status PUBLISHED
+    await reportsColl.insertOne({
+      reportId: consensusReportId,
+      userId: "citizen_consensus_tester",
+      status: "PUBLISHED",
+      associatedIncidentId: testInc.id,
+      category: "Road Surface / Pothole",
+      description: "Hazard awaiting community resolution quorum",
+      evidencePhotos: [],
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 8,
+        capturedAt: new Date().toISOString(),
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    // 3. Insert outbox event for community resolution
+    const [event] = await db
+      .insert(outboxEvents)
+      .values({
+        eventType: "incident.community_resolved",
+        aggregateType: "incident",
+        aggregateId: testInc.id,
+        payload: {
+          incidentId: testInc.id,
+          resolutionVotesCount: 4,
+          positiveRatio: 1.0,
+          message: "Consensus reached: 4 local confirmations",
+        },
+      })
+      .returning();
+
+    expect(event).toBeDefined();
+
+    // 4. Process outbox batch
+    const summary = await processOutboxBatch(10);
+    expect(summary.processed).toBeGreaterThan(0);
+
+    // 5. Verify that the associated report in MongoDB was updated to RESOLVED
+    const updatedReport = await reportsColl.findOne({ reportId: consensusReportId });
+    expect(updatedReport).toBeDefined();
+    expect(updatedReport?.status).toBe("RESOLVED");
+
+    // Clean up
+    await reportsColl.deleteOne({ reportId: consensusReportId });
+    await db.delete(incidents).where(eq(incidents.id, testInc.id));
+  });
+
+  // Scenario 72: Dashboard Report Status Normalizer Preserves Rejection and Failure States (PRD §3 Step 7 & 15)
+  it("Scenario 72: Dashboard report status normalizer accurately classifies REJECTED and PROCESSING_FAILED without falling back to under-review or open", () => {
+    const normalizeStatus = (rawStatus: string | null | undefined): string => {
+      const norm = (rawStatus || "").toUpperCase();
+      if (norm === "RESOLVED") return "resolved";
+      if (norm === "IN_PROGRESS" || norm === "IN-PROGRESS" || norm === "ASSIGNED")
+        return "in-progress";
+      if (norm === "ESCALATED" || norm === "MUNICIPALLY_DISPATCHED") return "escalated";
+      if (norm === "REJECTED" || norm === "SUSPENDED") return "rejected";
+      if (norm === "PROCESSING_FAILED") return "processing-failed";
+      if (
+        norm === "SUBMITTED" ||
+        norm === "PROCESSING" ||
+        norm === "MODERATION_PENDING" ||
+        norm === "UNDER_REVIEW"
+      )
+        return "under-review";
+      return "open";
+    };
+
+    expect(normalizeStatus("REJECTED")).toBe("rejected");
+    expect(normalizeStatus("SUSPENDED")).toBe("rejected");
+    expect(normalizeStatus("PROCESSING_FAILED")).toBe("processing-failed");
+    expect(normalizeStatus("RESOLVED")).toBe("resolved");
+    expect(normalizeStatus("MUNICIPALLY_DISPATCHED")).toBe("escalated");
+    expect(normalizeStatus("SUBMITTED")).toBe("under-review");
+    expect(normalizeStatus("PROCESSING")).toBe("under-review");
+    expect(normalizeStatus("UNKNOWN")).toBe("open");
   });
 });

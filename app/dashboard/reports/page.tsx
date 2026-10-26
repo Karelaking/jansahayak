@@ -122,6 +122,20 @@ function getStatusBadge(status: string, publicOpinionStatus?: string) {
           Under Review
         </span>
       );
+    case "rejected":
+      return (
+        <span className="status-rejected inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#f3d9cf] text-[#8c2e1b] border border-[#fecaca]">
+          <i aria-hidden="true" className="size-1.5 rounded-full bg-[#8c2e1b]" />
+          Rejected
+        </span>
+      );
+    case "processing-failed":
+      return (
+        <span className="status-failed inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-900 border border-rose-200">
+          <i aria-hidden="true" className="size-1.5 rounded-full bg-rose-600" />
+          Processing Interrupted
+        </span>
+      );
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
@@ -240,7 +254,15 @@ export default function ReportsPage() {
                 if (norm === "IN_PROGRESS" || norm === "IN-PROGRESS" || norm === "ASSIGNED")
                   return "in-progress";
                 if (norm === "ESCALATED" || norm === "MUNICIPALLY_DISPATCHED") return "escalated";
-                if (norm === "REJECTED" || norm === "SUSPENDED") return "under-review";
+                if (norm === "REJECTED" || norm === "SUSPENDED") return "rejected";
+                if (norm === "PROCESSING_FAILED") return "processing-failed";
+                if (
+                  norm === "SUBMITTED" ||
+                  norm === "PROCESSING" ||
+                  norm === "MODERATION_PENDING" ||
+                  norm === "UNDER_REVIEW"
+                )
+                  return "under-review";
                 return "open";
               })(),
               latitude: r.submissionLocation?.latitude || 28.4744,

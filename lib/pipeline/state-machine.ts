@@ -83,8 +83,10 @@ export const REPORT_TRANSITIONS: Readonly<Record<ProcessingStatus, readonly Proc
   ],
   APPROVED: ["PUBLICATION_PENDING", "PUBLISHED", "REJECTED"],
   PUBLICATION_PENDING: ["PUBLISHED", "APPROVED", "PROCESSING_FAILED"],
-  PUBLISHED: ["MUNICIPALLY_DISPATCHED", "SUSPENDED", "REJECTED"],
-  MUNICIPALLY_DISPATCHED: ["SUSPENDED", "PUBLISHED"],
+  PUBLISHED: ["MUNICIPALLY_DISPATCHED", "SUSPENDED", "REJECTED", "RESOLVED", "IN_PROGRESS"],
+  MUNICIPALLY_DISPATCHED: ["SUSPENDED", "PUBLISHED", "RESOLVED", "IN_PROGRESS"],
+  IN_PROGRESS: ["RESOLVED", "PUBLISHED", "SUSPENDED"],
+  RESOLVED: ["IN_PROGRESS", "PUBLISHED"],
   // Terminal by default; the explicit audited reprocess path is handled below.
   REJECTED: [],
   PROCESSING_RETRY_PENDING: ["PROCESSING", "PROCESSING_FAILED", "REJECTED"],
@@ -99,6 +101,8 @@ export const PUBLISHABLE_REPORT_STATES: readonly ProcessingStatus[] = [
   "PUBLISHED",
   "MUNICIPALLY_DISPATCHED",
   "SUSPENDED",
+  "IN_PROGRESS",
+  "RESOLVED",
 ];
 
 /** States in which a report must never be published. */
@@ -259,7 +263,12 @@ export function isTerminalStatus(status: ProcessingStatus): boolean {
 }
 
 export function isPublishedStatus(status: ProcessingStatus): boolean {
-  return status === "PUBLISHED" || status === "MUNICIPALLY_DISPATCHED";
+  return (
+    status === "PUBLISHED" ||
+    status === "MUNICIPALLY_DISPATCHED" ||
+    status === "RESOLVED" ||
+    status === "IN_PROGRESS"
+  );
 }
 
 /** Publication is only legal from a moderation-approved state (PRD §13). */

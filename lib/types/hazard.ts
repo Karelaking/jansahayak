@@ -15,7 +15,9 @@ export type HazardStatusKey =
   | "in-progress"
   | "community-verified"
   | "escalated"
-  | "resolved";
+  | "resolved"
+  | "rejected"
+  | "processing-failed";
 
 export interface HazardReport {
   id: string;
@@ -30,14 +32,7 @@ export interface HazardReport {
   time?: string;
   hoursAgo?: number;
   severity: "critical" | "high" | "medium" | "moderate" | "low" | "minor";
-  status:
-    | "open"
-    | "in-progress"
-    | "escalated"
-    | "resolved"
-    | "under-review"
-    | "assigned"
-    | "community-verified";
+  status: HazardStatusKey;
   statusLabel?: string;
   votes?: number;
   verificationsCount?: number;

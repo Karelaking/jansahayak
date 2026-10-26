@@ -38,7 +38,9 @@ export type ProcessingStatus =
   | "MUNICIPALLY_DISPATCHED"
   | "PROCESSING_RETRY_PENDING"
   | "PROCESSING_FAILED"
-  | "SUSPENDED";
+  | "SUSPENDED"
+  | "IN_PROGRESS"
+  | "RESOLVED";
 
 export type LocationQualityBand = "HIGH" | "MEDIUM" | "LOW" | "REJECTED";
 

@@ -3,6 +3,7 @@ import { eq, and, lte, or, asc } from "drizzle-orm";
 import { processReportBackground } from "./background-processor";
 import { dispatchMunicipalReportEmail } from "@/lib/email/municipal-dispatcher";
 import { dispatchVoterProgressNotification } from "@/lib/email/voter-notifier";
+import { getReportsCollection } from "@/lib/db/mongodb";
 
 export interface OutboxProcessingSummary {
   processed: number;
@@ -131,6 +132,22 @@ export async function processOutboxBatch(batchSize: number = 20): Promise<Outbox
               eventType: "incident.community_resolved",
               message: event.payload?.message as string | undefined,
             });
+
+            // Atomically synchronize linked reports in MongoDB to RESOLVED (PRD §3 step 16 & §14B)
+            try {
+              const reportsColl = await getReportsCollection();
+              await reportsColl.updateMany(
+                { associatedIncidentId: event.aggregateId },
+                {
+                  $set: {
+                    status: "RESOLVED",
+                    updatedAt: new Date().toISOString(),
+                  },
+                },
+              );
+            } catch (mongoErr) {
+              console.warn("[Outbox-Worker] Failed to sync RESOLVED status to MongoDB:", mongoErr);
+            }
             break;
           }
 
@@ -156,6 +173,25 @@ export async function processOutboxBatch(batchSize: number = 20): Promise<Outbox
               eventType: "incident.reopened_by_community",
               message: event.payload?.message as string | undefined,
             });
+
+            // Atomically synchronize linked reports in MongoDB to IN_PROGRESS (PRD §3 step 16 & §14B)
+            try {
+              const reportsColl = await getReportsCollection();
+              await reportsColl.updateMany(
+                { associatedIncidentId: event.aggregateId },
+                {
+                  $set: {
+                    status: "IN_PROGRESS",
+                    updatedAt: new Date().toISOString(),
+                  },
+                },
+              );
+            } catch (mongoErr) {
+              console.warn(
+                "[Outbox-Worker] Failed to sync IN_PROGRESS status to MongoDB:",
+                mongoErr,
+              );
+            }
             break;
           }
 

@@ -176,18 +176,27 @@ export async function POST(req: NextRequest) {
       console.error(`[Submit] Asynchronous background analysis error for ${reportId}:`, err);
     });
 
-    return NextResponse.json({
-      success: true,
-      reportId,
-      status: "SUBMITTED",
-      summary: {
+    return NextResponse.json(
+      {
+        success: true,
         reportId,
         status: "SUBMITTED",
-        stagesCompleted: 1,
-        message: "Report accepted and queued for background analysis",
-        durationMs: Date.now() - startTime,
+        summary: {
+          reportId,
+          status: "SUBMITTED",
+          stagesCompleted: 1,
+          message: "Report accepted and queued for background analysis",
+          durationMs: Date.now() - startTime,
+        },
       },
-    });
+      {
+        status: 200,
+        headers: {
+          "X-RateLimit-Limit": String(rateCheck.limit),
+          "X-RateLimit-Remaining": String(rateCheck.remaining),
+        },
+      },
+    );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     const isConnRefused = msg.includes("ECONNREFUSED") || msg.includes("connect");

@@ -102,14 +102,18 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
     Array<{ filename: string; base64: string; previewUrl: string }>
   >([]);
 
+  // Reprocessing Retry State (PRD §5 & §15)
+  const [isRetrying, setIsRetrying] = React.useState(false);
+  const [retryNotice, setRetryNotice] = React.useState<string | null>(null);
+
   const reportRef = React.useRef<ReportDetail | null>(null);
-  reportRef.current = report;
+
+  React.useEffect(() => {
+    reportRef.current = report;
+  }, [report]);
 
   const fetchReport = React.useCallback(
     async (isInitial = false) => {
-      if (isInitial && !reportRef.current) {
-        setIsLoading(true);
-      }
       try {
         const res = await fetch(`/api/reports/${encodeURIComponent(reportId)}`);
         const data = await res.json();
@@ -119,6 +123,7 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
         }
 
         setReport(data);
+        reportRef.current = data;
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -130,6 +135,26 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
     },
     [reportId],
   );
+
+  const handleRetryProcessing = async () => {
+    setIsRetrying(true);
+    setRetryNotice(null);
+    try {
+      const res = await fetch(`/api/reports/${encodeURIComponent(reportId)}/reprocess`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to trigger re-processing.");
+      }
+      setRetryNotice("Reprocessing initiated. The background worker is re-analyzing the report.");
+      await fetchReport();
+    } catch (err) {
+      setRetryNotice(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsRetrying(false);
+    }
+  };
 
   React.useEffect(() => {
     fetchReport(true);
@@ -224,6 +249,10 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
     }
 
     if (report.status === "REJECTED" && stageNum >= 7) {
+      return "failed";
+    }
+
+    if (report.status === "PROCESSING_FAILED" && stageNum >= 2) {
       return "failed";
     }
 
@@ -348,6 +377,11 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
                         <AlertCircle className="size-3" />
                         <span>Not Actionable / Out-of-Scope</span>
                       </Badge>
+                    ) : report.status === "PROCESSING_FAILED" ? (
+                      <Badge className="bg-rose-100 text-rose-900 border-rose-300 font-medium text-xs gap-1">
+                        <AlertTriangle className="size-3 text-rose-700" />
+                        <span>Processing Interrupted</span>
+                      </Badge>
                     ) : (
                       <Badge className="bg-[#eef1e9] text-[#17382f] border-transparent font-medium text-xs gap-1">
                         <Clock className="size-3" />
@@ -422,6 +456,36 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
                   Preserved in database for transparency & civic auditability. No public map pin
                   generated.
                 </p>
+              </div>
+            )}
+
+            {report.status === "PROCESSING_FAILED" && (
+              <div className="border border-rose-300 bg-rose-50/80 rounded-xl p-4 sm:p-5 text-xs text-rose-900 space-y-3">
+                <div className="flex items-center gap-2 font-bold text-rose-950 text-sm">
+                  <AlertTriangle className="size-4 text-rose-700 shrink-0" />
+                  <span>Automated Processing Interrupted</span>
+                </div>
+                <p className="text-rose-800 leading-relaxed text-[11px]">
+                  {report.rejectionReason ||
+                    "An unexpected error occurred during background analysis. Your uploaded photographs and GPS samples are safely preserved."}
+                </p>
+                {retryNotice && (
+                  <p className="text-emerald-800 font-semibold text-[11px] bg-emerald-100/70 p-2 rounded-lg border border-emerald-300">
+                    {retryNotice}
+                  </p>
+                )}
+                <div className="pt-1">
+                  <Button
+                    type="button"
+                    onClick={handleRetryProcessing}
+                    disabled={isRetrying}
+                    size="sm"
+                    className="bg-[#0e2b24] hover:bg-[#1c4b3e] text-white text-xs h-8 px-3 rounded-lg flex items-center gap-1.5"
+                  >
+                    <RefreshCw className={`size-3 ${isRetrying ? "animate-spin" : ""}`} />
+                    <span>{isRetrying ? "Re-queuing Analysis..." : "Retry Analysis"}</span>
+                  </Button>
+                </div>
               </div>
             )}
 
