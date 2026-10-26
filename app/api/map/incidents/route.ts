@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, incidents } from "@/lib/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, ne } from "drizzle-orm";
 
 /**
  * PRD §16 Public Map Incidents Endpoint
@@ -12,7 +12,11 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
 
-    const conditions = [eq(incidents.isPublished, true), eq(incidents.status, "approved")];
+    const conditions = [
+      eq(incidents.isPublished, true),
+      ne(incidents.status, "rejected"),
+      ne(incidents.status, "suspended"),
+    ];
 
     if (category && category !== "all") {
       conditions.push(eq(incidents.category, category));

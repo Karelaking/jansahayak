@@ -184,13 +184,87 @@ export default function ReportsPage() {
     });
   }, [reports, activeTab, searchQuery]);
 
-  // Handle status update inside the detail dialog
-  const handleStatusChange = (newStatus: HazardReport["status"]) => {
+  const [isUpdatingStatus, setIsUpdatingStatus] = React.useState(false);
+
+  // Handle status update inside the detail dialog and persist to backend
+  const handleStatusChange = async (newStatus: HazardReport["status"]) => {
     if (!selectedReport) return;
-    setReports((prev) =>
-      prev.map((r) => (r.id === selectedReport.id ? { ...r, status: newStatus } : r)),
+    setIsUpdatingStatus(true);
+    try {
+      const apiStatus =
+        newStatus === "in-progress" ? "in_progress" : newStatus === "open" ? "approved" : newStatus;
+
+      await fetch("/api/admin/escalations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          incidentId: selectedReport.id,
+          newStatus: apiStatus,
+          officialReply: `Status updated to ${newStatus} via Reports Registry dashboard`,
+        }),
+      }).catch((err) => console.warn("Failed to persist status to backend:", err));
+
+      setReports((prev) =>
+        prev.map((r) => (r.id === selectedReport.id ? { ...r, status: newStatus } : r)),
+      );
+      setSelectedReport((prev) => (prev ? { ...prev, status: newStatus } : null));
+    } catch (err) {
+      console.error("Error updating status:", err);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // Export filtered reports to CSV (RFC 4180 format)
+  const handleExportCsv = () => {
+    if (filteredReports.length === 0) return;
+    const headers = [
+      "Report ID",
+      "Title",
+      "Category",
+      "Severity",
+      "Status",
+      "Latitude",
+      "Longitude",
+      "Location / Landmark",
+      "Assigned Authority",
+      "Reported At",
+      "Description",
+    ];
+
+    const escapeCsv = (val: string | number | undefined | null) => {
+      if (val === undefined || val === null) return '""';
+      const str = String(val);
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const rows = filteredReports.map((r) => [
+      escapeCsv(r.id),
+      escapeCsv(r.title),
+      escapeCsv(r.category),
+      escapeCsv(r.severity),
+      escapeCsv(r.status),
+      r.latitude ?? "",
+      r.longitude ?? "",
+      escapeCsv(r.location || r.landmark || ""),
+      escapeCsv(r.authority || r.officialRouting || "GNIDA Civil Maintenance"),
+      escapeCsv(r.reportedAt || r.time || ""),
+      escapeCsv(r.description || ""),
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `jansahayak_hazard_reports_${new Date().toISOString().slice(0, 10)}.csv`,
     );
-    setSelectedReport((prev) => (prev ? { ...prev, status: newStatus } : null));
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -222,7 +296,13 @@ export default function ReportsPage() {
             <span>Refresh</span>
           </Button>
 
-          <Button variant="outline" size="sm" className="gap-1.5 h-9 sm:h-8">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 h-9 sm:h-8"
+            onClick={handleExportCsv}
+            disabled={filteredReports.length === 0}
+          >
             <Download className="size-3.5" />
             <span className="hidden sm:inline">Export CSV</span>
             <span className="sm:hidden">CSV</span>
@@ -508,6 +588,7 @@ export default function ReportsPage() {
                 <div className="flex flex-wrap gap-2">
                   <Button
                     size="xs"
+                    disabled={isUpdatingStatus}
                     variant={selectedReport.status === "open" ? "default" : "outline"}
                     onClick={() => handleStatusChange("open")}
                   >
@@ -515,6 +596,7 @@ export default function ReportsPage() {
                   </Button>
                   <Button
                     size="xs"
+                    disabled={isUpdatingStatus}
                     variant={selectedReport.status === "in-progress" ? "default" : "outline"}
                     onClick={() => handleStatusChange("in-progress")}
                   >
@@ -522,6 +604,7 @@ export default function ReportsPage() {
                   </Button>
                   <Button
                     size="xs"
+                    disabled={isUpdatingStatus}
                     variant={selectedReport.status === "escalated" ? "default" : "outline"}
                     onClick={() => handleStatusChange("escalated")}
                   >
@@ -529,6 +612,7 @@ export default function ReportsPage() {
                   </Button>
                   <Button
                     size="xs"
+                    disabled={isUpdatingStatus}
                     variant={selectedReport.status === "resolved" ? "default" : "outline"}
                     onClick={() => handleStatusChange("resolved")}
                   >
@@ -545,7 +629,7 @@ export default function ReportsPage() {
                   className="gap-1.5 text-xs bg-[#0e2b24] hover:bg-[#1c4b3e] text-white"
                 >
                   <FileText className="size-3.5" />
-                  <span>Track Full 8-Stage Dossier</span>
+                  <span>Track Multi-Stage Civic Dossier</span>
                 </Button>
               </Link>
               <Button variant="outline" size="sm" onClick={() => setSelectedReport(null)}>

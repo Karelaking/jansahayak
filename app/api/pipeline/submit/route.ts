@@ -5,10 +5,33 @@ import { executeStage1Intake } from "@/lib/pipeline/intake";
 import { processReportBackground } from "@/lib/pipeline/background-processor";
 import { db, outboxEvents } from "@/lib/db";
 import { IngestedEvidencePhoto, ReportSubmissionPayload } from "@/lib/pipeline/types";
+import { checkRateLimit } from "@/lib/security/rate-limit";
 
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
   try {
+    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
+    const rateCheck = checkRateLimit(`submit_${clientIp}`, { limit: 15, windowMs: 60 * 1000 });
+    if (!rateCheck.allowed) {
+      const retryAfterSec = Math.ceil(rateCheck.resetMs / 1000);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Too many submission attempts. Please wait before submitting another report.",
+          retryAfterSeconds: retryAfterSec,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(retryAfterSec),
+            "X-RateLimit-Limit": String(rateCheck.limit),
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(Math.ceil((Date.now() + rateCheck.resetMs) / 1000)),
+          },
+        },
+      );
+    }
+
     const session = await getCurrentUserSession(req);
     const contentType = req.headers.get("content-type") || "";
     const isSync = req.nextUrl.searchParams.get("sync") === "true";

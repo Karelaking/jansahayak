@@ -161,8 +161,8 @@ You must return a valid JSON object conforming exactly to this structure:
             }
             lastErrorMessage = `OpenRouter API error ${response.status} (${response.statusText})${errorDetails}`;
 
-            // If 404 (model not found/deprecated) or 400 (model unsupported or image decode failure), retry with next fallback candidate
-            if (response.status === 404 || response.status === 400) {
+            // If 404 (model not found/deprecated), 400 (model unsupported/image decode failure), or 5xx (upstream provider downtime/rate exhaustion), retry with next fallback candidate
+            if (response.status === 404 || response.status === 400 || response.status >= 500) {
               console.warn(
                 `[AI-Analysis] Model ${currentModel} returned ${response.status}. Attempting fallback...`,
               );

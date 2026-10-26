@@ -88,6 +88,43 @@ export default function AnalyticsPage() {
     }));
   }, [metrics]);
 
+  const handleExportAuditReport = () => {
+    if (!metrics) return;
+    const auditPayload = {
+      auditDossierId: `AUDIT-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Date.now().toString().slice(-4)}`,
+      platform: "JanSahayak SafeStreets",
+      jurisdiction: "Greater Noida Industrial Development Authority (GNIDA)",
+      exportedAt: new Date().toISOString(),
+      summary: {
+        totalIncidentsRecorded: metrics.totalIncidents,
+        publishedOnPublicMap: metrics.publishedIncidents,
+        criticalSeverityHazards: metrics.severityCounts.critical,
+        moderationQueuePending: metrics.underReviewIncidents,
+        approvedIncidents: metrics.approvedIncidents,
+        rejectedIncidents: metrics.rejectedIncidents,
+        totalRawReports: metrics.totalReports,
+      },
+      categoryDistribution: metrics.categoryCounts,
+      severityBreakdown: metrics.severityCounts,
+      outboxPipelineTelemetry: metrics.outboxCounts,
+    };
+
+    const blob = new Blob([JSON.stringify(auditPayload, null, 2)], {
+      type: "application/json;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `jansahayak_civic_safety_audit_${new Date().toISOString().slice(0, 10)}.json`,
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="flex flex-col gap-6">
       {/* ── Page Header ─── */}
@@ -119,7 +156,13 @@ export default function AnalyticsPage() {
             <span>Refresh</span>
           </Button>
 
-          <Button variant="outline" size="sm" className="gap-1.5 h-9 sm:h-8">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 h-9 sm:h-8"
+            onClick={handleExportAuditReport}
+            disabled={!metrics || isLoading}
+          >
             <Download className="size-3.5" />
             <span className="hidden sm:inline">Export Audit Report</span>
             <span className="sm:hidden">Report</span>

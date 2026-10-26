@@ -23,8 +23,11 @@ import {
 import { POST as processPipelineRoute } from "@/app/api/pipeline/process/route";
 import { GET as getReportDetailRoute } from "@/app/api/reports/[reportId]/route";
 import { GET as getDossierRoute } from "@/app/api/admin/incidents/[incidentId]/dossier/route";
+import { POST as submitRoute } from "@/app/api/pipeline/submit/route";
+import { GET as getMapIncidentsRoute } from "@/app/api/map/incidents/route";
+import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limit";
 
-describe("PRD §19 End-to-End Integration Test Suite (36 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (38 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -965,5 +968,66 @@ describe("PRD §19 End-to-End Integration Test Suite (36 Scenarios)", () => {
     expect(authRes.status).toBe(404);
     const authJson = await authRes.json();
     expect(authJson.error).toMatch(/not found/i);
+  });
+
+  // Scenario 37: Intake Gateway Rate Limiting & Abuse Prevention (PRD §17)
+  it("Scenario 37: Intake gateway enforces rate limits and responds with HTTP 429 when threshold exceeded", async () => {
+    const testIp = "192.168.10.42";
+    resetRateLimit(`submit_${testIp}`);
+
+    // Exhaust the rate limit
+    for (let i = 0; i < 15; i++) {
+      const check = checkRateLimit(`submit_${testIp}`, { limit: 15, windowMs: 60000 });
+      expect(check.allowed).toBe(true);
+    }
+
+    // 16th request must be rejected by checkRateLimit
+    const overLimitCheck = checkRateLimit(`submit_${testIp}`, { limit: 15, windowMs: 60000 });
+    expect(overLimitCheck.allowed).toBe(false);
+    expect(overLimitCheck.remaining).toBe(0);
+    expect(overLimitCheck.resetMs).toBeGreaterThan(0);
+
+    // Verify submit route returns HTTP 429 and Retry-After header
+    const overLimitReq = new NextRequest("http://localhost:3000/api/pipeline/submit", {
+      method: "POST",
+      headers: {
+        "x-forwarded-for": testIp,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ category: "Road Surface", description: "Rate limit test" }),
+    });
+
+    const res = await submitRoute(overLimitReq);
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBeDefined();
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.error).toMatch(/too many submission attempts/i);
+
+    // Clean up
+    resetRateLimit(`submit_${testIp}`);
+  });
+
+  // Scenario 38: Public Map Lifecycle Query Inclusion (PRD §13 & §16)
+  it("Scenario 38: Public map incidents API omits rejected/suspended incidents and returns active/remediated hazards", async () => {
+    const mapReq = new NextRequest("http://localhost:3000/api/map/incidents", {
+      method: "GET",
+    });
+
+    const res = await getMapIncidentsRoute(mapReq);
+    expect(res.status).toBe(200);
+
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(Array.isArray(json.incidents)).toBe(true);
+
+    // Ensure no returned incident is marked as rejected or suspended
+    for (const incident of json.incidents) {
+      expect(incident.status).not.toBe("rejected");
+      expect(incident.status).not.toBe("suspended");
+      expect(incident.statusLabel).toBeDefined();
+      expect(typeof incident.latitude).toBe("number");
+      expect(typeof incident.longitude).toBe("number");
+    }
   });
 });
