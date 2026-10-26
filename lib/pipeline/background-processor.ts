@@ -54,9 +54,12 @@ async function logStage(res: StageExecutionResult<unknown>, reportId: string) {
  */
 export async function processReportBackground(
   reportId: string,
+  options: { force?: boolean } = {},
 ): Promise<BackgroundProcessingResult> {
   const startTime = Date.now();
-  console.log(`[Background-Worker] Starting asynchronous processing for report: ${reportId}`);
+  console.log(
+    `[Background-Worker] Starting asynchronous processing for report: ${reportId}${options.force ? " (force=true)" : ""}`,
+  );
 
   try {
     const reportsColl = await getReportsCollection();
@@ -73,11 +76,12 @@ export async function processReportBackground(
       };
     }
 
-    // Short-circuit if already processed or terminated
+    // Short-circuit if already processed or terminated, unless force reprocessing is requested (PRD §5, §15)
     if (
-      report.status === "PUBLISHED" ||
-      report.status === "REJECTED" ||
-      report.status === "MUNICIPALLY_DISPATCHED"
+      !options.force &&
+      (report.status === "PUBLISHED" ||
+        report.status === "REJECTED" ||
+        report.status === "MUNICIPALLY_DISPATCHED")
     ) {
       console.log(
         `[Background-Worker] Report ${reportId} already in terminal state: ${report.status}`,
@@ -91,12 +95,13 @@ export async function processReportBackground(
       };
     }
 
-    // Transition to PROCESSING
+    // Transition to PROCESSING and clear prior rejection reason if force-reprocessing
     await reportsColl.updateOne(
       { reportId },
       {
         $set: {
           status: "PROCESSING",
+          rejectionReason: null,
           updatedAt: new Date().toISOString(),
         },
       },

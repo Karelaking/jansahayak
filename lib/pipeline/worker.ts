@@ -50,6 +50,19 @@ export async function processOutboxBatch(batchSize: number = 20): Promise<Outbox
     }
 
     for (const event of pendingEvents) {
+      // PRD §15 Bounded exponential backoff with jitter for retried events
+      if (event.retryCount > 0) {
+        const baseBackoffMs = Math.min(300, Math.pow(2, event.retryCount) * 5) * 1000;
+        const jitterMs = Math.floor(Math.random() * 2000);
+        const backoffMs = baseBackoffMs + jitterMs;
+        const eventAgeMs = Date.now() - new Date(event.createdAt).getTime();
+
+        if (eventAgeMs < backoffMs) {
+          // Backoff window has not yet elapsed; skip event for this batch tick
+          continue;
+        }
+      }
+
       summary.processed++;
 
       // Mark processing

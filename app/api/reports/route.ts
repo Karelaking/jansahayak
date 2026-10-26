@@ -37,15 +37,31 @@ export async function GET(req: NextRequest) {
         status: 1,
         createdAt: 1,
         submissionLocation: 1,
-        "photos.filename": 1,
-        "photos.byteSize": 1,
+        evidencePhotos: 1,
+        associatedIncidentId: 1,
       })
       .toArray();
 
+    const formattedReports = reports.map((r) => {
+      const photos = (r.evidencePhotos || []).map(
+        (p: { filename?: string; byteSize?: number; fileId?: string }) => ({
+          filename: p.filename || "evidence.jpg",
+          byteSize: p.byteSize || 0,
+          downloadUrl: p.fileId ? `/api/pipeline/photos/${p.fileId}` : undefined,
+        }),
+      );
+
+      return {
+        ...r,
+        photoCount: photos.length,
+        photos,
+      };
+    });
+
     return NextResponse.json({
       success: true,
-      count: reports.length,
-      reports,
+      count: formattedReports.length,
+      reports: formattedReports,
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

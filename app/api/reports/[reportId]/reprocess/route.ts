@@ -92,8 +92,20 @@ export async function POST(
       });
     }
 
-    // Default: Asynchronous background reprocessing (PRD §3, §4)
-    void processReportBackground(reportId).catch((err) => {
+    // Reset status to PROCESSING and clear previous rejection reason in MongoDB
+    await reportsColl.updateOne(
+      { reportId },
+      {
+        $set: {
+          status: "PROCESSING",
+          rejectionReason: null,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    );
+
+    // Default: Asynchronous background reprocessing with force override (PRD §3, §4, §5, §15)
+    void processReportBackground(reportId, { force: true }).catch((err) => {
       console.error(`[Reprocess] Asynchronous background reprocessing error for ${reportId}:`, err);
     });
 

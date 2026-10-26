@@ -178,6 +178,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      reportId,
+      status: "SUBMITTED",
       summary: {
         reportId,
         status: "SUBMITTED",

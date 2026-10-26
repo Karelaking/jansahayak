@@ -198,7 +198,7 @@ export interface RawReportDocument {
     | "PUBLISHED"
     | "MUNICIPALLY_DISPATCHED"
     | "PROCESSING_FAILED";
-  rejectionReason?: string;
+  rejectionReason?: string | null;
   evidencePhotos: PhotoCaptureRecord[];
   submissionLocation: {
     latitude: number;

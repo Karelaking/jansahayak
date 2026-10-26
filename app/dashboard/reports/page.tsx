@@ -137,8 +137,16 @@ export default function ReportsPage() {
               description: r.description || "Citizen road safety report",
               category: r.category || "road-surface",
               severity: "medium",
-              status:
-                r.status === "APPROVED" || r.status === "PUBLISHED" ? "resolved" : "under-review",
+              status: (() => {
+                const norm = (r.status || "").toUpperCase();
+                if (norm === "APPROVED" || norm === "PUBLISHED" || norm === "RESOLVED")
+                  return "resolved";
+                if (norm === "IN_PROGRESS" || norm === "IN-PROGRESS" || norm === "ASSIGNED")
+                  return "in-progress";
+                if (norm === "ESCALATED" || norm === "MUNICIPALLY_DISPATCHED") return "escalated";
+                if (norm === "REJECTED" || norm === "SUSPENDED") return "under-review";
+                return "open";
+              })(),
               latitude: r.submissionLocation?.latitude || 28.4744,
               longitude: r.submissionLocation?.longitude || 77.504,
               landmark: "Greater Noida",

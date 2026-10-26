@@ -152,9 +152,13 @@ export async function POST(
       );
     }
 
-    // Append new photos to report and reset status if it was awaiting evidence
+    // Append new photos to report and reset status if it was awaiting evidence or previously failed
     const nextStatus =
-      reportDoc.status === "ADDITIONAL_EVIDENCE_REQUIRED" ? "EVIDENCE_VALIDATED" : reportDoc.status;
+      reportDoc.status === "ADDITIONAL_EVIDENCE_REQUIRED" ||
+      reportDoc.status === "REJECTED" ||
+      reportDoc.status === "EVIDENCE_VALIDATION_FAILED"
+        ? "PROCESSING"
+        : reportDoc.status;
 
     await reportsColl.updateOne(
       { reportId },
@@ -162,6 +166,7 @@ export async function POST(
         $push: { evidencePhotos: { $each: newPhotos } },
         $set: {
           status: nextStatus,
+          rejectionReason: null,
           updatedAt: new Date().toISOString(),
         },
       },
@@ -184,8 +189,8 @@ export async function POST(
       // Offline fallback: continue
     }
 
-    // Immediately trigger asynchronous background re-verification (PRD §3, §4)
-    void processReportBackground(reportId).catch((err) => {
+    // Immediately trigger asynchronous background re-verification with force override (PRD §3, §4, §5, §15)
+    void processReportBackground(reportId, { force: true }).catch((err) => {
       console.error(
         `[Evidence] Asynchronous background re-verification error for ${reportId}:`,
         err,

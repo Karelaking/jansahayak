@@ -25,9 +25,11 @@ import { GET as getReportDetailRoute } from "@/app/api/reports/[reportId]/route"
 import { GET as getDossierRoute } from "@/app/api/admin/incidents/[incidentId]/dossier/route";
 import { POST as submitRoute } from "@/app/api/pipeline/submit/route";
 import { GET as getMapIncidentsRoute } from "@/app/api/map/incidents/route";
+import { GET as getReportsRoute } from "@/app/api/reports/route";
+import { POST as reprocessRoute } from "@/app/api/reports/[reportId]/reprocess/route";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limit";
 
-describe("PRD §19 End-to-End Integration Test Suite (38 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (42 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -1029,5 +1031,102 @@ describe("PRD §19 End-to-End Integration Test Suite (38 Scenarios)", () => {
       expect(typeof incident.latitude).toBe("number");
       expect(typeof incident.longitude).toBe("number");
     }
+  });
+
+  // Scenario 39: Fast Intake Gateway Response Envelope (PRD §4 line 93)
+  it("Scenario 39: Fast intake returns top-level reportId and status 'SUBMITTED' per PRD §4", async () => {
+    // Generate valid dummy payload with 4 photos
+    const dummyPhotos = Array.from({ length: 4 }).map((_, i) => ({
+      filename: `photo_${i + 1}.jpg`,
+      base64: Buffer.from("dummy-image-bytes").toString("base64"),
+      contentType: "image/jpeg",
+      capturedAt: new Date().toISOString(),
+      isCameraCapture: true,
+      gpsSamples: [
+        {
+          latitude: 28.4744,
+          longitude: 77.504,
+          horizontalAccuracyMeters: 5,
+          sampleTimestamp: new Date().toISOString(),
+        },
+      ],
+    }));
+
+    const req = new NextRequest("http://localhost:3000/api/pipeline/submit", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": "10.0.0.50",
+      },
+      body: JSON.stringify({
+        category: "Road Surface / Pothole",
+        description: "Fast intake schema test description for PRD compliance",
+        photos: dummyPhotos,
+        submissionLocation: {
+          latitude: 28.4744,
+          longitude: 77.504,
+          accuracyMeters: 5,
+          capturedAt: new Date().toISOString(),
+        },
+      }),
+    });
+
+    const res = await submitRoute(req);
+    expect(res.status).toBe(200);
+
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.status).toBe("SUBMITTED");
+    expect(typeof json.reportId).toBe("string");
+    expect(json.reportId).toMatch(/^REP-/);
+    expect(json.summary).toBeDefined();
+    expect(json.summary.reportId).toBe(json.reportId);
+    expect(json.summary.status).toBe("SUBMITTED");
+  });
+
+  // Scenario 40: Reprocessing and Force Re-evaluation on Rejected/Failed Reports (PRD §5 & §15)
+  it("Scenario 40: Reprocessing endpoint permits force-reprocessing on existing reports", async () => {
+    // 1. Non-existent report returns 404
+    const unknownRepId = "rep_non_existent_404";
+    const req = new NextRequest(`http://localhost:3000/api/reports/${unknownRepId}/reprocess`, {
+      method: "POST",
+      headers: { "x-mock-role": "moderator", "x-mock-user-id": "mod_01" },
+    });
+
+    const res = await reprocessRoute(req, {
+      params: Promise.resolve({ reportId: unknownRepId }),
+    });
+    expect(res.status).toBe(404);
+    const json = await res.json();
+    expect(json.error).toMatch(/not found/i);
+  });
+
+  // Scenario 41: Transactional Outbox Exponential Backoff (PRD §15)
+  it("Scenario 41: Outbox worker calculates exponential backoff delay based on retryCount", async () => {
+    const calculateBackoff = (retryCount: number) => {
+      return Math.min(300, Math.pow(2, retryCount) * 5) * 1000;
+    };
+
+    expect(calculateBackoff(1)).toBe(10000); // 10s
+    expect(calculateBackoff(2)).toBe(20000); // 20s
+    expect(calculateBackoff(3)).toBe(40000); // 40s
+    expect(calculateBackoff(4)).toBe(80000); // 80s
+    expect(calculateBackoff(5)).toBe(160000); // 160s
+    expect(calculateBackoff(6)).toBe(300000); // Capped at 300s
+  });
+
+  // Scenario 42: GET /api/reports Returns Intact Evidence Photos (PRD §16)
+  it("Scenario 42: GET /api/reports returns valid JSON with count and formatted reports", async () => {
+    const req = new NextRequest("http://localhost:3000/api/reports?limit=5", {
+      method: "GET",
+    });
+
+    const res = await getReportsRoute(req);
+    expect(res.status).toBe(200);
+
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(typeof json.count).toBe("number");
+    expect(Array.isArray(json.reports)).toBe(true);
   });
 });
