@@ -126,36 +126,34 @@ export async function getCurrentUserSession(req?: Request): Promise<UserSession>
     }
   }
 
-  // 3. Local Development Mode (Real PostgreSQL Database-Backed User)
-  if (process.env.NODE_ENV !== "production") {
-    // If request originates from admin dashboard or header/cookie specifies moderator
-    if (resolvedRole === "moderator" || resolvedRole === "admin") {
-      const devModId = resolvedUserId || "mod_dev_admin";
-      try {
-        await db
-          .insert(users)
-          .values({
-            id: devModId,
-            email: "moderator@jansahayak.internal",
-            fullName: "Civic Staff Moderator",
-            role: "moderator",
-          })
-          .onConflictDoNothing();
-      } catch {
-        // Non-blocking
-      }
-
-      return {
-        userId: devModId,
-        email: "moderator@jansahayak.internal",
-        fullName: "Civic Staff Moderator",
-        role: "moderator",
-        isAuthenticated: true,
-      };
+  // 3. Local Development Mode / Cookie / Header User Resolution
+  if (resolvedRole === "moderator" || resolvedRole === "admin") {
+    const devModId = resolvedUserId || "mod_dev_admin";
+    try {
+      await db
+        .insert(users)
+        .values({
+          id: devModId,
+          email: "moderator@jansahayak.internal",
+          fullName: "Civic Staff Moderator",
+          role: resolvedRole || "moderator",
+        })
+        .onConflictDoNothing();
+    } catch {
+      // Non-blocking
     }
 
-    // Default authenticated citizen session backed by real PostgreSQL user record
-    const devCitizenId = resolvedUserId || "citizen_dev";
+    return {
+      userId: devModId,
+      email: "moderator@jansahayak.internal",
+      fullName: "Civic Staff Moderator",
+      role: resolvedRole || "moderator",
+      isAuthenticated: true,
+    };
+  }
+
+  if (resolvedUserId) {
+    const devCitizenId = resolvedUserId;
     try {
       await db
         .insert(users)
@@ -174,12 +172,12 @@ export async function getCurrentUserSession(req?: Request): Promise<UserSession>
       userId: devCitizenId,
       email: "citizen@jansahayak.internal",
       fullName: "Verified Citizen",
-      role: "citizen",
+      role: (resolvedRole as UserRole) || "citizen",
       isAuthenticated: true,
     };
   }
 
-  // 4. Production Unauthenticated Session Default
+  // 4. Default Unauthenticated Session
   return {
     userId: "",
     email: "",

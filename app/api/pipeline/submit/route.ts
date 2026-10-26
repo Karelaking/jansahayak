@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       }
 
       payload = {
-        userId: session.userId,
+        userId: session.userId || (formData.get("userId") as string) || "citizen_dev",
         category,
         description,
         idempotencyKey,
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
       );
 
       payload = {
-        userId: session.userId || json.userId,
+        userId: session.userId || json.userId || "citizen_dev",
         category: json.category,
         description: json.description,
         idempotencyKey: json.idempotencyKey,

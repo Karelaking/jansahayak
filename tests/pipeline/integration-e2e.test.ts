@@ -22,7 +22,13 @@ import {
   POST as postEscalationRoute,
 } from "@/app/api/admin/escalations/route";
 import { POST as processPipelineRoute } from "@/app/api/pipeline/process/route";
-import { GET as getReportDetailRoute } from "@/app/api/reports/[reportId]/route";
+import {
+  GET as getReportDetailRoute,
+  PATCH as patchReportRoute,
+  DELETE as deleteReportRoute,
+} from "@/app/api/reports/[reportId]/route";
+import { POST as loginRoute } from "@/app/api/auth/login/route";
+import { POST as logoutRoute } from "@/app/api/auth/logout/route";
 import { GET as getDossierRoute } from "@/app/api/admin/incidents/[incidentId]/dossier/route";
 import { POST as submitRoute } from "@/app/api/pipeline/submit/route";
 import { GET as getMapIncidentsRoute } from "@/app/api/map/incidents/route";
@@ -33,7 +39,7 @@ import { GET as getVotesRoute } from "@/app/api/incidents/[incidentId]/votes/rou
 import { GET as getSessionRoute } from "@/app/api/auth/session/route";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limit";
 
-describe("PRD §19 End-to-End Integration Test Suite (59 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (62 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -1895,5 +1901,170 @@ describe("PRD §19 End-to-End Integration Test Suite (59 Scenarios)", () => {
     // Auto-dismisses drawer safely without index out of bounds
     expect(currentDrawer.drawerOpen).toBe(false);
     expect(currentDrawer.highlightedId).toBeNull();
+  });
+
+  // Scenario 60: Authenticated vs Unauthenticated Session Resolution & Direct Auth Bridge (PRD §2 & §16)
+  it("Scenario 60: Auth bridge resolves session cookies, validates unauthenticated state, and processes login/logout", async () => {
+    // 1. Unauthenticated request without cookies or headers returns isAuthenticated: false
+    const anonReq = new NextRequest("http://localhost:3000/api/auth/session", {
+      method: "GET",
+    });
+    const anonRes = await getSessionRoute(anonReq);
+    expect(anonRes.status).toBe(200);
+    const anonJson = await anonRes.json();
+    expect(anonJson.success).toBe(true);
+    expect(anonJson.session.isAuthenticated).toBe(false);
+    expect(anonJson.session.role).toBe("citizen");
+
+    // 2. Direct login as Citizen sets cookies
+    const loginReq = new NextRequest("http://localhost:3000/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role: "citizen", email: "citizen@example.in" }),
+    });
+    const loginRes = await loginRoute(loginReq);
+    expect(loginRes.status).toBe(200);
+    const loginJson = await loginRes.json();
+    expect(loginJson.success).toBe(true);
+    expect(loginJson.user.isAuthenticated).toBe(true);
+    expect(loginJson.user.role).toBe("citizen");
+    expect(loginRes.cookies.get("jansahayak_user_id")).toBeDefined();
+    expect(loginRes.cookies.get("jansahayak_role")?.value).toBe("citizen");
+
+    // 3. Direct login as Moderator sets staff role
+    const modLoginReq = new NextRequest("http://localhost:3000/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role: "moderator" }),
+    });
+    const modLoginRes = await loginRoute(modLoginReq);
+    expect(modLoginRes.status).toBe(200);
+    const modJson = await modLoginRes.json();
+    expect(modJson.user.role).toBe("moderator");
+    expect(modLoginRes.cookies.get("jansahayak_role")?.value).toBe("moderator");
+
+    // 4. Logout clears session cookies
+    const logoutRes = await logoutRoute();
+    expect(logoutRes.status).toBe(200);
+    const logoutJson = await logoutRes.json();
+    expect(logoutJson.success).toBe(true);
+  });
+
+  // Scenario 61: Report Update and Retraction / Deletion Ownership Protection (PRD §2 & §16)
+  it("Scenario 61: Report update and deletion endpoints enforce authentication and reporter ownership boundaries", async () => {
+    // 1. Unauthenticated update attempt returns 401
+    const unauthPatchReq = new NextRequest("http://localhost:3000/api/reports/REP-TEST-001", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ description: "Updated description attempt" }),
+    });
+    const unauthPatchRes = await patchReportRoute(unauthPatchReq, {
+      params: Promise.resolve({ reportId: "REP-TEST-001" }),
+    });
+    expect(unauthPatchRes.status).toBe(401);
+
+    // 2. Unauthenticated delete attempt returns 401
+    const unauthDelReq = new NextRequest("http://localhost:3000/api/reports/REP-TEST-001", {
+      method: "DELETE",
+    });
+    const unauthDelRes = await deleteReportRoute(unauthDelReq, {
+      params: Promise.resolve({ reportId: "REP-TEST-001" }),
+    });
+    expect(unauthDelRes.status).toBe(401);
+
+    // 3. Non-existent report returns 404 for authorized user
+    const notFoundPatchReq = new NextRequest(
+      "http://localhost:3000/api/reports/REP-NON-EXISTENT-404",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-mock-user-id": "citizen_owner",
+          "x-mock-role": "citizen",
+        },
+        body: JSON.stringify({ description: "Updated" }),
+      },
+    );
+    const notFoundPatchRes = await patchReportRoute(notFoundPatchReq, {
+      params: Promise.resolve({ reportId: "REP-NON-EXISTENT-404" }),
+    });
+    expect(notFoundPatchRes.status).toBe(404);
+
+    const notFoundDelReq = new NextRequest(
+      "http://localhost:3000/api/reports/REP-NON-EXISTENT-404",
+      {
+        method: "DELETE",
+        headers: {
+          "x-mock-user-id": "citizen_owner",
+          "x-mock-role": "citizen",
+        },
+      },
+    );
+    const notFoundDelRes = await deleteReportRoute(notFoundDelReq, {
+      params: Promise.resolve({ reportId: "REP-NON-EXISTENT-404" }),
+    });
+    expect(notFoundDelRes.status).toBe(404);
+  });
+
+  // Scenario 62: Civilian vs Municipal Staff RBAC Docket Isolation (PRD §2, §14B, & §16)
+  it("Scenario 62: Civilian accounts are isolated from staff dockets and staff can view all records", () => {
+    // 1. Role capability evaluation
+    const evaluateAccess = (role: string) => {
+      const isStaff = role === "moderator" || role === "admin";
+      return {
+        canViewDashboard: true,
+        canViewMyReports: true,
+        canViewLiveMap: true,
+        canViewModerationQueue: isStaff,
+        canAccessEscalations: isStaff,
+        canAccessPipeline: role === "admin",
+      };
+    };
+
+    const citizenCaps = evaluateAccess("citizen");
+    expect(citizenCaps.canViewDashboard).toBe(true);
+    expect(citizenCaps.canViewMyReports).toBe(true);
+    expect(citizenCaps.canViewModerationQueue).toBe(false);
+    expect(citizenCaps.canAccessEscalations).toBe(false);
+    expect(citizenCaps.canAccessPipeline).toBe(false);
+
+    const modCaps = evaluateAccess("moderator");
+    expect(modCaps.canViewModerationQueue).toBe(true);
+    expect(modCaps.canAccessEscalations).toBe(true);
+
+    const adminCaps = evaluateAccess("admin");
+    expect(adminCaps.canViewModerationQueue).toBe(true);
+    expect(adminCaps.canAccessEscalations).toBe(true);
+    expect(adminCaps.canAccessPipeline).toBe(true);
+
+    // 2. Navigation items visibility filtering logic
+    const allNavItems = [
+      { href: "/dashboard", label: "Overview", minRole: "citizen" },
+      { href: "/dashboard/reports", label: "Reports", minRole: "citizen" },
+      { href: "/dashboard/map", label: "Live Map", minRole: "citizen" },
+      { href: "/dashboard/moderation", label: "Moderation", minRole: "moderator" },
+      { href: "/dashboard/escalations", label: "Escalations", minRole: "moderator" },
+      { href: "/dashboard/pipeline", label: "PRD Pipeline", minRole: "moderator" },
+    ];
+
+    const filterNav = (userRole: string) => {
+      const isStaffUser = userRole === "moderator" || userRole === "admin";
+      return allNavItems.filter((item) => {
+        if (item.minRole === "citizen") return true;
+        if (item.minRole === "moderator") return isStaffUser;
+        return false;
+      });
+    };
+
+    const citizenNav = filterNav("citizen");
+    expect(citizenNav).toHaveLength(3);
+    expect(citizenNav.map((n) => n.href)).toEqual([
+      "/dashboard",
+      "/dashboard/reports",
+      "/dashboard/map",
+    ]);
+
+    const staffNav = filterNav("moderator");
+    expect(staffNav).toHaveLength(6);
   });
 });

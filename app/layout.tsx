@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { ClerkProviderWrapper } from "@/components/auth/clerk-provider-wrapper";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -37,12 +38,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col pb-16 md:pb-0 bg-[#f5f3ed] text-[#17382f]">
-        <TooltipProvider>
-          {children}
-          <Suspense fallback={null}>
-            <MobileBottomNav />
-          </Suspense>
-        </TooltipProvider>
+        <ClerkProviderWrapper>
+          <TooltipProvider>
+            {children}
+            <Suspense fallback={null}>
+              <MobileBottomNav />
+            </Suspense>
+          </TooltipProvider>
+        </ClerkProviderWrapper>
       </body>
     </html>
   );

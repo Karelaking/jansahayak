@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   FileText,
@@ -14,6 +14,8 @@ import {
   ExternalLink,
   Menu,
   Workflow,
+  LogOut,
+  User,
 } from "lucide-react";
 
 import { Brand } from "@/components/brand";
@@ -27,53 +29,65 @@ type NavItem = {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: string;
+  minRole?: "citizen" | "moderator" | "admin";
 };
 
-const NAV_ITEMS: NavItem[] = [
+const ALL_NAV_ITEMS: NavItem[] = [
   {
     href: "/dashboard",
     label: "Overview",
     icon: LayoutDashboard,
+    minRole: "citizen",
   },
   {
     href: "/dashboard/reports",
     label: "Reports",
     icon: FileText,
+    minRole: "citizen",
   },
   {
     href: "/dashboard/map",
     label: "Live Map",
     icon: MapPin,
+    minRole: "citizen",
   },
   {
     href: "/dashboard/moderation",
     label: "Moderation",
     icon: ShieldCheck,
     badge: "Staff",
+    minRole: "moderator",
   },
   {
     href: "/dashboard/analytics",
     label: "Analytics",
     icon: BarChart3,
+    minRole: "citizen",
   },
   {
     href: "/dashboard/escalations",
     label: "Escalations",
     icon: AlertTriangle,
     badge: "Staff",
+    minRole: "moderator",
   },
   {
     href: "/dashboard/pipeline",
     label: "PRD Pipeline",
     icon: Workflow,
     badge: "Staff",
+    minRole: "moderator",
   },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [userRole, setUserRole] = React.useState<string>("citizen");
+  const [userEmail, setUserEmail] = React.useState<string>("");
+  const [userFullName, setUserFullName] = React.useState<string>("");
+  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
 
   React.useEffect(() => {
     setMobileOpen(false);
@@ -81,24 +95,63 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   React.useEffect(() => {
     let active = true;
-    async function loadRole() {
+    async function verifyAuth() {
       try {
         const res = await fetch("/api/auth/session");
         if (res.ok) {
           const data = await res.json();
-          if (active && data.success && data.session?.role) {
-            setUserRole(data.session.role);
+          if (active) {
+            if (data.success && data.session?.isAuthenticated) {
+              setIsAuthenticated(true);
+              setUserRole(data.session.role || "citizen");
+              setUserEmail(data.session.email || "");
+              setUserFullName(data.session.fullName || "");
+            } else {
+              setIsAuthenticated(false);
+              router.replace(`/sign-in?redirect_url=${encodeURIComponent(pathname)}`);
+            }
+          }
+        } else {
+          if (active) {
+            setIsAuthenticated(false);
+            router.replace(`/sign-in?redirect_url=${encodeURIComponent(pathname)}`);
           }
         }
       } catch {
-        // non-blocking
+        if (active) {
+          setIsAuthenticated(false);
+          router.replace(`/sign-in?redirect_url=${encodeURIComponent(pathname)}`);
+        }
       }
     }
-    loadRole();
+    verifyAuth();
     return () => {
       active = false;
     };
-  }, []);
+  }, [pathname, router]);
+
+  const handleSignOut = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      router.push("/sign-in");
+    } catch {
+      router.push("/sign-in");
+    }
+  };
+
+  // Filter navigation items based on user role (Civilians only see authorized pages)
+  const isStaff = userRole === "moderator" || userRole === "admin";
+  const visibleNavItems = ALL_NAV_ITEMS.filter((item) => {
+    if (!item.minRole || item.minRole === "citizen") return true;
+    if (item.minRole === "moderator") return isStaff;
+    if (item.minRole === "admin") return userRole === "admin";
+    return false;
+  }).map((item) => {
+    if (item.href === "/dashboard/reports" && userRole === "citizen") {
+      return { ...item, label: "My Reports" };
+    }
+    return item;
+  });
 
   const navContent = (
     <div className="flex h-full flex-col justify-between py-5">
@@ -113,7 +166,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </Link>
           <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/60 pt-2">
             <span>Access Tier:</span>
-            <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider">
+            <Badge
+              variant="outline"
+              className={`text-[10px] font-semibold uppercase tracking-wider ${
+                userRole === "admin"
+                  ? "bg-rose-100 text-rose-900 border-rose-300"
+                  : userRole === "moderator"
+                    ? "bg-blue-100 text-blue-900 border-blue-300"
+                    : "bg-emerald-100 text-emerald-900 border-emerald-300"
+              }`}
+            >
               {userRole}
             </Badge>
           </div>
@@ -121,10 +183,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <div className="px-2">
           <div className="px-3 pb-2 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-            Platform
+            {isStaff ? "Municipal Workspace" : "Citizen Workspace"}
           </div>
           <nav className="flex flex-col gap-0.5" aria-label="Dashboard navigation">
-            {NAV_ITEMS.map((item) => {
+            {visibleNavItems.map((item) => {
               const Icon = item.icon;
               const isActive =
                 pathname === item.href ||
@@ -161,6 +223,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <div className="space-y-3 px-2">
         <Separator className="mx-2" />
+
+        {/* User Identity & Sign Out Widget */}
+        <div className="rounded-lg bg-muted/40 p-2.5 mx-1 border border-border/50 text-xs space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#0e2b24] text-white">
+              <User className="size-3.5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold text-[11px] text-foreground">
+                {userFullName ||
+                  (userRole === "admin"
+                    ? "Civic Admin"
+                    : userRole === "moderator"
+                      ? "Staff Moderator"
+                      : "Citizen User")}
+              </p>
+              <p className="truncate text-[10px] text-muted-foreground">
+                {userEmail || `${userRole}@jansahayak.in`}
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={handleSignOut}
+            className="w-full justify-start gap-1.5 text-xs text-rose-700 hover:text-rose-800 hover:bg-rose-50 h-7"
+          >
+            <LogOut className="size-3" />
+            <span>Sign Out</span>
+          </Button>
+        </div>
+
         <div className="flex flex-col gap-1 px-1">
           <Button
             variant="ghost"
@@ -175,7 +270,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Button
             variant="default"
             size="sm"
-            className="w-full justify-start gap-2 rounded-lg text-xs font-medium h-8 shadow-sm"
+            className="w-full justify-start gap-2 rounded-lg text-xs font-medium h-8 shadow-sm bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed]"
             render={<Link href="/reports/new" />}
           >
             <Plus className="size-3.5" />
@@ -190,6 +285,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </div>
   );
 
+  // Authenticating session check screen
+  if (isAuthenticated === null) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#f5f3ed] p-6 text-center">
+        <div className="size-8 rounded-full border-2 border-[#0e2b24] border-t-transparent animate-spin mb-3" />
+        <p className="text-xs font-semibold text-[#0e2b24]">Verifying Civic Session...</p>
+        <p className="text-[11px] text-[#5c6f66]">Validating Role-Based Dashboard Authorization</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen bg-background text-foreground antialiased">
       {/* Desktop Persistent Sidebar */}
@@ -199,12 +305,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col min-w-0">
-        {/* Mobile Header with shadcn Sheet */}
-        <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-card/95 px-3 backdrop-blur supports-backdrop-filter:bg-card/80 md:hidden">
+        {/* Mobile Header Bar */}
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-sm md:hidden">
+          <Link href="/" className="flex items-center gap-2">
+            <Brand />
+          </Link>
+
           <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-[10px] uppercase font-mono">
+              {userRole}
+            </Badge>
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger
-                render={<Button variant="ghost" size="icon-sm" aria-label="Open Navigation Menu" />}
+                render={<Button variant="ghost" size="icon-sm" aria-label="Open navigation menu" />}
               >
                 <Menu className="size-5" />
               </SheetTrigger>
@@ -215,28 +328,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {navContent}
               </SheetContent>
             </Sheet>
-
-            <Link href="/dashboard" className="flex items-center gap-2 text-inherit no-underline">
-              <span className="font-heading text-sm font-semibold">JanSahayak</span>
-              <Badge variant="outline" className="text-[10px] hidden xs:inline-flex">
-                Dashboard
-              </Badge>
-            </Link>
           </div>
-
-          <Button size="sm" className="gap-1.5 h-8 px-2.5" render={<Link href="/reports/new" />}>
-            <Plus className="size-3.5" />
-            <span className="text-xs">Report</span>
-          </Button>
         </header>
 
-        {/* Main Routed Content */}
-        <main
-          className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 max-w-[1600px] w-full mx-auto pb-24 md:pb-8"
-          id="main-content"
-        >
-          {children}
-        </main>
+        {/* Page Content */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">{children}</main>
       </div>
     </div>
   );

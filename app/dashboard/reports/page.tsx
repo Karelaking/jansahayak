@@ -12,12 +12,17 @@ import {
   RotateCcw,
   Users,
   ThumbsUp,
+  Pencil,
+  Trash2,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableHeader,
@@ -43,6 +48,7 @@ import {
   EmptyDescription,
   EmptyContent,
 } from "@/components/ui/empty";
+import { Spinner } from "@/components/ui/spinner";
 import type { HazardReport } from "@/lib/types/hazard";
 
 /** Status vs severity are separate vocabularies (Severity/Status Split). */
@@ -150,25 +156,54 @@ function getSeverityBadge(severity: string) {
 }
 
 export default function ReportsPage() {
-  // Real records fetched from API, or sample records loaded on request
   const [reports, setReports] = React.useState<HazardReport[]>([]);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [activeTab, setActiveTab] = React.useState("all");
   const [selectedReport, setSelectedReport] = React.useState<HazardReport | null>(null);
   const [isStaff, setIsStaff] = React.useState(false);
+  const [sessionUserId, setSessionUserId] = React.useState<string>("");
+  const [userRole, setUserRole] = React.useState<string>("citizen");
+  const [scopeFilter, setScopeFilter] = React.useState<"mine" | "all">("all");
+
+  // Edit Report State
+  const [editingReport, setEditingReport] = React.useState<HazardReport | null>(null);
+  const [editForm, setEditForm] = React.useState({
+    description: "",
+    category: "road-surface",
+    landmark: "",
+  });
+  const [isUpdatingReport, setIsUpdatingReport] = React.useState(false);
+
+  // Delete Report State
+  const [deletingReport, setDeletingReport] = React.useState<HazardReport | null>(null);
+  const [isDeletingReport, setIsDeletingReport] = React.useState(false);
+
+  // Feedback banner
+  const [feedback, setFeedback] = React.useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   React.useEffect(() => {
     fetch("/api/auth/session")
       .then((res) => res.json())
       .then((data) => {
-        if (data?.session?.role === "moderator" || data?.session?.role === "admin") {
-          setIsStaff(true);
+        if (data?.session) {
+          setSessionUserId(data.session.userId || "");
+          setUserRole(data.session.role || "citizen");
+          if (data.session.role === "moderator" || data.session.role === "admin") {
+            setIsStaff(true);
+            setScopeFilter("all");
+          } else {
+            setIsStaff(false);
+            setScopeFilter("mine");
+          }
         }
       })
       .catch(() => {});
   }, []);
 
-  // Fetch real database reports on mount
+  // Fetch database reports
   const loadReports = React.useCallback(async () => {
     try {
       const [mapRes, reportsRes] = await Promise.all([
@@ -206,12 +241,12 @@ export default function ReportsPage() {
                   return "in-progress";
                 if (norm === "ESCALATED" || norm === "MUNICIPALLY_DISPATCHED") return "escalated";
                 if (norm === "REJECTED" || norm === "SUSPENDED") return "under-review";
-                // PRD §5 & §14B: A published report represents an active hazard on the map awaiting municipal resolution & public consensus
                 return "open";
               })(),
               latitude: r.submissionLocation?.latitude || 28.4744,
               longitude: r.submissionLocation?.longitude || 77.504,
-              landmark: "Greater Noida",
+              landmark: r.submissionLocation?.landmark || "Greater Noida",
+              location: r.submissionLocation?.landmark || "Greater Noida",
               time: r.createdAt
                 ? new Date(r.createdAt).toLocaleTimeString([], {
                     hour: "2-digit",
@@ -240,6 +275,9 @@ export default function ReportsPage() {
   // Filtered reports
   const filteredReports = React.useMemo(() => {
     return reports.filter((r) => {
+      if (scopeFilter === "mine" && sessionUserId && (r as unknown as { userId?: string }).userId) {
+        if ((r as unknown as { userId?: string }).userId !== sessionUserId) return false;
+      }
       const matchesTab = activeTab === "all" || r.status === activeTab;
       const q = searchQuery.toLowerCase().trim();
       const loc = r.location || r.landmark || "";
@@ -252,11 +290,11 @@ export default function ReportsPage() {
 
       return matchesTab && matchesSearch;
     });
-  }, [reports, activeTab, searchQuery]);
+  }, [reports, activeTab, searchQuery, scopeFilter, sessionUserId]);
 
   const [isUpdatingStatus, setIsUpdatingStatus] = React.useState(false);
 
-  // Handle status update inside the detail dialog and persist to backend
+  // Status update by staff
   const handleStatusChange = async (newStatus: HazardReport["status"]) => {
     if (!selectedReport) return;
     setIsUpdatingStatus(true);
@@ -278,14 +316,123 @@ export default function ReportsPage() {
         prev.map((r) => (r.id === selectedReport.id ? { ...r, status: newStatus } : r)),
       );
       setSelectedReport((prev) => (prev ? { ...prev, status: newStatus } : null));
+      setFeedback({ type: "success", text: `Status updated to ${newStatus}.` });
     } catch (err) {
       console.error("Error updating status:", err);
+      setFeedback({ type: "error", text: "Failed to update lifecycle status." });
     } finally {
       setIsUpdatingStatus(false);
     }
   };
 
-  // Export filtered reports to CSV (RFC 4180 format)
+  // Open Edit Dialog
+  const handleOpenEdit = (report: HazardReport) => {
+    setEditingReport(report);
+    setEditForm({
+      description: report.description || report.title || "",
+      category: report.category || "road-surface",
+      landmark: report.landmark || report.location || "",
+    });
+  };
+
+  // Submit Edit Report Form
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingReport) return;
+
+    setIsUpdatingReport(true);
+    setFeedback(null);
+    try {
+      const res = await fetch(`/api/reports/${editingReport.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: editForm.description,
+          category: editForm.category,
+          landmark: editForm.landmark,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to update report.");
+      }
+
+      setReports((prev) =>
+        prev.map((r) =>
+          r.id === editingReport.id
+            ? {
+                ...r,
+                description: editForm.description,
+                title: editForm.description.slice(0, 60),
+                category: editForm.category,
+                landmark: editForm.landmark,
+                location: editForm.landmark,
+              }
+            : r,
+        ),
+      );
+
+      if (selectedReport?.id === editingReport.id) {
+        setSelectedReport((prev) =>
+          prev
+            ? {
+                ...prev,
+                description: editForm.description,
+                title: editForm.description.slice(0, 60),
+                category: editForm.category,
+                landmark: editForm.landmark,
+                location: editForm.landmark,
+              }
+            : null,
+        );
+      }
+
+      setEditingReport(null);
+      setFeedback({ type: "success", text: "Report details updated successfully." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Update failed.";
+      setFeedback({ type: "error", text: msg });
+    } finally {
+      setIsUpdatingReport(false);
+    }
+  };
+
+  // Submit Delete Report
+  const handleConfirmDelete = async () => {
+    if (!deletingReport) return;
+
+    setIsDeletingReport(true);
+    setFeedback(null);
+    try {
+      const res = await fetch(`/api/reports/${deletingReport.id}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete report.");
+      }
+
+      setReports((prev) => prev.filter((r) => r.id !== deletingReport.id));
+      if (selectedReport?.id === deletingReport.id) {
+        setSelectedReport(null);
+      }
+
+      setFeedback({
+        type: "success",
+        text: `Report ${deletingReport.id} retracted and deleted from civic registry.`,
+      });
+      setDeletingReport(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Delete failed.";
+      setFeedback({ type: "error", text: msg });
+    } finally {
+      setIsDeletingReport(false);
+    }
+  };
+
+  // Export CSV
   const handleExportCsv = () => {
     if (filteredReports.length === 0) return;
     const headers = [
@@ -298,14 +445,14 @@ export default function ReportsPage() {
       "Longitude",
       "Location / Landmark",
       "Assigned Authority",
-      "Reported At",
+      "Reported Time",
       "Description",
     ];
 
-    const escapeCsv = (val: string | number | undefined | null) => {
-      if (val === undefined || val === null) return '""';
-      const str = String(val);
-      return `"${str.replace(/"/g, '""')}"`;
+    const escapeCsv = (str: string | undefined | null) => {
+      if (!str) return '""';
+      const escaped = String(str).replace(/"/g, '""');
+      return `"${escaped}"`;
     };
 
     const rows = filteredReports.map((r) => [
@@ -344,18 +491,58 @@ export default function ReportsPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="font-heading text-xl font-bold tracking-tight text-foreground sm:text-2xl md:text-3xl">
-              Hazard Reports Registry
+              {isStaff
+                ? scopeFilter === "mine"
+                  ? "My Submissions"
+                  : "Hazard Reports Registry"
+                : "My Submitted Reports"}
             </h1>
             <Badge variant="secondary" className="text-xs">
               {filteredReports.length} of {reports.length}
             </Badge>
+            <Badge
+              variant="outline"
+              className={`text-[10px] uppercase font-mono border ${
+                userRole === "admin"
+                  ? "bg-rose-50 text-rose-800 border-rose-300"
+                  : userRole === "moderator"
+                    ? "bg-blue-50 text-blue-800 border-blue-300"
+                    : "bg-emerald-50 text-emerald-800 border-emerald-300"
+              }`}
+            >
+              {userRole}
+            </Badge>
           </div>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-            Browse, search, inspect dossiers, and update civic action status.
+            {isStaff
+              ? "Browse, inspect, update lifecycle status, and manage all Greater Noida hazard dockets."
+              : "Review your submitted civic reports, update descriptions, or retract submissions."}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {isStaff && (
+            <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border text-xs mr-1">
+              <Button
+                type="button"
+                variant={scopeFilter === "all" ? "secondary" : "ghost"}
+                size="xs"
+                onClick={() => setScopeFilter("all")}
+                className="h-7 text-xs font-medium"
+              >
+                All Dockets
+              </Button>
+              <Button
+                type="button"
+                variant={scopeFilter === "mine" ? "secondary" : "ghost"}
+                size="xs"
+                onClick={() => setScopeFilter("mine")}
+                className="h-7 text-xs font-medium"
+              >
+                My Submissions
+              </Button>
+            </div>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -378,12 +565,46 @@ export default function ReportsPage() {
             <span className="sm:hidden">CSV</span>
           </Button>
 
-          <Button size="sm" className="h-9 sm:h-8" render={<Link href="/reports/new" />}>
-            <Plus className="size-3.5" />
-            <span>Report</span>
+          <Button
+            size="sm"
+            className="h-9 sm:h-8 bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed]"
+            render={<Link href="/reports/new" />}
+          >
+            <Plus className="size-3.5 mr-1" />
+            <span>New Report</span>
           </Button>
         </div>
       </div>
+
+      {/* Action Feedback Banner */}
+      {feedback && (
+        <div
+          role="alert"
+          className={`flex items-center justify-between rounded-lg p-3 text-xs border ${
+            feedback.type === "success"
+              ? "bg-emerald-50 text-emerald-900 border-emerald-300"
+              : "bg-rose-50 text-rose-900 border-rose-300"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {feedback.type === "success" ? (
+              <CheckCircle2 className="size-4 shrink-0 text-emerald-700" />
+            ) : (
+              <AlertCircle className="size-4 shrink-0 text-rose-700" />
+            )}
+            <span>{feedback.text}</span>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={() => setFeedback(null)}
+            className="h-6 px-2 text-inherit"
+          >
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       {/* ── Table & Mobile Card View ─── */}
       <Card className="shadow-xs overflow-hidden">
@@ -400,102 +621,74 @@ export default function ReportsPage() {
               <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
             </div>
 
-            {/* Filter Tabs with horizontal touch scrolling on mobile */}
-            <div className="w-full overflow-x-auto no-scrollbar -mx-1 px-1 md:w-auto">
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="h-9 sm:h-8 w-max min-w-full justify-start sm:w-auto">
-                  <TabsTrigger value="all" className="text-xs px-2.5">
-                    All ({reports.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="open" className="text-xs px-2.5">
-                    Open ({reports.filter((r) => r.status === "open").length})
-                  </TabsTrigger>
-                  <TabsTrigger value="in-progress" className="text-xs px-2.5">
-                    Progress ({reports.filter((r) => r.status === "in-progress").length})
-                  </TabsTrigger>
-                  <TabsTrigger value="escalated" className="text-xs px-2.5">
-                    Escalated ({reports.filter((r) => r.status === "escalated").length})
-                  </TabsTrigger>
-                  <TabsTrigger value="resolved" className="text-xs px-2.5">
-                    Resolved ({reports.filter((r) => r.status === "resolved").length})
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
+            {/* Status Filter Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full md:w-auto">
+              <TabsList className="grid w-full grid-cols-4 md:w-auto">
+                <TabsTrigger value="all" className="text-xs">
+                  All
+                </TabsTrigger>
+                <TabsTrigger value="open" className="text-xs">
+                  Open
+                </TabsTrigger>
+                <TabsTrigger value="in-progress" className="text-xs">
+                  In Progress
+                </TabsTrigger>
+                <TabsTrigger value="resolved" className="text-xs">
+                  Resolved
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
         </CardHeader>
 
         <CardContent className="p-0">
-          {reports.length === 0 ? (
-            /* Zatian / shadcn Empty State when no data has been submitted */
-            <Empty className="my-8 border-0 bg-transparent px-4">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <FileText className="size-6 text-muted-foreground" />
-                </EmptyMedia>
-                <EmptyTitle>No hazard reports recorded yet</EmptyTitle>
-                <EmptyDescription>
-                  There are currently no active road hazard reports in the system. Citizen
-                  submissions across Greater Noida corridors will populate here automatically.
-                </EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent className="flex flex-wrap gap-2 justify-center">
-                <Button size="sm" className="h-9" render={<Link href="/reports/new" />}>
-                  <Plus className="mr-1.5 size-3.5" />
-                  <span>Submit First Report</span>
-                </Button>
-              </EmptyContent>
-            </Empty>
-          ) : filteredReports.length === 0 ? (
-            /* Empty state when active filter yields zero results */
-            <Empty className="my-8 border-0 bg-transparent px-4">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <Search className="size-6 text-muted-foreground" />
-                </EmptyMedia>
-                <EmptyTitle>No matching reports found</EmptyTitle>
-                <EmptyDescription>
-                  No hazard files matched your current search and status filters. Try clearing
-                  keywords or changing tabs.
-                </EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setActiveTab("all");
-                  }}
-                >
-                  Reset Filters
-                </Button>
-              </EmptyContent>
-            </Empty>
+          {filteredReports.length === 0 ? (
+            <div className="p-8">
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <FileText className="size-6 text-muted-foreground" />
+                  </EmptyMedia>
+                  <EmptyTitle className="text-sm font-semibold">
+                    No reports match your filters
+                  </EmptyTitle>
+                  <EmptyDescription className="text-xs">
+                    Try adjusting your search criteria or report a new roadway hazard.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setActiveTab("all");
+                    }}
+                  >
+                    Clear Filters
+                  </Button>
+                </EmptyContent>
+              </Empty>
+            </div>
           ) : (
             <>
-              {/* Mobile Card Feed View (< md) */}
-              <div className="block md:hidden divide-y divide-border">
+              {/* Mobile Card View (< md) */}
+              <div className="divide-y divide-border/60 md:hidden">
                 {filteredReports.map((report) => (
-                  <button
-                    key={report.id}
-                    type="button"
-                    onClick={() => setSelectedReport(report)}
-                    className="w-full text-left p-3.5 hover:bg-muted/30 transition-colors cursor-pointer space-y-2 active:bg-muted/50 block focus-visible:outline-2 focus-visible:outline-ring"
-                  >
-                    <div className="flex items-center justify-between gap-2">
+                  <div key={report.id} className="p-4 space-y-3 hover:bg-muted/30">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-mono text-xs font-bold text-muted-foreground">
+                        {report.id}
+                      </span>
                       <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-xs font-bold text-muted-foreground">
-                          {report.id}
-                        </span>
-                        {getStatusBadge(report.status)}
+                        {getStatusBadge(report.status, report.publicOpinionStatus)}
+                        {getSeverityBadge(report.severity)}
                       </div>
-                      {getSeverityBadge(report.severity)}
                     </div>
 
                     <div>
-                      <h4 className="font-semibold text-sm text-foreground leading-snug">
+                      <h4 className="text-sm font-semibold text-foreground leading-snug">
                         {report.title}
                       </h4>
                       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
@@ -512,11 +705,37 @@ export default function ReportsPage() {
 
                     <div className="flex items-center justify-between pt-1 text-[11px] text-muted-foreground border-t border-border/40">
                       <span>{report.time || report.reportedAt || "Recently"}</span>
-                      <span className="font-medium text-foreground">
-                        {report.votes || report.verificationsCount || 0} verifications · Tap to view
-                      </span>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => setSelectedReport(report)}
+                          className="h-7 text-xs"
+                        >
+                          <Eye className="size-3 mr-1" />
+                          <span>Inspect</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => handleOpenEdit(report)}
+                          className="h-7 text-xs text-[#0e2b24]"
+                        >
+                          <Pencil className="size-3 mr-1" />
+                          <span>Edit</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => setDeletingReport(report)}
+                          className="h-7 text-xs text-rose-700 hover:text-rose-800 hover:bg-rose-50"
+                        >
+                          <Trash2 className="size-3 mr-1" />
+                          <span>Delete</span>
+                        </Button>
+                      </div>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
 
@@ -525,7 +744,7 @@ export default function ReportsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[100px]">Docket ID</TableHead>
+                      <TableHead className="w-[110px]">Docket ID</TableHead>
                       <TableHead>Hazard Details</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>Location</TableHead>
@@ -576,15 +795,35 @@ export default function ReportsPage() {
                         <TableCell>{getSeverityBadge(report.severity)}</TableCell>
 
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            className="gap-1 text-xs"
-                            onClick={() => setSelectedReport(report)}
-                          >
-                            <Eye className="size-3" />
-                            <span>Inspect</span>
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              className="gap-1 text-xs"
+                              onClick={() => setSelectedReport(report)}
+                            >
+                              <Eye className="size-3" />
+                              <span>Inspect</span>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              className="gap-1 text-xs text-[#0e2b24] hover:bg-[#eef1e9]"
+                              onClick={() => handleOpenEdit(report)}
+                            >
+                              <Pencil className="size-3" />
+                              <span>Edit</span>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              className="gap-1 text-xs text-rose-700 hover:text-rose-800 hover:bg-rose-50"
+                              onClick={() => setDeletingReport(report)}
+                            >
+                              <Trash2 className="size-3" />
+                              <span>Delete</span>
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -610,6 +849,177 @@ export default function ReportsPage() {
           </div>
         </CardFooter>
       </Card>
+
+      {/* ── Edit Report Modal Dialog ─── */}
+      <Dialog open={!!editingReport} onOpenChange={(open) => !open && setEditingReport(null)}>
+        {editingReport && (
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="font-mono text-[10px]">
+                  {editingReport.id}
+                </Badge>
+                <Badge variant="secondary" className="text-[10px]">
+                  Edit Report Details
+                </Badge>
+              </div>
+              <DialogTitle className="mt-1 text-base font-bold text-[#0e2b24]">
+                Update Road Hazard Submission
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Revise hazard description, category, or location notes to help road maintenance
+                crews.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="edit-report-category"
+                  className="block text-xs font-semibold text-[#17382f]"
+                >
+                  Hazard Category
+                </label>
+                <select
+                  id="edit-report-category"
+                  value={editForm.category}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, category: e.target.value }))}
+                  className="w-full rounded-md border border-[#cbd5cb] bg-white px-3 py-1.5 text-xs text-[#17382f]"
+                >
+                  <option value="road-surface">Road Surface / Pothole</option>
+                  <option value="pothole">Deep Pothole / Crater</option>
+                  <option value="drainage">Open Drain / Waterlogging</option>
+                  <option value="lighting">Broken Streetlight / Dark Spot</option>
+                  <option value="signal-failure">Traffic Signal Failure</option>
+                  <option value="obstruction">Road Obstruction / Debris</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="edit-report-description"
+                  className="block text-xs font-semibold text-[#17382f]"
+                >
+                  Hazard Description &amp; Details
+                </label>
+                <Textarea
+                  id="edit-report-description"
+                  rows={4}
+                  required
+                  value={editForm.description}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, description: e.target.value }))
+                  }
+                  placeholder="Describe the severity, lane obstruction, or road conditions..."
+                  className="text-xs bg-white border-[#cbd5cb] text-[#17382f]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="edit-report-landmark"
+                  className="block text-xs font-semibold text-[#17382f]"
+                >
+                  Landmark / Location Clarification
+                </label>
+                <Input
+                  id="edit-report-landmark"
+                  type="text"
+                  value={editForm.landmark}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, landmark: e.target.value }))}
+                  placeholder="e.g. Near Pari Chowk Roundabout, Opposite Metro Pillar 140"
+                  className="text-xs bg-white border-[#cbd5cb] text-[#17382f] h-9"
+                />
+              </div>
+
+              <DialogFooter className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditingReport(null)}
+                  disabled={isUpdatingReport}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={isUpdatingReport}
+                  className="bg-[#0e2b24] hover:bg-[#1c4b3e] text-white"
+                >
+                  {isUpdatingReport ? (
+                    <span className="flex items-center gap-1.5">
+                      <Spinner className="size-3.5" />
+                      <span>Saving Changes...</span>
+                    </span>
+                  ) : (
+                    <span>Save Changes</span>
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* ── Delete Report Confirmation Dialog ─── */}
+      <Dialog open={!!deletingReport} onOpenChange={(open) => !open && setDeletingReport(null)}>
+        {deletingReport && (
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-rose-100 text-rose-800">
+                <Trash2 className="size-5" />
+              </div>
+              <DialogTitle className="text-center text-base font-bold text-[#0e2b24]">
+                Retract &amp; Delete Hazard Report?
+              </DialogTitle>
+              <DialogDescription className="text-center text-xs text-[#5c6f66]">
+                Are you sure you want to retract docket <strong>{deletingReport.id}</strong>? This
+                will delete your report from the public civic registry and remove it from active
+                municipal dockets.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 text-xs text-rose-900 space-y-1">
+              <p className="font-semibold">Important Consideration:</p>
+              <p className="text-[11px] leading-relaxed text-rose-800">
+                Retracting a report removes it from civic progress tracking. If this hazard has
+                already been dispatched to municipal contractors, field teams will be notified of
+                case retraction.
+              </p>
+            </div>
+
+            <DialogFooter className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setDeletingReport(null)}
+                disabled={isDeletingReport}
+              >
+                Keep Report
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={handleConfirmDelete}
+                disabled={isDeletingReport}
+              >
+                {isDeletingReport ? (
+                  <span className="flex items-center gap-1.5">
+                    <Spinner className="size-3.5" />
+                    <span>Retracting...</span>
+                  </span>
+                ) : (
+                  <span>Yes, Delete Report</span>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
 
       {/* ── Report Detail Dialog using shadcn Dialog ─── */}
       <Dialog open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>
@@ -763,18 +1173,41 @@ export default function ReportsPage() {
             </div>
 
             <DialogFooter className="flex items-center justify-between gap-2 border-t border-border pt-3">
-              <Link href={`/reports/${selectedReport.id}`}>
+              <div className="flex items-center gap-1">
                 <Button
-                  size="sm"
-                  className="gap-1.5 text-xs bg-[#0e2b24] hover:bg-[#1c4b3e] text-white"
+                  size="xs"
+                  variant="outline"
+                  onClick={() => handleOpenEdit(selectedReport)}
+                  className="gap-1 text-xs text-[#0e2b24]"
                 >
-                  <FileText className="size-3.5" />
-                  <span>Track Multi-Stage Civic Dossier</span>
+                  <Pencil className="size-3" />
+                  <span>Edit Details</span>
                 </Button>
-              </Link>
-              <Button variant="outline" size="sm" onClick={() => setSelectedReport(null)}>
-                Close Dossier
-              </Button>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={() => setDeletingReport(selectedReport)}
+                  className="gap-1 text-xs text-rose-700 hover:text-rose-800 hover:bg-rose-50 border-rose-200"
+                >
+                  <Trash2 className="size-3" />
+                  <span>Retract</span>
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Link href={`/reports/${selectedReport.id}`}>
+                  <Button
+                    size="sm"
+                    className="gap-1.5 text-xs bg-[#0e2b24] hover:bg-[#1c4b3e] text-white"
+                  >
+                    <FileText className="size-3.5" />
+                    <span>Track Dossier</span>
+                  </Button>
+                </Link>
+                <Button variant="outline" size="sm" onClick={() => setSelectedReport(null)}>
+                  Close
+                </Button>
+              </div>
             </DialogFooter>
           </DialogContent>
         )}
