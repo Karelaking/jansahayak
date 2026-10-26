@@ -44,6 +44,7 @@ export interface HazardReport {
   resolutionVotesCount?: number;
   unresolvedVotesCount?: number;
   publicOpinionStatus?: string;
+  isPublicDisputed?: boolean;
   coordinates?: string;
   officialRouting?: string;
   authority?: string;

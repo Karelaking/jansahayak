@@ -22,9 +22,9 @@ export function HeroLiveFeedStrip() {
             <CheckCircle2 className="size-3.5 text-[#2d5246]" />
           </div>
           <div>
-            <div className="font-semibold text-xs text-[#0e2b24]">Recent 24h Activity</div>
+            <div className="font-semibold text-xs text-[#0e2b24]">Public Consensus Gating</div>
             <div className="text-[11px] text-[#63736b]">
-              Citizen-verified hazards tracked to resolution
+              100% citizen-governed resolution · 500m local resident quorum
             </div>
           </div>
         </div>

@@ -102,6 +102,30 @@ export function HazardCardDrawer({
           >
             {hazard.statusLabel}
           </Badge>
+          {hazard.publicOpinionStatus === "reopened_by_community" && (
+            <Badge
+              variant="outline"
+              className="border-rose-400/60 bg-rose-50 text-[10px] font-semibold text-rose-800"
+            >
+              Citizen Disputed
+            </Badge>
+          )}
+          {hazard.publicOpinionStatus === "verified_by_community" && (
+            <Badge
+              variant="outline"
+              className="border-amber-400/60 bg-amber-50 text-[10px] font-semibold text-amber-800"
+            >
+              Community Verified
+            </Badge>
+          )}
+          {hazard.publicOpinionStatus === "under_repair" && (
+            <Badge
+              variant="outline"
+              className="border-blue-400/60 bg-blue-50 text-[10px] font-semibold text-blue-800"
+            >
+              Under Repair
+            </Badge>
+          )}
           <span className="text-[10px] text-[#63736b]">{hazard.categoryLabel}</span>
         </div>
 
@@ -126,16 +150,16 @@ export function HazardCardDrawer({
 
       <CardFooter className="flex items-center justify-between gap-2 border-t border-[#eef1e9] bg-[#f8faf7] p-2.5 px-3">
         <Link
-          href={`/reports/new?ref=${hazard.id}`}
+          href={`/reports/${hazard.id}`}
           className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0e2b24] hover:underline"
         >
-          Confirm / Add notes <ArrowUpRight className="size-3" />
+          <span>Community Progress</span> <ArrowUpRight className="size-3" />
         </Link>
         <Link
-          href={`/reports/new`}
+          href={`/reports/new?ref=${hazard.id}`}
           className="rounded-full bg-[#0e2b24] px-3 py-1.5 text-[11px] font-medium text-[#f5f3ed]! shadow-xs transition hover:bg-[#1c4b3e]"
         >
-          Report near here
+          Confirm / Vote (+1)
         </Link>
       </CardFooter>
     </Card>

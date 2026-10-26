@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Plus,
   MapPin,
+  Users,
 } from "lucide-react";
 
 import {
@@ -46,7 +47,40 @@ import {
 } from "@/components/ui/empty";
 import type { HazardReport } from "@/lib/types/hazard";
 
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, publicOpinionStatus?: string) {
+  if (publicOpinionStatus === "reopened_by_community") {
+    return (
+      <span className="status-escalated bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30">
+        <i aria-hidden="true" className="bg-rose-600" />
+        Citizen Disputed
+      </span>
+    );
+  }
+  if (publicOpinionStatus === "verified_by_community") {
+    return (
+      <span className="status-progress bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
+        <i aria-hidden="true" className="bg-amber-600" />
+        Community Verified
+      </span>
+    );
+  }
+  if (publicOpinionStatus === "under_repair") {
+    return (
+      <span className="status-progress bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30">
+        <i aria-hidden="true" className="bg-blue-600" />
+        Under Repair
+      </span>
+    );
+  }
+  if (publicOpinionStatus === "under_review") {
+    return (
+      <span className="status-open bg-sky-500/15 text-sky-700 dark:text-sky-400 border-sky-500/30">
+        <i aria-hidden="true" className="bg-sky-600" />
+        Quorum Pending
+      </span>
+    );
+  }
+
   switch (status) {
     case "open":
       return (
@@ -151,6 +185,14 @@ export default function DashboardPage() {
 
   const filteredReports = React.useMemo(() => {
     if (activeTab === "all") return reports;
+    if (activeTab === "disputed") {
+      return reports.filter(
+        (r) =>
+          r.publicOpinionStatus === "reopened_by_community" ||
+          r.isPublicDisputed ||
+          r.status === "escalated",
+      );
+    }
     return reports.filter((r) => r.status === activeTab);
   }, [reports, activeTab]);
 
@@ -181,7 +223,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── KPI Telemetry Grid ─── */}
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-5">
         <Card className="shadow-xs">
           <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
             <div className="flex items-center justify-between">
@@ -216,6 +258,33 @@ export default function DashboardPage() {
           <CardContent className="p-3 sm:p-4 pt-0">
             <p className="text-[10px] sm:text-xs text-muted-foreground">
               {pendingReviewCount > 0 ? "Awaiting moderator review" : "Review queue clean"}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-xs">
+          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
+            <div className="flex items-center justify-between">
+              <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
+                Community Quorum
+              </CardDescription>
+              <Users className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
+            </div>
+            <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
+              {
+                reports.filter(
+                  (r) =>
+                    r.publicOpinionStatus === "reopened_by_community" ||
+                    (r.votes || r.verificationsCount || 0) > 0,
+                ).length
+              }
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
+              {reports.filter((r) => r.publicOpinionStatus === "reopened_by_community").length > 0
+                ? `${reports.filter((r) => r.publicOpinionStatus === "reopened_by_community").length} disputed by citizens`
+                : "Active citizen consensus"}
             </p>
           </CardContent>
         </Card>
@@ -282,6 +351,7 @@ export default function DashboardPage() {
                       <TabsTrigger value="open">Open</TabsTrigger>
                       <TabsTrigger value="in-progress">In Progress</TabsTrigger>
                       <TabsTrigger value="escalated">Escalated</TabsTrigger>
+                      <TabsTrigger value="disputed">Disputed</TabsTrigger>
                     </TabsList>
                   </Tabs>
 
@@ -364,7 +434,9 @@ export default function DashboardPage() {
                           </div>
                         </TableCell>
                         <TableCell>{getSeverityBadge(report.severity)}</TableCell>
-                        <TableCell>{getStatusBadge(report.status)}</TableCell>
+                        <TableCell>
+                          {getStatusBadge(report.status, report.publicOpinionStatus)}
+                        </TableCell>
                         <TableCell className="text-right font-medium text-xs">
                           {report.votes || report.verificationsCount || 0}
                         </TableCell>

@@ -46,7 +46,40 @@ import {
 import type { HazardReport } from "@/lib/types/hazard";
 
 /** Status vs severity are separate vocabularies (Severity/Status Split). */
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, publicOpinionStatus?: string) {
+  if (publicOpinionStatus === "reopened_by_community") {
+    return (
+      <span className="status-escalated bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30">
+        <i aria-hidden="true" className="bg-rose-600" />
+        Citizen Disputed
+      </span>
+    );
+  }
+  if (publicOpinionStatus === "verified_by_community") {
+    return (
+      <span className="status-progress bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
+        <i aria-hidden="true" className="bg-amber-600" />
+        Community Verified
+      </span>
+    );
+  }
+  if (publicOpinionStatus === "under_repair") {
+    return (
+      <span className="status-progress bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30">
+        <i aria-hidden="true" className="bg-blue-600" />
+        Under Repair
+      </span>
+    );
+  }
+  if (publicOpinionStatus === "under_review") {
+    return (
+      <span className="status-open bg-sky-500/15 text-sky-700 dark:text-sky-400 border-sky-500/30">
+        <i aria-hidden="true" className="bg-sky-600" />
+        Quorum Pending
+      </span>
+    );
+  }
+
   switch (status) {
     case "open":
       return (
@@ -536,7 +569,9 @@ export default function ReportsPage() {
                           </span>
                         </TableCell>
 
-                        <TableCell>{getStatusBadge(report.status)}</TableCell>
+                        <TableCell>
+                          {getStatusBadge(report.status, report.publicOpinionStatus)}
+                        </TableCell>
 
                         <TableCell>{getSeverityBadge(report.severity)}</TableCell>
 

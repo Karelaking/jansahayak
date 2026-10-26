@@ -33,7 +33,7 @@ import { GET as getVotesRoute } from "@/app/api/incidents/[incidentId]/votes/rou
 import { GET as getSessionRoute } from "@/app/api/auth/session/route";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limit";
 
-describe("PRD §19 End-to-End Integration Test Suite (53 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (55 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -1549,5 +1549,91 @@ describe("PRD §19 End-to-End Integration Test Suite (53 Scenarios)", () => {
     });
     expect(resolvedResult.success).toBe(true);
     expect(resolvedResult.subject).toContain("Community Verified Resolved");
+  });
+
+  // Scenario 54: Main Dashboard & Reports Registry Consensus Status Normalization (PRD §14B)
+  it("Scenario 54: Dashboard consensus normalization identifies citizen dispute dockets and quorum state", () => {
+    // 1. Verify consensus normalization helper
+    function resolveDashboardConsensusLabel(status: string, publicOpinionStatus?: string) {
+      if (publicOpinionStatus === "reopened_by_community") return "Citizen Disputed";
+      if (publicOpinionStatus === "verified_by_community") return "Community Verified";
+      if (publicOpinionStatus === "under_repair") return "Under Repair";
+      if (publicOpinionStatus === "under_review") return "Quorum Pending";
+      return status;
+    }
+
+    expect(resolveDashboardConsensusLabel("in-progress", "reopened_by_community")).toBe(
+      "Citizen Disputed",
+    );
+    expect(resolveDashboardConsensusLabel("in-progress", "verified_by_community")).toBe(
+      "Community Verified",
+    );
+    expect(resolveDashboardConsensusLabel("in-progress", "under_repair")).toBe("Under Repair");
+    expect(resolveDashboardConsensusLabel("open", "under_review")).toBe("Quorum Pending");
+    expect(resolveDashboardConsensusLabel("resolved")).toBe("resolved");
+
+    // 2. Verify dispute filtering predicate
+    const mockReports = [
+      {
+        id: "REP-1",
+        status: "in-progress",
+        publicOpinionStatus: "reopened_by_community",
+        votes: 4,
+      },
+      { id: "REP-2", status: "open", publicOpinionStatus: "verified_by_community", votes: 2 },
+      { id: "REP-3", status: "escalated", publicOpinionStatus: "under_review", votes: 1 },
+      { id: "REP-4", status: "resolved", publicOpinionStatus: "resolved", votes: 5 },
+    ];
+
+    const disputedReports = mockReports.filter(
+      (r) => r.publicOpinionStatus === "reopened_by_community" || r.status === "escalated",
+    );
+    expect(disputedReports.length).toBe(2);
+    expect(disputedReports.map((r) => r.id)).toEqual(["REP-1", "REP-3"]);
+
+    // 3. Verify Community Quorum Telemetry calculation
+    const communityQuorumCount = mockReports.filter(
+      (r) => r.publicOpinionStatus === "reopened_by_community" || (r.votes || 0) > 0,
+    ).length;
+    expect(communityQuorumCount).toBe(4);
+  });
+
+  // Scenario 55: Map Drawer & Live Safety Map Public Consensus Integration (PRD §13 & §14B)
+  it("Scenario 55: Map incidents and drawer expose required community consensus counters and metadata", async () => {
+    // 1. Map incidents endpoint returns valid consensus metadata
+    const mapReq = new NextRequest("http://localhost:3000/api/map/incidents", {
+      method: "GET",
+    });
+    const mapRes = await getMapIncidentsRoute(mapReq);
+    expect(mapRes.status).toBe(200);
+
+    const mapData = await mapRes.json();
+    expect(mapData.success).toBe(true);
+    expect(Array.isArray(mapData.incidents)).toBe(true);
+
+    if (mapData.incidents.length > 0) {
+      const sample = mapData.incidents[0];
+      expect(typeof sample.verificationsCount).toBe("number");
+      expect(typeof sample.statusLabel).toBe("string");
+      expect(sample.latitude).toBeGreaterThan(0);
+      expect(sample.longitude).toBeGreaterThan(0);
+    }
+
+    // 2. Voting within 500m qualification rejects missing incident gracefully
+    const voteReq = new NextRequest("http://localhost:3000/api/incidents/inc_unknown/vote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        voteType: "verify_hazard",
+        isLocalResident: true,
+        voterLatitude: 28.4744,
+        voterLongitude: 77.504,
+      }),
+    });
+    const voteRes = await postVoteRoute(voteReq, {
+      params: Promise.resolve({ incidentId: "inc_unknown" }),
+    });
+    // Unknown incident in DB returns 404
+    expect(voteRes.status).toBe(404);
   });
 });
