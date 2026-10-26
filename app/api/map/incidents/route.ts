@@ -55,8 +55,11 @@ export async function GET(req: NextRequest) {
       longitude: Number(inc.longitude),
       coordinates: `${Number(inc.latitude).toFixed(4)}° N, ${Number(inc.longitude).toFixed(4)}° E`,
       spatialUncertaintyMeters: Number(inc.spatialUncertaintyMeters) || 10,
-      verificationsCount: inc.reportCount || 1,
-      votes: inc.reportCount || 1,
+      verificationsCount: Number(inc.verificationVotesCount) || Number(inc.reportCount) || 1,
+      votes: Number(inc.verificationVotesCount) || Number(inc.reportCount) || 1,
+      resolutionVotesCount: Number(inc.resolutionVotesCount) || 0,
+      unresolvedVotesCount: Number(inc.unresolvedVotesCount) || 0,
+      publicOpinionStatus: inc.publicOpinionStatus || "verified_hazard",
       reportedAt:
         inc.publishedAt?.toLocaleDateString("en-IN", {
           day: "numeric",

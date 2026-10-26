@@ -13,7 +13,7 @@ import {
   type MapRef,
 } from "@/components/ui/map";
 import { ArrowRight, ArrowUpRight } from "@/components/icons";
-import { Plus } from "lucide-react";
+import { Plus, Check, ThumbsUp } from "lucide-react";
 import { GREATER_NOIDA_CENTER } from "@/lib/data";
 import type { HazardReport, HazardCategoryKey } from "@/lib/types/hazard";
 import { HazardPin } from "./hazard-pin";
@@ -93,10 +93,21 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
   const [isMounted, setIsMounted] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<HazardCategoryKey | "all">("all");
   const [liveHazards, setLiveHazards] = useState<HazardReport[]>(hazards);
+  const [votedIncidents, setVotedIncidents] = useState<Record<string, boolean>>({});
+  const [votingLoading, setVotingLoading] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setIsMounted(true);
     let active = true;
+
+    try {
+      const stored = localStorage.getItem("jansahayak_voted_incidents");
+      if (stored) {
+        setVotedIncidents(JSON.parse(stored));
+      }
+    } catch {
+      // localStorage may fail in private mode or SSR
+    }
 
     async function fetchLiveIncidents() {
       try {
@@ -116,6 +127,48 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
       active = false;
     };
   }, []);
+
+  const handleVote = async (incidentId: string) => {
+    if (votedIncidents[incidentId] || votingLoading[incidentId]) return;
+    setVotingLoading((prev) => ({ ...prev, [incidentId]: true }));
+    try {
+      const res = await fetch(`/api/incidents/${incidentId}/vote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voteType: "verify_hazard",
+          isLocalResident: true,
+          wantsUpdates: false,
+        }),
+      });
+      if (res.ok) {
+        setVotedIncidents((prev) => {
+          const updated = { ...prev, [incidentId]: true };
+          try {
+            localStorage.setItem("jansahayak_voted_incidents", JSON.stringify(updated));
+          } catch {
+            // ignore
+          }
+          return updated;
+        });
+        setLiveHazards((prev) =>
+          prev.map((h) =>
+            h.id === incidentId
+              ? {
+                  ...h,
+                  verificationsCount: (h.verificationsCount || h.votes || 1) + 1,
+                  votes: (h.votes || 1) + 1,
+                }
+              : h,
+          ),
+        );
+      }
+    } catch (err) {
+      console.warn("Vote recording error:", err);
+    } finally {
+      setVotingLoading((prev) => ({ ...prev, [incidentId]: false }));
+    }
+  };
 
   const filteredHazards = liveHazards.filter(
     (h) => selectedCategory === "all" || h.category === selectedCategory,
@@ -181,24 +234,93 @@ export function LiveHazardMap({ hazards = [], showHeroOverlay = true }: LiveHaza
 
             {/* Click popup anchored to the pin */}
             <MarkerPopup>
-              <div className="w-64 rounded-lg bg-white p-3 text-[#17382f] shadow-xl">
+              <div className="w-72 rounded-xl bg-white p-3.5 text-[#17382f] shadow-2xl border border-[#e5e9e2]">
                 <div className="flex items-center justify-between text-[10px] text-[#63736b]">
                   <span className="font-mono font-semibold text-[#0e2b24]">{hazard.id}</span>
-                  <span>{hazard.reportedAt || hazard.time || "Recently"}</span>
+                  <span
+                    className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold border ${
+                      hazard.publicOpinionStatus === "community_resolved"
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                        : hazard.publicOpinionStatus === "public_disputed"
+                          ? "bg-amber-50 text-amber-900 border-amber-200"
+                          : hazard.publicOpinionStatus === "under_repair"
+                            ? "bg-blue-50 text-blue-800 border-blue-200"
+                            : "bg-[#eaf1e9] text-[#1e4638] border-[#c5d8c3]"
+                    }`}
+                  >
+                    {hazard.publicOpinionStatus === "community_resolved"
+                      ? "Community Resolved"
+                      : hazard.publicOpinionStatus === "public_disputed"
+                        ? "Public Disputed"
+                        : hazard.publicOpinionStatus === "under_repair"
+                          ? "Under Repair"
+                          : "Community Verified"}
+                  </span>
                 </div>
-                <p className="mt-1 font-semibold text-xs text-[#0e2b24]">{hazard.title}</p>
+                <p className="mt-1.5 font-semibold text-xs leading-snug text-[#0e2b24]">
+                  {hazard.title}
+                </p>
                 <p className="mt-0.5 text-[11px] text-[#486057]">
                   {hazard.landmark || hazard.location}
                 </p>
+
+                {/* Community Verification & Public Opinion Bar */}
+                <div className="mt-2.5 rounded-lg bg-[#fafbf9] border border-[#ebeee8] p-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-semibold text-[#17382f] flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                      {hazard.verificationsCount || hazard.votes || 1} local verifications
+                    </span>
+                    {hazard.resolutionVotesCount !== undefined &&
+                      hazard.resolutionVotesCount > 0 && (
+                        <span className="text-[10px] text-[#486057] font-medium">
+                          {hazard.resolutionVotesCount} fixed / {hazard.unresolvedVotesCount || 0}{" "}
+                          open
+                        </span>
+                      )}
+                  </div>
+
+                  {/* 1-click citizen verification */}
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={votedIncidents[hazard.id] || votingLoading[hazard.id]}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleVote(hazard.id);
+                      }}
+                      className={`w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-md text-[11px] font-semibold transition-all ${
+                        votedIncidents[hazard.id]
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-default"
+                          : "bg-[#0e2b24] text-[#faf9f5] hover:bg-[#1c4b3e] active:scale-95 shadow-xs"
+                      }`}
+                    >
+                      {votingLoading[hazard.id] ? (
+                        <span>Recording...</span>
+                      ) : votedIncidents[hazard.id] ? (
+                        <>
+                          <Check className="size-3.5 stroke-[2.5]" />
+                          <span>You Verified This Hazard (+1)</span>
+                        </>
+                      ) : (
+                        <>
+                          <ThumbsUp className="size-3 stroke-[2.2]" />
+                          <span>I See This Too (+1)</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
                 <div className="mt-2.5 flex items-center justify-between border-t border-[#eef1e9] pt-2 text-[10px]">
-                  <span className="font-medium text-[#78a37d]">
-                    ✓ {hazard.verificationsCount || hazard.votes || 0} verified
+                  <span className="text-[#63736b]">
+                    {hazard.reportedAt || hazard.time || "Recently"}
                   </span>
                   <Link
                     href={`/reports/${hazard.id}`}
-                    className="font-semibold text-[#0e2b24] underline underline-offset-2 hover:opacity-80"
+                    className="font-semibold text-[#0e2b24] underline underline-offset-2 hover:opacity-80 inline-flex items-center gap-0.5"
                   >
-                    View Case Details &rarr;
+                    <span>Community Progress &rarr;</span>
                   </Link>
                 </div>
               </div>

@@ -190,21 +190,18 @@ export function SiteNav() {
                     onClick={() => setMobileOpen(false)}
                     className="flex items-center justify-between py-2.5 px-3 rounded-lg text-sm font-medium text-[#0e2b24] hover:bg-[#eef1e9] transition-colors"
                   >
-                    <span>{item.label}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span>{item.label}</span>
+                      {item.href === "/dashboard" && (
+                        <span className="text-[9px] font-semibold text-[#5c6f66] bg-[#eef1e9] px-1.5 py-0.2 rounded border border-[#cbd5cb]">
+                          Staff
+                        </span>
+                      )}
+                    </span>
                     <ArrowRight className="size-4 text-[#5c6f66]" />
                   </Link>
                 </li>
               ))}
-              <li>
-                <Link
-                  href="/dashboard"
-                  onClick={() => setMobileOpen(false)}
-                  className="flex items-center justify-between py-2.5 px-3 rounded-lg text-sm font-medium text-[#0e2b24] hover:bg-[#eef1e9] transition-colors"
-                >
-                  <span>Operations Dashboard</span>
-                  <ArrowRight className="size-4 text-[#5c6f66]" />
-                </Link>
-              </li>
             </ul>
 
             <div className="mt-4 pt-3 border-t border-[#cbd5cb]/60">

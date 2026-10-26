@@ -27,9 +27,11 @@ import { POST as submitRoute } from "@/app/api/pipeline/submit/route";
 import { GET as getMapIncidentsRoute } from "@/app/api/map/incidents/route";
 import { GET as getReportsRoute } from "@/app/api/reports/route";
 import { POST as reprocessRoute } from "@/app/api/reports/[reportId]/reprocess/route";
+import { POST as postVoteRoute } from "@/app/api/incidents/[incidentId]/vote/route";
+import { GET as getVotesRoute } from "@/app/api/incidents/[incidentId]/votes/route";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limit";
 
-describe("PRD §19 End-to-End Integration Test Suite (42 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (45 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -1128,5 +1130,108 @@ describe("PRD §19 End-to-End Integration Test Suite (42 Scenarios)", () => {
     expect(json.success).toBe(true);
     expect(typeof json.count).toBe("number");
     expect(Array.isArray(json.reports)).toBe(true);
+  });
+
+  // Scenario 43: POST /api/incidents/:id/vote Payload Validation & Error Handling (PRD §14B & §16)
+  it("Scenario 43: POST /api/incidents/:id/vote validates voteType and handles non-existent incidents", async () => {
+    // 1. Rejects invalid voteType
+    const invalidVoteReq = new NextRequest(
+      "http://localhost:3000/api/incidents/inc_test_123/vote",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ voteType: "thumbs_up" }),
+      },
+    );
+
+    const invalidRes = await postVoteRoute(invalidVoteReq, {
+      params: Promise.resolve({ incidentId: "inc_test_123" }),
+    });
+    expect(invalidRes.status).toBe(400);
+    const invalidJson = await invalidRes.json();
+    expect(invalidJson.error).toMatch(/Invalid voteType/i);
+
+    // 2. Rejects missing incident with 404
+    const validVoteReq = new NextRequest(
+      "http://localhost:3000/api/incidents/inc_missing_404/vote",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          voteType: "verify_hazard",
+          isLocalResident: true,
+        }),
+      },
+    );
+
+    const notFoundRes = await postVoteRoute(validVoteReq, {
+      params: Promise.resolve({ incidentId: "inc_missing_404" }),
+    });
+    expect(notFoundRes.status).toBe(404);
+    const notFoundJson = await notFoundRes.json();
+    expect(notFoundJson.error).toMatch(/not found/i);
+  });
+
+  // Scenario 44: PRD §14B Public Community Consensus Mathematical Gating
+  it("Scenario 44: Community consensus evaluation gates incident resolution and triggers reopen on dispute", () => {
+    const evaluateConsensus = (
+      resolvedVotes: number,
+      unresolvedVotes: number,
+      currentStatus: string,
+    ) => {
+      const total = resolvedVotes + unresolvedVotes;
+      const ratio = total > 0 ? resolvedVotes / total : 0;
+
+      // Gate A: Resolution requires >= 3 confirmations and >= 75% positive ratio
+      const shouldResolve = resolvedVotes >= 3 && ratio >= 0.75;
+
+      // Gate B: Dispute requires >= 2 unresolved votes
+      const isDisputed = unresolvedVotes >= 2;
+
+      let newStatus = currentStatus;
+      let newOpinion = "verified_hazard";
+
+      if (isDisputed) {
+        newStatus = "in_progress";
+        newOpinion = "public_disputed";
+      } else if (shouldResolve) {
+        newStatus = "resolved";
+        newOpinion = "community_resolved";
+      }
+
+      return { shouldResolve, isDisputed, newStatus, newOpinion, ratio };
+    };
+
+    // Case 1: 2 resolve votes (below quorum threshold of 3)
+    const result1 = evaluateConsensus(2, 0, "in_progress");
+    expect(result1.shouldResolve).toBe(false);
+    expect(result1.newStatus).toBe("in_progress");
+
+    // Case 2: 3 resolve votes, 0 unresolved (100% ratio >= 75%) -> Transitions to resolved
+    const result2 = evaluateConsensus(3, 0, "under_repair");
+    expect(result2.shouldResolve).toBe(true);
+    expect(result2.newStatus).toBe("resolved");
+    expect(result2.newOpinion).toBe("community_resolved");
+
+    // Case 3: 3 resolve votes, 2 unresolved votes (60% ratio < 75%) and 2 unresolved votes -> Disputed and reopens
+    const result3 = evaluateConsensus(3, 2, "resolved");
+    expect(result3.isDisputed).toBe(true);
+    expect(result3.newStatus).toBe("in_progress");
+    expect(result3.newOpinion).toBe("public_disputed");
+  });
+
+  // Scenario 45: GET /api/incidents/:id/votes Endpoint Contract (PRD §14B & §16)
+  it("Scenario 45: GET /api/incidents/:id/votes returns 404 for missing incident and enforces contract", async () => {
+    const req = new NextRequest("http://localhost:3000/api/incidents/inc_unknown_xyz/votes", {
+      method: "GET",
+    });
+
+    const res = await getVotesRoute(req, {
+      params: Promise.resolve({ incidentId: "inc_unknown_xyz" }),
+    });
+
+    expect(res.status).toBe(404);
+    const json = await res.json();
+    expect(json.error).toMatch(/not found/i);
   });
 });

@@ -69,6 +69,12 @@ export const incidents = pgTable(
       .notNull()
       .default("10.00"),
     reportCount: integer("report_count").notNull().default(1),
+    verificationVotesCount: integer("verification_votes_count").notNull().default(1),
+    resolutionVotesCount: integer("resolution_votes_count").notNull().default(0),
+    unresolvedVotesCount: integer("unresolved_votes_count").notNull().default(0),
+    publicOpinionStatus: varchar("public_opinion_status", { length: 50 })
+      .notNull()
+      .default("verified_hazard"),
     isPublished: boolean("is_published").notNull().default(false),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     publishedBy: varchar("published_by", { length: 255 }),
@@ -179,6 +185,38 @@ export const publicationRecords = pgTable(
   (table) => [index("publication_records_incident_idx").on(table.incidentId)],
 );
 
+/**
+ * Community Hazard Verification & Resolution Votes Table (PRD §14B)
+ * Stores local resident and reporter verification votes, update subscriptions,
+ * and physical repair confirmation votes.
+ */
+export const incidentVotes = pgTable(
+  "incident_votes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    incidentId: uuid("incident_id")
+      .notNull()
+      .references(() => incidents.id, { onDelete: "cascade" }),
+    voterIdentifier: varchar("voter_identifier", { length: 255 }).notNull(), // userId or voter email/session/ip
+    voterName: varchar("voter_name", { length: 255 }),
+    voterRole: varchar("voter_role", { length: 50 }).notNull().default("local_resident"), // 'reporter' | 'local_resident' | 'commuter'
+    voteType: varchar("vote_type", { length: 50 }).notNull(), // 'verify_hazard' | 'confirm_resolved' | 'still_unresolved'
+    comment: text("comment"),
+    latitude: numeric("latitude", { precision: 10, scale: 7 }),
+    longitude: numeric("longitude", { precision: 10, scale: 7 }),
+    sectorName: varchar("sector_name", { length: 100 }),
+    isLocalResident: boolean("is_local_resident").notNull().default(true),
+    wantsUpdates: boolean("wants_updates").notNull().default(false),
+    voterEmail: varchar("voter_email", { length: 255 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("incident_votes_incident_idx").on(table.incidentId),
+    index("incident_votes_voter_idx").on(table.voterIdentifier),
+    index("incident_votes_type_idx").on(table.voteType),
+  ],
+);
+
 // Type exports for application use
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -197,3 +235,6 @@ export type NewOutboxEvent = typeof outboxEvents.$inferInsert;
 
 export type PublicationRecord = typeof publicationRecords.$inferSelect;
 export type NewPublicationRecord = typeof publicationRecords.$inferInsert;
+
+export type IncidentVote = typeof incidentVotes.$inferSelect;
+export type NewIncidentVote = typeof incidentVotes.$inferInsert;

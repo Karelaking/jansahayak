@@ -18,6 +18,8 @@ export const ROLE_PERMISSIONS: Record<
   {
     canSubmitReport: boolean;
     canViewPublicMap: boolean;
+    canVoteOnIncident: boolean;
+    canSubscribeToUpdates: boolean;
     canViewModerationQueue: boolean;
     canApproveRejectIncident: boolean;
     canMergeIncidents: boolean;
@@ -30,6 +32,8 @@ export const ROLE_PERMISSIONS: Record<
   citizen: {
     canSubmitReport: true,
     canViewPublicMap: true,
+    canVoteOnIncident: true,
+    canSubscribeToUpdates: true,
     canViewModerationQueue: false,
     canApproveRejectIncident: false,
     canMergeIncidents: false,
@@ -41,6 +45,8 @@ export const ROLE_PERMISSIONS: Record<
   moderator: {
     canSubmitReport: true,
     canViewPublicMap: true,
+    canVoteOnIncident: true,
+    canSubscribeToUpdates: true,
     canViewModerationQueue: true,
     canApproveRejectIncident: true,
     canMergeIncidents: true,
@@ -52,6 +58,8 @@ export const ROLE_PERMISSIONS: Record<
   admin: {
     canSubmitReport: true,
     canViewPublicMap: true,
+    canVoteOnIncident: true,
+    canSubscribeToUpdates: true,
     canViewModerationQueue: true,
     canApproveRejectIncident: true,
     canMergeIncidents: true,
@@ -63,6 +71,8 @@ export const ROLE_PERMISSIONS: Record<
   field_official: {
     canSubmitReport: true,
     canViewPublicMap: true,
+    canVoteOnIncident: true,
+    canSubscribeToUpdates: true,
     canViewModerationQueue: true,
     canApproveRejectIncident: false,
     canMergeIncidents: false,

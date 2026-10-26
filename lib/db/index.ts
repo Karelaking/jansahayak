@@ -35,7 +35,38 @@ export async function initPostgres(): Promise<{ success: boolean; message: strin
     const client = await pool.connect();
     try {
       await client.query("CREATE EXTENSION IF NOT EXISTS postgis;");
-      return { success: true, message: "PostgreSQL & PostGIS successfully initialized" };
+      await client.query(`
+        ALTER TABLE incidents 
+        ADD COLUMN IF NOT EXISTS verification_votes_count integer NOT NULL DEFAULT 1,
+        ADD COLUMN IF NOT EXISTS resolution_votes_count integer NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS unresolved_votes_count integer NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS public_opinion_status varchar(50) NOT NULL DEFAULT 'verified_hazard';
+
+        CREATE TABLE IF NOT EXISTS incident_votes (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+          voter_identifier varchar(255) NOT NULL,
+          voter_name varchar(255),
+          voter_role varchar(50) NOT NULL DEFAULT 'local_resident',
+          vote_type varchar(50) NOT NULL,
+          comment text,
+          latitude numeric(10, 7),
+          longitude numeric(10, 7),
+          sector_name varchar(100),
+          is_local_resident boolean NOT NULL DEFAULT true,
+          wants_updates boolean NOT NULL DEFAULT false,
+          voter_email varchar(255),
+          created_at timestamp with time zone NOT NULL DEFAULT now()
+        );
+
+        CREATE INDEX IF NOT EXISTS incident_votes_incident_idx ON incident_votes(incident_id);
+        CREATE INDEX IF NOT EXISTS incident_votes_voter_idx ON incident_votes(voter_identifier);
+        CREATE INDEX IF NOT EXISTS incident_votes_type_idx ON incident_votes(vote_type);
+      `);
+      return {
+        success: true,
+        message: "PostgreSQL, PostGIS & JanSahayak tables successfully initialized",
+      };
     } finally {
       client.release();
     }

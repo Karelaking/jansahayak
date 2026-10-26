@@ -24,6 +24,7 @@ import { SiteNav, SiteFooter } from "@/components/sections";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { CommunityProgressVotingWidget } from "@/components/reports/community-progress-voting-widget";
 
 interface StageLog {
   stage: number;
@@ -70,6 +71,10 @@ interface ReportDetail {
     municipalDocketNumber?: string | null;
     municipalDispatchedAt?: string | null;
     municipalRecipient?: string | null;
+    verificationVotesCount?: number;
+    resolutionVotesCount?: number;
+    unresolvedVotesCount?: number;
+    publicOpinionStatus?: string;
   } | null;
   stages: StageLog[];
 }
@@ -516,6 +521,26 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
                   </Link>
                 )}
               </div>
+            )}
+
+            {/* ── PRD §14B Community Hazard Verification & Resolution Voting ── */}
+            {(report.canonicalIncident ||
+              report.associatedIncidentId ||
+              report.status === "PUBLISHED") && (
+              <CommunityProgressVotingWidget
+                incidentId={
+                  report.canonicalIncident?.id || report.associatedIncidentId || report.reportId
+                }
+                incidentNumber={report.canonicalIncident?.incidentNumber}
+                initialStatus={report.canonicalIncident?.status || report.status.toLowerCase()}
+                initialOpinionStatus={
+                  report.canonicalIncident?.publicOpinionStatus || "verified_hazard"
+                }
+                initialVerifications={report.canonicalIncident?.verificationVotesCount || 1}
+                initialResolutions={report.canonicalIncident?.resolutionVotesCount || 0}
+                initialUnresolved={report.canonicalIncident?.unresolvedVotesCount || 0}
+                onRefreshParent={() => fetchReport(false)}
+              />
             )}
 
             {/* ── PRD §3 8-Stage Automated Processing Stepper ── */}

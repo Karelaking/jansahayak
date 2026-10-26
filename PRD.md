@@ -50,16 +50,17 @@ The system must never publish a report or incident when a required processing st
 - Moderation and approval workflow.
 - Explicit terminal rejection with documented reasons (`REJECTED` status).
 - Canonical incident creation and public map publication upon complete verification.
+- **Role-Based Access Control (RBAC)**: Public/Citizen tier (map exploration, report submission, and localized community voting) vs. Staff/Moderator/Admin tier (moderation queues, dossier review, merge/split operations, and municipal escalation).
 - **Municipal civic report dossier generation and automatic email dispatch to the local municipality**.
+- **Community Hazard Verification & Resolution Voting (Public-Opinion-Driven Project Progress)**: Local residents and reporting citizens vote to verify hazards, subscribe to progress updates, and gate final resolution status based on community consensus.
 - Automatic retries, transactional outbox pattern, failure handling, and operational monitoring.
 - Audit logs, citizen notifications, and automated integration tests.
 
 ### Excluded from this module
 
 - Authority performance scoring and SLA penalties.
-- Citizen resolution voting.
-- Final physical repair verification by field contractors.
 - Proprietary closed-source municipal ERP integrations (the open standard email dossier is the primary dispatch channel).
+- Commercial contractor payout or procurement management.
 
 These later workflows must consume the canonical incident created by this pipeline without weakening its validation or publication requirements.
 
@@ -80,6 +81,7 @@ These later workflows must consume the canonical incident created by this pipeli
 13. **Map Publication**: Only upon complete, approved workflow execution does the incident transition to `PUBLISHED` and appear on the public safety map.
 14. **Municipal Civic Report Generation & Email Dispatch**: Immediately following publication, the system compiles a formal civic report docket containing the incident details, verified coordinates, AI findings, and evidence photos, and automatically dispatches it to the local municipality grievance redressal authority via email.
 15. **Citizen Tracking**: The citizen can track progress at any time via `/reports/:reportId`, observing stage transitions in real-time (`SUBMITTED` → `PROCESSING` → `APPROVED` / `REJECTED` → `PUBLISHED` & `MUNICIPALLY_DISPATCHED`).
+16. **Community Hazard Verification & Public-Opinion Progress Gating**: Once pinned to the public map, citizens living or commuting in the affected neighborhood (and the original reporter) can cast verification votes, subscribe to municipal progress updates, and vote on physical repair completion. Overall project progress and final transition to `RESOLVED` directly depend on public community consensus rather than unilateral administrative sign-off.
 
 ## 4. Processing architecture
 
@@ -490,6 +492,44 @@ Once a canonical incident satisfies the publication eligibility predicate and tr
 3. **Citizen Notification**:
    - The citizen's tracking dossier at `/reports/:reportId` displays a confirmed dispatch badge: _"Official Civic Dossier Dispatched to Local Municipality"_, providing transparent civic accountability.
 
+## 14B. Stage 10: Community Verification & Public-Opinion-Driven Project Progress
+
+Once an approved hazard is verified and pinned to the public map, community members living in or commuting through the affected area—along with the original reporting citizen—become the primary deciders of ongoing hazard verification, priority escalation, and physical repair completion.
+
+### Requirements
+
+1. **Role-Based Access Control (RBAC)**:
+   - **General Users (Citizens / Public)**:
+     - View all verified incidents and real-time hazard badges on the interactive public map (`/map`).
+     - Submit new road safety hazard reports (`/reports/new`) with in-app camera capture and capture-time GPS telemetry.
+     - View public-safe incident tracking dossiers (`/reports/:reportId`).
+     - Cast localized community verification votes on incidents in their residential or commute sector (`POST /api/incidents/:id/vote`).
+     - Subscribe to automated project progress notifications as municipal repairs proceed.
+     - Vote to confirm or dispute physical repair resolution.
+     - Restricted from accessing operational staff tools (`/dashboard/moderation`, `/dashboard/pipeline`, `/dashboard/escalations`).
+   - **Civic Staff & Moderators (`moderator`, `admin`)**:
+     - Manage moderation review queues, inspect raw evidence dossiers, and execute merge/split/reject/approve actions.
+     - Trigger manual re-dispatch of municipal dossiers, coordinate with GNIDA/PWD engineering wings, and monitor system outbox telemetry.
+
+2. **Localized Community Voting Subsystem**:
+   - **Voter Eligibility**:
+     - The original citizen who submitted the hazard report.
+     - Residents living within the local sector / pilot bounding box (e.g., Pari Chowk, Alpha I/II, Beta I/II, Knowledge Park) or commuters located within 500m of the incident centroid.
+   - **Vote Classifications**:
+     - `verify_hazard` ("I see this hazard / Confirmed road danger"): Increments incident verification tally, pushing priority higher in municipal escalation reports.
+     - `confirm_resolved` ("Fixed & Safe"): Community confirmation that physical repair work has restored road safety.
+     - `still_unresolved` ("Repair Failed / Defect Still Present"): Citizen dispute indicating contractor patch failed or hazard remains unaddressed.
+   - **Update Subscriptions**:
+     - Voters can opt in with their contact information or session to receive real-time notifications when the municipal department acknowledges, begins field repair, or requests community verification.
+
+3. **Public-Opinion-Governed Project Progress**:
+   - An incident's lifecycle cannot transition to `RESOLVED` purely by administrative decree or unverified contractor claims.
+   - **Community Consensus Gating**:
+     - When the municipal authority marks work complete, the incident transitions to `under_review` / `community_verification`.
+     - Local residents and reporters cast resolution confirmation votes.
+     - If positive confirmation reaches the configured consensus threshold (e.g. minimum 3 local resident votes and >= 75% positive ratio), the incident transitions to `resolved` with a community-verified badge.
+     - If local community members report `still_unresolved`, the incident automatically re-opens with status `open` / `reopened`, re-escalating directly to the municipal authority docket with community feedback notes.
+
 ## 15. Failure and retry policy
 
 Every stage must classify errors as:
@@ -577,6 +617,8 @@ Possible endpoints:
 - `POST /api/cron/process-outbox`
 - `POST /api/pipeline/process`
 - `GET /api/map/incidents`
+- `POST /api/incidents/:incidentId/vote`
+- `GET /api/incidents/:incidentId/votes`
 
 All administrative routes must enforce authentication, role-based authorization, input validation and audit logging.
 

@@ -68,6 +68,10 @@ export async function GET(
               municipalDocketNumber: (meta.municipalDocketNumber as string) || null,
               municipalDispatchedAt: (meta.municipalDispatchedAt as string) || null,
               municipalRecipient: (meta.municipalRecipient as string) || null,
+              verificationVotesCount: Number(inc.verificationVotesCount) || 1,
+              resolutionVotesCount: Number(inc.resolutionVotesCount) || 0,
+              unresolvedVotesCount: Number(inc.unresolvedVotesCount) || 0,
+              publicOpinionStatus: inc.publicOpinionStatus || "verified_hazard",
             },
             stages: [],
           });
@@ -108,6 +112,10 @@ export async function GET(
       municipalDocketNumber?: string | null;
       municipalDispatchedAt?: string | null;
       municipalRecipient?: string | null;
+      verificationVotesCount?: number;
+      resolutionVotesCount?: number;
+      unresolvedVotesCount?: number;
+      publicOpinionStatus?: string;
     } | null = null;
 
     if (report.associatedIncidentId) {
@@ -122,6 +130,10 @@ export async function GET(
             reportCount: incidents.reportCount,
             publishedAt: incidents.publishedAt,
             metadata: incidents.metadata,
+            verificationVotesCount: incidents.verificationVotesCount,
+            resolutionVotesCount: incidents.resolutionVotesCount,
+            unresolvedVotesCount: incidents.unresolvedVotesCount,
+            publicOpinionStatus: incidents.publicOpinionStatus,
           })
           .from(incidents)
           .where(eq(incidents.id, report.associatedIncidentId))
@@ -140,6 +152,10 @@ export async function GET(
             municipalDocketNumber: (meta.municipalDocketNumber as string) || null,
             municipalDispatchedAt: (meta.municipalDispatchedAt as string) || null,
             municipalRecipient: (meta.municipalRecipient as string) || null,
+            verificationVotesCount: Number(inc.verificationVotesCount) || 1,
+            resolutionVotesCount: Number(inc.resolutionVotesCount) || 0,
+            unresolvedVotesCount: Number(inc.unresolvedVotesCount) || 0,
+            publicOpinionStatus: inc.publicOpinionStatus || "verified_hazard",
           };
         }
       } catch {

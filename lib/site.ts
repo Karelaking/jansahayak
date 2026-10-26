@@ -5,10 +5,10 @@ export const siteConfig = {
     "Document road-safety hazards, discover existing reports, and follow recorded civic updates in Greater Noida.",
   pilotArea: "Greater Noida, Uttar Pradesh",
   navigation: [
-    { label: "Dashboard", href: "/dashboard" },
     { label: "Explore map", href: "/map" },
     { label: "How it works", href: "/#how-it-works" },
     { label: "Community impact", href: "/#community" },
+    { label: "Operations", href: "/dashboard" },
   ],
   languages: [
     {
