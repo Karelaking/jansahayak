@@ -43,14 +43,16 @@ export async function executeStage3AIAnalysis(
 
   try {
     const apiKey = process.env.OPENROUTER_API_KEY;
-    const configuredModel = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
+    const configuredModel = process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-001";
     const baseUrl = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
 
     // Candidate models in preference order (handles model deprecations/unavailability)
     const candidateModels = [
       configuredModel,
-      "google/gemini-2.5-flash",
-      "google/gemini-2.5-flash-lite",
+      "google/gemini-2.0-flash-001",
+      "google/gemini-flash-1.5",
+      "meta-llama/llama-3.2-11b-vision-instruct",
+      "openai/gpt-4o-mini",
     ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
     let analysis: AIAnalysisResult;
@@ -60,8 +62,10 @@ export async function executeStage3AIAnalysis(
     if (apiKey && apiKey.trim().length > 10 && !apiKey.includes("placeholder")) {
       provider = "openrouter";
 
-      // Prepare images: load first 4 photos as base64
+      // Prepare images: load up to 4 photos as base64, guarding total HTTP body budget
       const imageParts: Array<{ type: string; image_url: { url: string } }> = [];
+      let totalPayloadBytes = 0;
+      const MAX_TOTAL_IMAGE_BYTES = 6 * 1024 * 1024; // 6MB payload guard for OpenRouter HTTP limits
 
       for (let i = 0; i < Math.min(report.evidencePhotos.length, 4); i++) {
         const photo = report.evidencePhotos[i];
@@ -75,7 +79,12 @@ export async function executeStage3AIAnalysis(
           }
         }
 
-        if (buf) {
+        if (buf && buf.length > 0) {
+          if (totalPayloadBytes + buf.length > MAX_TOTAL_IMAGE_BYTES && imageParts.length >= 2) {
+            // Keep at least 2 representative photos within the safe HTTP payload budget
+            break;
+          }
+          totalPayloadBytes += buf.length;
           const mime = photo.contentType || "image/jpeg";
           const base64 = buf.toString("base64");
           imageParts.push({

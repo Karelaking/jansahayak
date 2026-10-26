@@ -97,40 +97,48 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
     Array<{ filename: string; base64: string; previewUrl: string }>
   >([]);
 
-  const fetchReport = React.useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch(`/api/reports/${encodeURIComponent(reportId)}`);
-      const data = await res.json();
+  const reportRef = React.useRef<ReportDetail | null>(null);
+  reportRef.current = report;
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Unable to locate report dossier.");
+  const fetchReport = React.useCallback(
+    async (isInitial = false) => {
+      if (isInitial && !reportRef.current) {
+        setIsLoading(true);
       }
+      try {
+        const res = await fetch(`/api/reports/${encodeURIComponent(reportId)}`);
+        const data = await res.json();
 
-      setReport(data);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [reportId]);
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Unable to locate report dossier.");
+        }
+
+        setReport(data);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (isInitial) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [reportId],
+  );
 
   React.useEffect(() => {
-    fetchReport();
+    fetchReport(true);
     // PRD §3: Automatically poll for updates while background worker analyzes report
     const interval = setInterval(() => {
-      setReport((curr) => {
-        if (
-          !curr ||
-          curr.status === "SUBMITTED" ||
-          curr.status === "PROCESSING" ||
-          curr.status === "DRAFT"
-        ) {
-          fetchReport();
-        }
-        return curr;
-      });
+      const current = reportRef.current;
+      if (
+        current &&
+        (current.status === "SUBMITTED" ||
+          current.status === "PROCESSING" ||
+          current.status === "DRAFT")
+      ) {
+        fetchReport(false);
+      }
     }, 3000);
     return () => clearInterval(interval);
   }, [fetchReport]);
@@ -299,7 +307,7 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
             <h2 className="text-base font-semibold text-rose-950">Report Not Found</h2>
             <p className="text-xs text-rose-800 max-w-md mx-auto">{error}</p>
             <Button
-              onClick={fetchReport}
+              onClick={() => fetchReport(true)}
               variant="outline"
               size="sm"
               className="text-xs border-rose-300 hover:bg-rose-100"

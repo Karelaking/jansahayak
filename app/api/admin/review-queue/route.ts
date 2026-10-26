@@ -9,7 +9,7 @@ import { eq, or, desc } from "drizzle-orm";
  */
 export async function GET(req: NextRequest) {
   try {
-    const session = await getCurrentUserSession();
+    const session = await getCurrentUserSession(req);
 
     if (session.role !== "moderator" && session.role !== "admin") {
       return NextResponse.json(

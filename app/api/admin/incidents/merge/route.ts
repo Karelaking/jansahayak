@@ -11,7 +11,7 @@ import { executeIncidentMerge } from "@/lib/pipeline/moderation";
  */
 export async function POST(req: NextRequest) {
   try {
-    const session = await getCurrentUserSession();
+    const session = await getCurrentUserSession(req);
 
     if (session.role !== "moderator" && session.role !== "admin") {
       return NextResponse.json(

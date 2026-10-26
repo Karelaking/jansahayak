@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserSession } from "@/lib/auth/session";
 import { db, incidents, outboxEvents } from "@/lib/db";
 import { getReportsCollection } from "@/lib/db/mongodb";
@@ -9,9 +9,9 @@ import { getReportsCollection } from "@/lib/db/mongodb";
  * Computes authentic live metrics across PostgreSQL canonical incidents,
  * outbox events, and MongoDB citizen reports.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const session = await getCurrentUserSession();
+    const session = await getCurrentUserSession(req);
 
     if (session.role !== "moderator" && session.role !== "admin") {
       return NextResponse.json(

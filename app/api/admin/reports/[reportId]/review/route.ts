@@ -12,12 +12,9 @@ import { eq } from "drizzle-orm";
  * raw submission data, GridFS photo records, AI vision extractions, linked canonical incident,
  * and immutable moderation audit history.
  */
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ reportId: string }> },
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ reportId: string }> }) {
   try {
-    const session = await getCurrentUserSession();
+    const session = await getCurrentUserSession(req);
 
     if (session.role !== "moderator" && session.role !== "admin") {
       return NextResponse.json(

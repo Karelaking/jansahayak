@@ -14,30 +14,75 @@ export async function GET(
   try {
     const { reportId } = await params;
     const reportsColl = await getReportsCollection();
-    const report = await reportsColl.findOne(
-      { reportId },
-      {
-        projection: {
-          reportId: 1,
-          category: 1,
-          description: 1,
-          status: 1,
-          createdAt: 1,
-          submissionLocation: 1,
-          evidencePhotos: 1,
-          associatedIncidentId: 1,
-        },
-      },
-    );
+    const projection = {
+      reportId: 1,
+      category: 1,
+      description: 1,
+      status: 1,
+      rejectionReason: 1,
+      createdAt: 1,
+      submissionLocation: 1,
+      evidencePhotos: 1,
+      associatedIncidentId: 1,
+    };
 
+    // 1. Try finding by raw reportId
+    let report = await reportsColl.findOne({ reportId }, { projection });
+
+    // 2. Fallback: Check if reportId is an associated canonical incident ID
     if (!report) {
+      report = await reportsColl.findOne({ associatedIncidentId: reportId }, { projection });
+    }
+
+    // 3. Fallback: Check if reportId is a canonical incident in PostgreSQL
+    if (!report) {
+      try {
+        const [inc] = await db.select().from(incidents).where(eq(incidents.id, reportId)).limit(1);
+
+        if (inc) {
+          const meta = (inc.metadata || {}) as Record<string, unknown>;
+          return NextResponse.json({
+            success: true,
+            reportId: inc.incidentNumber,
+            category: inc.category,
+            description: inc.summary || inc.title,
+            status: inc.isPublished ? "PUBLISHED" : inc.status.toUpperCase(),
+            rejectionReason: inc.rejectionReason,
+            createdAt: inc.createdAt.toISOString(),
+            location: {
+              latitude: Number(inc.latitude),
+              longitude: Number(inc.longitude),
+              accuracyMeters: Number(inc.spatialUncertaintyMeters) || 10,
+            },
+            photoCount: 0,
+            photos: [],
+            associatedIncidentId: inc.id,
+            canonicalIncident: {
+              id: inc.id,
+              incidentNumber: inc.incidentNumber,
+              isPublished: inc.isPublished,
+              status: inc.status,
+              moderationStatus: inc.moderationStatus,
+              reportCount: inc.reportCount,
+              publishedAt: inc.publishedAt,
+              municipalDocketNumber: (meta.municipalDocketNumber as string) || null,
+              municipalDispatchedAt: (meta.municipalDispatchedAt as string) || null,
+              municipalRecipient: (meta.municipalRecipient as string) || null,
+            },
+            stages: [],
+          });
+        }
+      } catch {
+        // Non-blocking fallback
+      }
+
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
     // Fetch public-safe stage progress
     const logsColl = await getPipelineLogsCollection();
     const stageLogs = await logsColl
-      .find({ reportId })
+      .find({ reportId: report.reportId })
       .project({ stage: 1, stageName: 1, status: 1, details: 1, timestamp: 1 })
       .sort({ stage: 1 })
       .toArray();

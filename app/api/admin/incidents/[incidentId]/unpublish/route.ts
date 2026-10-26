@@ -14,7 +14,7 @@ export async function POST(
   { params }: { params: Promise<{ incidentId: string }> },
 ) {
   try {
-    const session = await getCurrentUserSession();
+    const session = await getCurrentUserSession(req);
 
     if (session.role !== "moderator" && session.role !== "admin") {
       return NextResponse.json(

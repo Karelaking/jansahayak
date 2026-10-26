@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserSession } from "@/lib/auth/session";
 import { db, outboxEvents } from "@/lib/db";
 import { desc } from "drizzle-orm";
@@ -7,9 +7,9 @@ import { desc } from "drizzle-orm";
  * PRD §18 Outbox Telemetry & Queue Observability Endpoint
  * GET /api/admin/outbox
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const session = await getCurrentUserSession();
+    const session = await getCurrentUserSession(req);
 
     if (session.role !== "moderator" && session.role !== "admin") {
       return NextResponse.json(

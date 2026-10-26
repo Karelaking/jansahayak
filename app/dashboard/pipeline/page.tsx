@@ -16,6 +16,7 @@ import {
   RefreshCw,
   FileCheck,
   Layers,
+  Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -275,7 +276,7 @@ export default function PipelineInspectionPage() {
               variant="outline"
               className="bg-emerald-500/10 text-emerald-700 border-emerald-300 dark:border-emerald-800 text-xs"
             >
-              Stages 1–8 Active
+              Stages 1–9 Active
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
@@ -616,6 +617,7 @@ export default function PipelineInspectionPage() {
                     {st.stage === 6 && <Database className="h-4 w-4 text-emerald-600" />}
                     {st.stage === 7 && <ShieldCheck className="h-4 w-4 text-emerald-600" />}
                     {st.stage === 8 && <Send className="h-4 w-4 text-emerald-600" />}
+                    {st.stage === 9 && <Mail className="h-4 w-4 text-emerald-600" />}
                     {st.stageName}
                   </CardTitle>
                 </CardHeader>
@@ -680,10 +682,20 @@ export default function PipelineInspectionPage() {
                 </div>
 
                 {moderationDecision && publicationResult && (
-                  <div className="mt-3 p-3 rounded bg-muted/60 text-xs font-mono">
-                    <p className="font-semibold text-foreground mb-1">
+                  <div className="mt-3 p-3 rounded bg-muted/60 text-xs font-mono space-y-2">
+                    <p className="font-semibold text-foreground">
                       Decision Recorded: {moderationDecision.toUpperCase()}
                     </p>
+                    {(publicationResult.incident as { isPublished?: boolean } | undefined)
+                      ?.isPublished && (
+                      <div className="flex items-center gap-2 p-2 rounded bg-blue-50/70 border border-blue-200 text-blue-900 text-xs">
+                        <Mail className="size-3.5 text-blue-700 shrink-0" />
+                        <span>
+                          Stage 9 Triggered: Municipal Civic Dossier automatically compiled and
+                          dispatched to local authority.
+                        </span>
+                      </div>
+                    )}
                     <pre className="text-[11px] text-muted-foreground overflow-x-auto">
                       {JSON.stringify(publicationResult, null, 2)}
                     </pre>

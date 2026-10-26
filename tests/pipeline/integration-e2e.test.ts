@@ -17,8 +17,9 @@ import { NextRequest } from "next/server";
 import { POST as dispatchMunicipalRoute } from "@/app/api/admin/incidents/[incidentId]/dispatch-municipal/route";
 import { GET as getEscalationsRoute } from "@/app/api/admin/escalations/route";
 import { POST as processPipelineRoute } from "@/app/api/pipeline/process/route";
+import { GET as getReportDetailRoute } from "@/app/api/reports/[reportId]/route";
 
-describe("PRD §19 End-to-End Integration Test Suite (32 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (33 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -822,5 +823,20 @@ describe("PRD §19 End-to-End Integration Test Suite (32 Scenarios)", () => {
     expect(batchJson.mode).toBe("outbox_batch");
     expect(batchJson.summary).toBeDefined();
     expect(typeof batchJson.summary.processed).toBe("number");
+  });
+
+  // Scenario 33: Public Case Resolution Gateway & Map Pin Navigation (PRD §13, §16)
+  it("Scenario 33: GET /api/reports/:id safely handles raw report IDs and canonical incident UUIDs", async () => {
+    // 1. Non-existent ID returns clean 404
+    const unknownId = "non_existent_99999";
+    const req = new NextRequest(`http://localhost:3000/api/reports/${unknownId}`, {
+      method: "GET",
+    });
+    const res = await getReportDetailRoute(req, {
+      params: Promise.resolve({ reportId: unknownId }),
+    });
+    expect(res.status).toBe(404);
+    const json = await res.json();
+    expect(json.error).toBe("Report not found");
   });
 });
