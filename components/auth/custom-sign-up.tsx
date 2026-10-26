@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
-import { UserPlus, AlertCircle, ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
+import { UserPlus, AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
 
 interface CustomSignUpProps {
   hasClerkKeys?: boolean;
@@ -44,7 +44,6 @@ function ClerkConnectedSignUp() {
   const [fullName, setFullName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [role, setRole] = React.useState<"citizen" | "moderator">("citizen");
   const [verifying, setVerifying] = React.useState(false);
   const [code, setCode] = React.useState("");
   const [localError, setLocalError] = React.useState<string | null>(null);
@@ -76,13 +75,6 @@ function ClerkConnectedSignUp() {
         setLocalError(error.message || "Sign-up validation failed.");
         setIsSubmitting(false);
         return;
-      }
-
-      // Add role metadata if requested
-      if (role !== "citizen") {
-        await signUp.update({
-          unsafeMetadata: { requestedRole: role },
-        });
       }
 
       // Check if email code verification is required
@@ -166,8 +158,6 @@ function ClerkConnectedSignUp() {
       setEmail={setEmail}
       password={password}
       setPassword={setPassword}
-      role={role}
-      setRole={setRole}
       isLoading={isLoading}
       errorMessage={
         localError || errors?.global?.[0]?.message || errors?.fields?.emailAddress?.message
@@ -189,7 +179,6 @@ function LocalBridgeSignUp() {
   const [fullName, setFullName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [role, setRole] = React.useState<"citizen" | "moderator">("citizen");
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
 
@@ -210,7 +199,6 @@ function LocalBridgeSignUp() {
         body: JSON.stringify({
           fullName,
           email,
-          role,
         }),
       });
 
@@ -236,8 +224,6 @@ function LocalBridgeSignUp() {
       setEmail={setEmail}
       password={password}
       setPassword={setPassword}
-      role={role}
-      setRole={setRole}
       isLoading={isLoading}
       errorMessage={localError}
       redirectUrl={redirectUrl}
@@ -256,8 +242,6 @@ function SignUpLayout({
   setEmail,
   password,
   setPassword,
-  role,
-  setRole,
   isLoading,
   errorMessage,
   redirectUrl,
@@ -269,8 +253,6 @@ function SignUpLayout({
   setEmail: (val: string) => void;
   password: string;
   setPassword: (val: string) => void;
-  role: "citizen" | "moderator";
-  setRole: (val: "citizen" | "moderator") => void;
   isLoading: boolean;
   errorMessage?: string | null;
   redirectUrl: string;
@@ -379,47 +361,15 @@ function SignUpLayout({
                 />
               </div>
 
-              <div className="space-y-1.5 pt-1">
-                <span className="block text-xs font-semibold text-[#17382f]">
-                  Account Role &amp; Access Tier
-                </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRole("citizen")}
-                    className={`flex items-center gap-2 rounded-lg border p-2.5 text-left text-xs transition ${
-                      role === "citizen"
-                        ? "border-[#0e2b24] bg-[#eef1e9] text-[#0e2b24] font-medium ring-1 ring-[#0e2b24]"
-                        : "border-[#cbd5cb] bg-white text-[#5c6f66] hover:bg-muted/40"
-                    }`}
-                  >
-                    <CheckCircle2
-                      className={`size-3.5 ${role === "citizen" ? "text-emerald-800" : "opacity-30"}`}
-                    />
-                    <div>
-                      <p className="font-semibold text-[11px]">Civilian Reporter</p>
-                      <p className="text-[10px] text-[#5c6f66]">Standard citizen</p>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setRole("moderator")}
-                    className={`flex items-center gap-2 rounded-lg border p-2.5 text-left text-xs transition ${
-                      role === "moderator"
-                        ? "border-[#0e2b24] bg-[#eef1e9] text-[#0e2b24] font-medium ring-1 ring-[#0e2b24]"
-                        : "border-[#cbd5cb] bg-white text-[#5c6f66] hover:bg-muted/40"
-                    }`}
-                  >
-                    <ShieldCheck
-                      className={`size-3.5 ${role === "moderator" ? "text-blue-800" : "opacity-30"}`}
-                    />
-                    <div>
-                      <p className="font-semibold text-[11px]">Municipal Staff</p>
-                      <p className="text-[10px] text-[#5c6f66]">Staff moderator</p>
-                    </div>
-                  </button>
+              <div className="rounded-lg border border-[#cbd5cb] bg-[#f0eee6] p-3 text-xs text-[#17382f] space-y-1">
+                <div className="flex items-center gap-1.5 font-semibold text-[#0e2b24]">
+                  <CheckCircle2 className="size-3.5 text-emerald-800 shrink-0" />
+                  <span>Civilian Account Enrollment</span>
                 </div>
+                <p className="text-[11px] text-[#5c6f66] leading-relaxed">
+                  All public registrations are enrolled as Civilian Reporter accounts. Moderator or
+                  Administrative privileges are appointed by designated municipal authorities.
+                </p>
               </div>
 
               <Button

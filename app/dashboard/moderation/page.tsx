@@ -20,7 +20,10 @@ import {
   Sliders,
   Scissors,
   Mail,
+  Users,
 } from "lucide-react";
+
+import { StaffRoleDelegation } from "@/components/admin/staff-role-delegation";
 
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,6 +72,7 @@ export default function ModerationPage() {
   // Empty state by default; centralized sample queue loaded on demand or fetched from API
   const [items, setItems] = React.useState<ModerationQueueItem[]>([]);
   const [activeTab, setActiveTab] = React.useState("all");
+  const [viewMode, setViewMode] = React.useState<"queue" | "staff">("queue");
   const [isSubmitting, setIsSubmitting] = React.useState<string | null>(null);
   const [inspectingItem, setInspectingItem] = React.useState<ModerationQueueItem | null>(null);
 
@@ -370,261 +374,304 @@ export default function ModerationPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl sm:text-2xl font-serif font-bold text-[#0e2b24] tracking-tight">
-              Moderation Queue
+              {viewMode === "queue" ? "Moderation Queue" : "Civic Staff & Role Delegation"}
             </h1>
             <p className="text-xs sm:text-sm text-[#5c6f66]">
-              Review flagged hazards, merge spatial duplicates, resolve geo-fence ambiguities, and
-              audit incident scope.
+              {viewMode === "queue"
+                ? "Review flagged hazards, merge spatial duplicates, resolve geo-fence ambiguities, and audit incident scope."
+                : "Manage registered users, appoint field moderators, and delegate municipal authority."}
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1 h-9 sm:h-8"
-              onClick={() => loadReviewQueue()}
+          <div className="flex items-center gap-1 rounded-md border border-[#cbd5cb] bg-white p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("queue")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition ${
+                viewMode === "queue"
+                  ? "bg-[#0e2b24] text-white shadow-xs"
+                  : "text-[#5c6f66] hover:text-[#0e2b24]"
+              }`}
             >
-              <RotateCcw className="size-3" />
-              <span>Refresh</span>
-            </Button>
+              <ShieldAlert className="size-3.5" />
+              <span>Review Queue</span>
+              <Badge
+                variant="outline"
+                className={`text-[10px] ml-1 py-0 px-1 border-current ${
+                  viewMode === "queue" ? "text-white" : "text-[#5c6f66]"
+                }`}
+              >
+                {pendingItems.length}
+              </Badge>
+            </button>
 
-            <div className="w-full overflow-x-auto no-scrollbar -mx-1 px-1 sm:w-auto">
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="h-9 sm:h-8 w-max min-w-full justify-start sm:w-auto">
-                  <TabsTrigger value="all" className="text-xs px-2.5">
-                    All ({pendingItems.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="duplicate" className="text-xs px-2.5">
-                    Duplicates ({pendingItems.filter((i) => i.type === "duplicate").length})
-                  </TabsTrigger>
-                  <TabsTrigger value="location" className="text-xs px-2.5">
-                    Location ({pendingItems.filter((i) => i.type === "location").length})
-                  </TabsTrigger>
-                  <TabsTrigger value="scope" className="text-xs px-2.5">
-                    Scope ({pendingItems.filter((i) => i.type === "scope").length})
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
+            <button
+              type="button"
+              onClick={() => setViewMode("staff")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition ${
+                viewMode === "staff"
+                  ? "bg-[#0e2b24] text-white shadow-xs"
+                  : "text-[#5c6f66] hover:text-[#0e2b24]"
+              }`}
+            >
+              <Users className="size-3.5" />
+              <span>Staff Delegation</span>
+            </button>
           </div>
         </div>
 
-        {/* ── Cards List of Moderation Queue ─── */}
-        <div className="grid grid-cols-1 gap-4">
-          {items.length === 0 ? (
-            /* Zatian / shadcn Empty State when queue is pristine and no data exists */
-            <Card className="shadow-xs p-2">
-              <Empty className="my-8 border-0 bg-transparent">
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <CheckCircle2 className="size-6 text-emerald-600" />
-                  </EmptyMedia>
-                  <EmptyTitle>Moderation queue is clean</EmptyTitle>
-                  <EmptyDescription>
-                    There are currently no citizen hazard reports requiring duplicate consolidation,
-                    geotag verification, or scope classification.
-                  </EmptyDescription>
-                </EmptyHeader>
-                <EmptyContent>
-                  <Button variant="outline" size="sm" onClick={() => loadReviewQueue()}>
-                    <RotateCcw className="size-3.5 mr-1.5" />
-                    Refresh Queue
-                  </Button>
-                </EmptyContent>
-              </Empty>
-            </Card>
-          ) : filteredItems.length === 0 ? (
-            /* Empty state when active filter has all items triaged */
-            <Card className="shadow-xs p-2">
-              <Empty className="my-8 border-0 bg-transparent">
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <CheckCircle2 className="size-6 text-emerald-600" />
-                  </EmptyMedia>
-                  <EmptyTitle>All items in this category resolved</EmptyTitle>
-                  <EmptyDescription>
-                    No pending reports remain in the &quot;{activeTab}&quot; queue. Switch filters
-                    or reset the queue to inspect other entries.
-                  </EmptyDescription>
-                </EmptyHeader>
-                <EmptyContent>
-                  <Button variant="outline" size="sm" onClick={() => setActiveTab("all")}>
-                    View All Categories
-                  </Button>
-                </EmptyContent>
-              </Empty>
-            </Card>
-          ) : (
-            filteredItems.map((item) => (
-              <Card
-                key={item.id}
-                className="shadow-xs transition-colors hover:border-foreground/20"
+        {viewMode === "staff" ? (
+          <StaffRoleDelegation />
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1 h-9 sm:h-8"
+                onClick={() => loadReviewQueue()}
               >
-                <CardHeader className="pb-3">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-semibold text-muted-foreground">
-                        {item.id}
-                      </span>
-                      <Badge variant={item.badgeVariant} className="gap-1 text-xs">
-                        {getIcon(item.iconName)}
-                        <span>{item.flagLabel}</span>
-                      </Badge>
-                      {item.metadata?.municipalDocketNumber ? (
-                        <Badge
-                          variant="outline"
-                          className="gap-1 text-[11px] font-mono border-blue-600/30 text-blue-700 bg-blue-50/50"
-                        >
-                          <Mail className="size-3 text-blue-600" />
-                          <span>{String(item.metadata.municipalDocketNumber)}</span>
-                        </Badge>
-                      ) : null}
-                    </div>
+                <RotateCcw className="size-3" />
+                <span>Refresh</span>
+              </Button>
 
-                    <span className="text-xs text-muted-foreground">{item.time}</span>
-                  </div>
-
-                  <CardTitle className="mt-2 text-base font-semibold">{item.title}</CardTitle>
-                  <CardDescription className="text-xs">{item.detail}</CardDescription>
-                </CardHeader>
-
-                <CardFooter className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>Filed by:</span>
-                    <strong className="text-foreground">{item.reporter}</strong>
-                    <span>·</span>
-                    <button
-                      type="button"
-                      onClick={() => setInspectingItem(item)}
-                      className="inline-flex items-center gap-1 text-foreground underline underline-offset-2 hover:opacity-80 py-1 cursor-pointer"
-                    >
-                      <span>View photo evidence</span>
-                      <ExternalLink className="size-2.5" />
-                    </button>
-                  </div>
-
-                  {/* PRD §12 Triage Action Controls */}
-                  <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={isSubmitting === item.id}
-                      className="h-10 sm:h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive justify-center"
-                      onClick={() => {
-                        setRejectItem(item);
-                        setRejectionReason("");
-                      }}
-                    >
-                      <X className="size-3.5 mr-1" />
-                      <span>Reject</span>
-                    </Button>
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        disabled={isSubmitting === item.id}
-                        className="h-10 sm:h-7 text-xs justify-center gap-1 inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1 font-medium shadow-xs hover:bg-accent hover:text-accent-foreground cursor-pointer disabled:pointer-events-none disabled:opacity-50"
-                      >
-                        <Sliders className="size-3 text-muted-foreground" />
-                        <span>Actions</span>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="text-xs">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setRequestEvidenceItem(item);
-                            setEvidenceNotes("");
-                          }}
-                        >
-                          <Camera className="size-3.5 mr-2 text-amber-600" />
-                          <span>Request Evidence</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setCorrectLocationItem(item);
-                            setLatInput("28.4744");
-                            setLngInput("77.5040");
-                            setLocationNotes("");
-                          }}
-                        >
-                          <MapPin className="size-3.5 mr-2 text-blue-600" />
-                          <span>Correct Coordinates</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setMergeItem(item);
-                            setDuplicateIdsInput("");
-                            setMergeReason("");
-                          }}
-                        >
-                          <Copy className="size-3.5 mr-2 text-purple-600" />
-                          <span>Merge Duplicate</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSplitItem(item);
-                            setSplitReportIdsInput("");
-                            setSplitReason("");
-                          }}
-                        >
-                          <Scissors className="size-3.5 mr-2 text-orange-600" />
-                          <span>Split Incident</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => handleDispatchMunicipal(item.id)}
-                          disabled={isSubmitting === item.id}
-                        >
-                          <Mail className="size-3.5 mr-2 text-blue-600" />
-                          <span>Dispatch Municipal Email</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onClick={() => {
-                            setUnpublishItem(item);
-                            setUnpublishReason("");
-                          }}
-                        >
-                          <MapPinOff className="size-3.5 mr-2" />
-                          <span>Unpublish Pin</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-
-                    <Button
-                      size="sm"
-                      disabled={isSubmitting === item.id}
-                      className="col-span-2 sm:col-span-1 h-10 sm:h-7 text-xs justify-center bg-emerald-800 hover:bg-emerald-900 text-white"
-                      onClick={() => handleApprove(item.id)}
-                    >
-                      <Check className="size-3.5 mr-1" />
-                      <span>
-                        {isSubmitting === item.id ? "Publishing..." : "Approve & Publish"}
-                      </span>
-                    </Button>
-                  </div>
-                </CardFooter>
-              </Card>
-            ))
-          )}
-        </div>
-
-        {/* ── Guidance Card ─── */}
-        <Card className="border-dashed bg-muted/20 shadow-none">
-          <CardHeader className="py-4">
-            <div className="flex items-start gap-3">
-              <ShieldAlert className="size-4 text-muted-foreground mt-0.5 shrink-0" />
-              <div className="text-xs">
-                <span className="font-semibold text-foreground">Civic Moderation Policy:</span>
-                <p className="mt-0.5 text-muted-foreground leading-relaxed">
-                  JanSahayak does not censor citizen observations. Flagged items only resolve
-                  duplicate pings to avoid overburdening municipal engineering divisions with
-                  identical coordinates.
-                </p>
+              <div className="w-full overflow-x-auto no-scrollbar -mx-1 px-1 sm:w-auto">
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList className="h-9 sm:h-8 w-max min-w-full justify-start sm:w-auto">
+                    <TabsTrigger value="all" className="text-xs px-2.5">
+                      All ({pendingItems.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="duplicate" className="text-xs px-2.5">
+                      Duplicates ({pendingItems.filter((i) => i.type === "duplicate").length})
+                    </TabsTrigger>
+                    <TabsTrigger value="location" className="text-xs px-2.5">
+                      Location ({pendingItems.filter((i) => i.type === "location").length})
+                    </TabsTrigger>
+                    <TabsTrigger value="scope" className="text-xs px-2.5">
+                      Scope ({pendingItems.filter((i) => i.type === "scope").length})
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </div>
             </div>
-          </CardHeader>
-        </Card>
+
+            {/* ── Cards List of Moderation Queue ─── */}
+            <div className="grid grid-cols-1 gap-4">
+              {items.length === 0 ? (
+                /* Zatian / shadcn Empty State when queue is pristine and no data exists */
+                <Card className="shadow-xs p-2">
+                  <Empty className="my-8 border-0 bg-transparent">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <CheckCircle2 className="size-6 text-emerald-600" />
+                      </EmptyMedia>
+                      <EmptyTitle>Moderation queue is clean</EmptyTitle>
+                      <EmptyDescription>
+                        There are currently no citizen hazard reports requiring duplicate
+                        consolidation, geotag verification, or scope classification.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent>
+                      <Button variant="outline" size="sm" onClick={() => loadReviewQueue()}>
+                        <RotateCcw className="size-3.5 mr-1.5" />
+                        Refresh Queue
+                      </Button>
+                    </EmptyContent>
+                  </Empty>
+                </Card>
+              ) : filteredItems.length === 0 ? (
+                /* Empty state when active filter has all items triaged */
+                <Card className="shadow-xs p-2">
+                  <Empty className="my-8 border-0 bg-transparent">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <CheckCircle2 className="size-6 text-emerald-600" />
+                      </EmptyMedia>
+                      <EmptyTitle>All items in this category resolved</EmptyTitle>
+                      <EmptyDescription>
+                        No pending reports remain in the &quot;{activeTab}&quot; queue. Switch
+                        filters or reset the queue to inspect other entries.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent>
+                      <Button variant="outline" size="sm" onClick={() => setActiveTab("all")}>
+                        View All Categories
+                      </Button>
+                    </EmptyContent>
+                  </Empty>
+                </Card>
+              ) : (
+                filteredItems.map((item) => (
+                  <Card
+                    key={item.id}
+                    className="shadow-xs transition-colors hover:border-foreground/20"
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-semibold text-muted-foreground">
+                            {item.id}
+                          </span>
+                          <Badge variant={item.badgeVariant} className="gap-1 text-xs">
+                            {getIcon(item.iconName)}
+                            <span>{item.flagLabel}</span>
+                          </Badge>
+                          {item.metadata?.municipalDocketNumber ? (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 text-[11px] font-mono border-blue-600/30 text-blue-700 bg-blue-50/50"
+                            >
+                              <Mail className="size-3 text-blue-600" />
+                              <span>{String(item.metadata.municipalDocketNumber)}</span>
+                            </Badge>
+                          ) : null}
+                        </div>
+
+                        <span className="text-xs text-muted-foreground">{item.time}</span>
+                      </div>
+
+                      <CardTitle className="mt-2 text-base font-semibold">{item.title}</CardTitle>
+                      <CardDescription className="text-xs">{item.detail}</CardDescription>
+                    </CardHeader>
+
+                    <CardFooter className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <span>Filed by:</span>
+                        <strong className="text-foreground">{item.reporter}</strong>
+                        <span>·</span>
+                        <button
+                          type="button"
+                          onClick={() => setInspectingItem(item)}
+                          className="inline-flex items-center gap-1 text-foreground underline underline-offset-2 hover:opacity-80 py-1 cursor-pointer"
+                        >
+                          <span>View photo evidence</span>
+                          <ExternalLink className="size-2.5" />
+                        </button>
+                      </div>
+
+                      {/* PRD §12 Triage Action Controls */}
+                      <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isSubmitting === item.id}
+                          className="h-10 sm:h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive justify-center"
+                          onClick={() => {
+                            setRejectItem(item);
+                            setRejectionReason("");
+                          }}
+                        >
+                          <X className="size-3.5 mr-1" />
+                          <span>Reject</span>
+                        </Button>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            disabled={isSubmitting === item.id}
+                            className="h-10 sm:h-7 text-xs justify-center gap-1 inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1 font-medium shadow-xs hover:bg-accent hover:text-accent-foreground cursor-pointer disabled:pointer-events-none disabled:opacity-50"
+                          >
+                            <Sliders className="size-3 text-muted-foreground" />
+                            <span>Actions</span>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="text-xs">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setRequestEvidenceItem(item);
+                                setEvidenceNotes("");
+                              }}
+                            >
+                              <Camera className="size-3.5 mr-2 text-amber-600" />
+                              <span>Request Evidence</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setCorrectLocationItem(item);
+                                setLatInput("28.4744");
+                                setLngInput("77.5040");
+                                setLocationNotes("");
+                              }}
+                            >
+                              <MapPin className="size-3.5 mr-2 text-blue-600" />
+                              <span>Correct Coordinates</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setMergeItem(item);
+                                setDuplicateIdsInput("");
+                                setMergeReason("");
+                              }}
+                            >
+                              <Copy className="size-3.5 mr-2 text-purple-600" />
+                              <span>Merge Duplicate</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSplitItem(item);
+                                setSplitReportIdsInput("");
+                                setSplitReason("");
+                              }}
+                            >
+                              <Scissors className="size-3.5 mr-2 text-orange-600" />
+                              <span>Split Incident</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDispatchMunicipal(item.id)}
+                              disabled={isSubmitting === item.id}
+                            >
+                              <Mail className="size-3.5 mr-2 text-blue-600" />
+                              <span>Dispatch Municipal Email</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onClick={() => {
+                                setUnpublishItem(item);
+                                setUnpublishReason("");
+                              }}
+                            >
+                              <MapPinOff className="size-3.5 mr-2" />
+                              <span>Unpublish Pin</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        <Button
+                          size="sm"
+                          disabled={isSubmitting === item.id}
+                          className="col-span-2 sm:col-span-1 h-10 sm:h-7 text-xs justify-center bg-emerald-800 hover:bg-emerald-900 text-white"
+                          onClick={() => handleApprove(item.id)}
+                        >
+                          <Check className="size-3.5 mr-1" />
+                          <span>
+                            {isSubmitting === item.id ? "Publishing..." : "Approve & Publish"}
+                          </span>
+                        </Button>
+                      </div>
+                    </CardFooter>
+                  </Card>
+                ))
+              )}
+            </div>
+
+            {/* ── Guidance Card ─── */}
+            <Card className="border-dashed bg-muted/20 shadow-none">
+              <CardHeader className="py-4">
+                <div className="flex items-start gap-3">
+                  <ShieldAlert className="size-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <div className="text-xs">
+                    <span className="font-semibold text-foreground">Civic Moderation Policy:</span>
+                    <p className="mt-0.5 text-muted-foreground leading-relaxed">
+                      JanSahayak does not censor citizen observations. Flagged items only resolve
+                      duplicate pings to avoid overburdening municipal engineering divisions with
+                      identical coordinates.
+                    </p>
+                  </div>
+                </div>
+              </CardHeader>
+            </Card>
+          </>
+        )}
 
         {/* ── PRD §12 Evidence & AI Vision Inspection Modal ─── */}
         <Dialog open={!!inspectingItem} onOpenChange={(open) => !open && setInspectingItem(null)}>

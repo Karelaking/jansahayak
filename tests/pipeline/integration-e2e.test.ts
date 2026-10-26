@@ -29,6 +29,10 @@ import {
 } from "@/app/api/reports/[reportId]/route";
 import { POST as loginRoute } from "@/app/api/auth/login/route";
 import { POST as logoutRoute } from "@/app/api/auth/logout/route";
+import { POST as registerRoute } from "@/app/api/auth/register/route";
+import { GET as getUsersRoute } from "@/app/api/admin/users/route";
+import { PATCH as patchUserRoleRoute } from "@/app/api/admin/users/[userId]/role/route";
+import { canAppointRole } from "@/lib/auth/roles";
 import { GET as getDossierRoute } from "@/app/api/admin/incidents/[incidentId]/dossier/route";
 import { POST as submitRoute } from "@/app/api/pipeline/submit/route";
 import { GET as getMapIncidentsRoute } from "@/app/api/map/incidents/route";
@@ -39,7 +43,7 @@ import { GET as getVotesRoute } from "@/app/api/incidents/[incidentId]/votes/rou
 import { GET as getSessionRoute } from "@/app/api/auth/session/route";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limit";
 
-describe("PRD §19 End-to-End Integration Test Suite (62 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (64 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -2066,5 +2070,217 @@ describe("PRD §19 End-to-End Integration Test Suite (62 Scenarios)", () => {
 
     const staffNav = filterNav("moderator");
     expect(staffNav).toHaveLength(6);
+  });
+
+  // Scenario 63: Civic Self-Registration Role Restriction (PRD §2 & Civic Governance)
+  it("Scenario 63: Public self-registration always defaults to citizen and ignores client-supplied staff roles", async () => {
+    // 1. Regular registration defaults to citizen
+    const regReq = new NextRequest("http://localhost:3000/api/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "citizen_new@example.in",
+        fullName: "Aarav Gupta",
+      }),
+    });
+    const regRes = await registerRoute(regReq);
+    expect(regRes.status).toBe(200);
+    const regJson = await regRes.json();
+    expect(regJson.success).toBe(true);
+    expect(regJson.user.role).toBe("citizen");
+    expect(regRes.cookies.get("jansahayak_role")?.value).toBe("citizen");
+
+    // 2. Malicious self-registration attempting to claim 'admin' is strictly clamped to 'citizen'
+    const exploitReq = new NextRequest("http://localhost:3000/api/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "sneaky_attacker@example.in",
+        fullName: "Privilege Escalation Attempt",
+        role: "admin",
+      }),
+    });
+    const exploitRes = await registerRoute(exploitReq);
+    expect(exploitRes.status).toBe(200);
+    const exploitJson = await exploitRes.json();
+    expect(exploitJson.success).toBe(true);
+    expect(exploitJson.user.role).toBe("citizen");
+    expect(exploitRes.cookies.get("jansahayak_role")?.value).toBe("citizen");
+
+    // 3. Self-registration attempting to claim 'moderator' is strictly clamped to 'citizen'
+    const modExploitReq = new NextRequest("http://localhost:3000/api/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "mod_claim@example.in",
+        fullName: "Staff Claim Attempt",
+        role: "moderator",
+      }),
+    });
+    const modExploitRes = await registerRoute(modExploitReq);
+    expect(modExploitRes.status).toBe(200);
+    const modExploitJson = await modExploitRes.json();
+    expect(modExploitJson.success).toBe(true);
+    expect(modExploitJson.user.role).toBe("citizen");
+    expect(modExploitRes.cookies.get("jansahayak_role")?.value).toBe("citizen");
+  });
+
+  // Scenario 64: Role Delegation Matrix & Appointment Authority Hierarchy (PRD §2 & §14B)
+  it("Scenario 64: Role delegation enforces that admins can appoint moderators/admins, moderators can appoint moderators, and moderators cannot appoint admins", async () => {
+    // 1. Unauthenticated or Citizen requests to view staff users directory are rejected with 403
+    const citizenListReq = new NextRequest("http://localhost:3000/api/admin/users", {
+      headers: {
+        "x-mock-user-id": "citizen_dev",
+        "x-mock-role": "citizen",
+      },
+    });
+    const citizenListRes = await getUsersRoute(citizenListReq);
+    expect(citizenListRes.status).toBe(403);
+
+    // 2. Moderator can access the users list
+    const modListReq = new NextRequest("http://localhost:3000/api/admin/users", {
+      headers: {
+        "x-mock-user-id": "mod_dev_01",
+        "x-mock-role": "moderator",
+      },
+    });
+    const modListRes = await getUsersRoute(modListReq);
+    expect(modListRes.status).toBe(200);
+    const modUsersJson = await modListRes.json();
+    expect(modUsersJson.success).toBe(true);
+    expect(Array.isArray(modUsersJson.users)).toBe(true);
+
+    // 3. Citizen cannot mutate any role (rejected with 403)
+    const citizenMutateReq = new NextRequest(
+      "http://localhost:3000/api/admin/users/usr_target_1/role",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-mock-user-id": "citizen_dev",
+          "x-mock-role": "citizen",
+        },
+        body: JSON.stringify({ role: "moderator" }),
+      },
+    );
+    const citizenMutateRes = await patchUserRoleRoute(citizenMutateReq, {
+      params: Promise.resolve({ userId: "usr_target_1" }),
+    });
+    expect(citizenMutateRes.status).toBe(403);
+
+    // 4. Moderator CAN appoint a citizen to moderator
+    const modPromoteModReq = new NextRequest(
+      "http://localhost:3000/api/admin/users/usr_target_1/role",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-mock-user-id": "mod_dev_01",
+          "x-mock-role": "moderator",
+        },
+        body: JSON.stringify({ role: "moderator" }),
+      },
+    );
+    const modPromoteModRes = await patchUserRoleRoute(modPromoteModReq, {
+      params: Promise.resolve({ userId: "usr_target_1" }),
+    });
+    expect(modPromoteModRes.status).toBe(200);
+    const modPromoteJson = await modPromoteModRes.json();
+    expect(modPromoteJson.success).toBe(true);
+    expect(modPromoteJson.user.role).toBe("moderator");
+
+    // 5. Moderator CAN demote a moderator to citizen
+    const modDemoteCitizenReq = new NextRequest(
+      "http://localhost:3000/api/admin/users/usr_target_1/role",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-mock-user-id": "mod_dev_01",
+          "x-mock-role": "moderator",
+        },
+        body: JSON.stringify({ role: "citizen" }),
+      },
+    );
+    const modDemoteCitizenRes = await patchUserRoleRoute(modDemoteCitizenReq, {
+      params: Promise.resolve({ userId: "usr_target_1" }),
+    });
+    expect(modDemoteCitizenRes.status).toBe(200);
+    const modDemoteJson = await modDemoteCitizenRes.json();
+    expect(modDemoteJson.success).toBe(true);
+    expect(modDemoteJson.user.role).toBe("citizen");
+
+    // 6. CRITICAL RULE: Moderator CANNOT appoint an admin (HTTP 403 Forbidden)
+    const modPromoteAdminReq = new NextRequest(
+      "http://localhost:3000/api/admin/users/usr_target_1/role",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-mock-user-id": "mod_dev_01",
+          "x-mock-role": "moderator",
+        },
+        body: JSON.stringify({ role: "admin" }),
+      },
+    );
+    const modPromoteAdminRes = await patchUserRoleRoute(modPromoteAdminReq, {
+      params: Promise.resolve({ userId: "usr_target_1" }),
+    });
+    expect(modPromoteAdminRes.status).toBe(403);
+    const modPromoteAdminJson = await modPromoteAdminRes.json();
+    expect(modPromoteAdminJson.success).toBe(false);
+    expect(modPromoteAdminJson.error).toContain("Moderators cannot appoint administrators");
+
+    // 7. Administrator CAN appoint an admin
+    const adminPromoteAdminReq = new NextRequest(
+      "http://localhost:3000/api/admin/users/usr_target_1/role",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-mock-user-id": "admin_dev_01",
+          "x-mock-role": "admin",
+        },
+        body: JSON.stringify({ role: "admin" }),
+      },
+    );
+    const adminPromoteAdminRes = await patchUserRoleRoute(adminPromoteAdminReq, {
+      params: Promise.resolve({ userId: "usr_target_1" }),
+    });
+    expect(adminPromoteAdminRes.status).toBe(200);
+    const adminPromoteAdminJson = await adminPromoteAdminRes.json();
+    expect(adminPromoteAdminJson.success).toBe(true);
+    expect(adminPromoteAdminJson.user.role).toBe("admin");
+
+    // 8. Administrator CAN appoint a moderator
+    const adminPromoteModReq = new NextRequest(
+      "http://localhost:3000/api/admin/users/usr_target_2/role",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-mock-user-id": "admin_dev_01",
+          "x-mock-role": "admin",
+        },
+        body: JSON.stringify({ role: "moderator" }),
+      },
+    );
+    const adminPromoteModRes = await patchUserRoleRoute(adminPromoteModReq, {
+      params: Promise.resolve({ userId: "usr_target_2" }),
+    });
+    expect(adminPromoteModRes.status).toBe(200);
+    const adminPromoteModJson = await adminPromoteModRes.json();
+    expect(adminPromoteModJson.success).toBe(true);
+    expect(adminPromoteModJson.user.role).toBe("moderator");
+
+    // 9. Matrix helper canAppointRole verification directly
+    expect(canAppointRole("citizen", "moderator").allowed).toBe(false);
+    expect(canAppointRole("citizen", "admin").allowed).toBe(false);
+    expect(canAppointRole("moderator", "moderator").allowed).toBe(true);
+    expect(canAppointRole("moderator", "citizen").allowed).toBe(true);
+    expect(canAppointRole("moderator", "admin").allowed).toBe(false);
+    expect(canAppointRole("admin", "moderator").allowed).toBe(true);
+    expect(canAppointRole("admin", "admin").allowed).toBe(true);
+    expect(canAppointRole("admin", "citizen").allowed).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import { UserRole, UserSession } from "./roles";
 import { db, users } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
+import { findUserById } from "./user-store";
 
 /**
  * Server-side helper to retrieve the current authenticated user session.
@@ -118,6 +119,22 @@ export async function getCurrentUserSession(req?: Request): Promise<UserSession>
           fullName: dbUser.fullName || undefined,
           role: (dbUser.role as UserRole) || resolvedRole || "citizen",
           avatarUrl: dbUser.avatarUrl || undefined,
+          isAuthenticated: true,
+        };
+      }
+    } catch {
+      // Non-blocking
+    }
+
+    try {
+      const storeUser = await findUserById(resolvedUserId);
+      if (storeUser) {
+        return {
+          userId: storeUser.id,
+          email: storeUser.email,
+          fullName: storeUser.fullName || undefined,
+          role: storeUser.role || resolvedRole || "citizen",
+          avatarUrl: storeUser.avatarUrl || undefined,
           isAuthenticated: true,
         };
       }

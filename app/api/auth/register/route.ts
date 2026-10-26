@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, users } from "@/lib/db";
 import { UserRole } from "@/lib/auth/roles";
+import { registerCivilianUser } from "@/lib/auth/user-store";
 
 /**
  * Authentication Register Endpoint
  * POST /api/auth/register
  *
- * Creates a new account in PostgreSQL and sets session cookies.
+ * PRD §2, §14B, & Civic Governance Rule:
+ * During account creation, users can ONLY create a civilian account ("citizen").
+ * Moderator and Admin roles cannot be requested or selected by default.
+ * Role promotions can only be granted post-registration by authorized staff.
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const email = (body.email as string)?.trim().toLowerCase();
     const fullName = (body.fullName as string)?.trim();
-    const role = (body.role as UserRole) || "citizen";
+
+    // Security invariant: public self-registration is strictly locked to civilian status
+    const role: UserRole = "citizen";
 
     if (!email || !email.includes("@")) {
       return NextResponse.json(
@@ -29,30 +34,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const userId = `usr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-
-    await db.insert(users).values({
-      id: userId,
+    const customId = typeof body.userId === "string" ? body.userId.trim() : undefined;
+    const registeredUser = await registerCivilianUser({
+      id: customId,
       email,
       fullName,
-      role,
-      updatedAt: new Date(),
     });
 
     const res = NextResponse.json({
       success: true,
-      message: "Account registered successfully",
+      message: "Civic civilian account registered successfully",
       user: {
-        userId,
-        email,
-        fullName,
-        role,
+        userId: registeredUser.id,
+        email: registeredUser.email,
+        fullName: registeredUser.fullName,
+        role: "citizen",
         isAuthenticated: true,
       },
     });
 
     const maxAge = 60 * 60 * 24 * 14;
-    res.cookies.set("jansahayak_user_id", userId, {
+    res.cookies.set("jansahayak_user_id", registeredUser.id, {
       path: "/",
       maxAge,
       sameSite: "lax",

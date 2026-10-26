@@ -89,3 +89,39 @@ export function hasPermission(
 ): boolean {
   return ROLE_PERMISSIONS[role]?.[permission] ?? false;
 }
+
+/**
+ * Role Appointment & Delegation Matrix
+ * PRD §2, §14B, & Civic Governance:
+ * - Public users can only self-register as "citizen".
+ * - Administrators can appoint moderators and administrators.
+ * - Administrators and Moderators can appoint moderators (and demote to citizen).
+ * - Moderators CANNOT appoint administrators (strictly restricted to administrators).
+ */
+export function canAppointRole(
+  requesterRole: UserRole,
+  targetRole: UserRole,
+): { allowed: boolean; reason?: string } {
+  if (requesterRole !== "admin" && requesterRole !== "moderator") {
+    return {
+      allowed: false,
+      reason: "Forbidden: Only designated moderators or administrators can manage user roles.",
+    };
+  }
+
+  if (targetRole === "admin" && requesterRole !== "admin") {
+    return {
+      allowed: false,
+      reason: "Moderators cannot appoint administrators. Administrator privileges required.",
+    };
+  }
+
+  if (targetRole !== "citizen" && targetRole !== "moderator" && targetRole !== "admin") {
+    return {
+      allowed: false,
+      reason: `Invalid target role '${targetRole}'. Must be citizen, moderator, or admin.`,
+    };
+  }
+
+  return { allowed: true };
+}
