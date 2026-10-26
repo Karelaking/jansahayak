@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
       .project({
         _id: 1,
         reportId: 1,
+        userId: 1,
         category: 1,
         description: 1,
         status: 1,
@@ -61,6 +62,7 @@ export async function GET(req: NextRequest) {
 
       return {
         ...r,
+        userId: r.userId,
         photoCount: photos.length,
         photos,
       };

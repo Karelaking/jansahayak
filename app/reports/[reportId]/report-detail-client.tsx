@@ -239,16 +239,21 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
   const getStageStatus = (stageNum: number) => {
     if (!report) return "pending";
 
-    // Published or Municipally Dispatched = All 8 done
+    // Published, Municipally Dispatched, or Resolved = All 8 done
     if (
       report.status === "PUBLISHED" ||
       report.status === "APPROVED" ||
-      report.status === "MUNICIPALLY_DISPATCHED"
+      report.status === "MUNICIPALLY_DISPATCHED" ||
+      report.status === "RESOLVED"
     ) {
       return "completed";
     }
 
-    if (report.status === "REJECTED" && stageNum >= 7) {
+    if (report.status === "AI_ANALYSIS_FAILED" && stageNum === 3) {
+      return "failed";
+    }
+
+    if (report.status === "LOCATION_VERIFICATION_FAILED" && stageNum === 4) {
       return "failed";
     }
 
@@ -266,6 +271,11 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
       return logged.status === "FAILED" ? "failed" : "completed";
     }
 
+    if (report.status === "REJECTED") {
+      // If evidence validation rejected, stage 2 is failed, otherwise stage 7 moderation
+      return stageNum === 2 ? "failed" : "pending";
+    }
+
     // Heuristics based on overall status
     if (stageNum === 1) return "completed";
     if (
@@ -276,21 +286,26 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
         "APPROVED",
         "PUBLISHED",
         "MUNICIPALLY_DISPATCHED",
+        "RESOLVED",
       ].includes(report.status)
     ) {
       return "completed";
     }
     if (
       stageNum <= 6 &&
-      ["MODERATION_PENDING", "APPROVED", "PUBLISHED", "MUNICIPALLY_DISPATCHED"].includes(
-        report.status,
-      )
+      [
+        "MODERATION_PENDING",
+        "APPROVED",
+        "PUBLISHED",
+        "MUNICIPALLY_DISPATCHED",
+        "RESOLVED",
+      ].includes(report.status)
     ) {
       return "completed";
     }
     if (
       stageNum === 7 &&
-      ["APPROVED", "PUBLISHED", "MUNICIPALLY_DISPATCHED"].includes(report.status)
+      ["APPROVED", "PUBLISHED", "MUNICIPALLY_DISPATCHED", "RESOLVED"].includes(report.status)
     ) {
       return "completed";
     }
@@ -362,10 +377,25 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
                     <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-[#eef1e9] text-[#17382f]">
                       {report.reportId}
                     </span>
-                    {report.status === "PUBLISHED" || report.status === "APPROVED" ? (
+                    {report.status === "RESOLVED" ? (
+                      <Badge className="bg-[#d6e5d2] text-[#234a29] border-transparent font-medium text-xs gap-1">
+                        <CheckCircle2 className="size-3" />
+                        <span>Community Verified Resolved</span>
+                      </Badge>
+                    ) : report.status === "MUNICIPALLY_DISPATCHED" ? (
+                      <Badge className="bg-[#d6e5d2] text-[#234a29] border-transparent font-medium text-xs gap-1">
+                        <Send className="size-3" />
+                        <span>Municipal Dossier Dispatched</span>
+                      </Badge>
+                    ) : report.status === "PUBLISHED" || report.status === "APPROVED" ? (
                       <Badge className="bg-[#d6e5d2] text-[#234a29] border-transparent font-medium text-xs gap-1">
                         <CheckCircle2 className="size-3" />
                         <span>Publicly Verified &amp; Published</span>
+                      </Badge>
+                    ) : report.status === "SUSPENDED" ? (
+                      <Badge className="bg-[#f4e8be] text-[#7a540b] border-transparent font-medium text-xs gap-1">
+                        <AlertCircle className="size-3" />
+                        <span>Temporarily Suspended</span>
                       </Badge>
                     ) : report.status === "ADDITIONAL_EVIDENCE_REQUIRED" ? (
                       <Badge className="bg-[#f4e8be] text-[#7a540b] border-transparent font-medium text-xs gap-1">
@@ -377,7 +407,9 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
                         <AlertCircle className="size-3" />
                         <span>Not Actionable / Out-of-Scope</span>
                       </Badge>
-                    ) : report.status === "PROCESSING_FAILED" ? (
+                    ) : report.status === "PROCESSING_FAILED" ||
+                      report.status === "AI_ANALYSIS_FAILED" ||
+                      report.status === "LOCATION_VERIFICATION_FAILED" ? (
                       <Badge className="bg-rose-100 text-rose-900 border-rose-300 font-medium text-xs gap-1">
                         <AlertTriangle className="size-3 text-rose-700" />
                         <span>Processing Interrupted</span>
@@ -459,7 +491,9 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
               </div>
             )}
 
-            {report.status === "PROCESSING_FAILED" && (
+            {(report.status === "PROCESSING_FAILED" ||
+              report.status === "AI_ANALYSIS_FAILED" ||
+              report.status === "LOCATION_VERIFICATION_FAILED") && (
               <div className="border border-rose-300 bg-rose-50/80 rounded-xl p-4 sm:p-5 text-xs text-rose-900 space-y-3">
                 <div className="flex items-center gap-2 font-bold text-rose-950 text-sm">
                   <AlertTriangle className="size-4 text-rose-700 shrink-0" />
@@ -467,7 +501,11 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
                 </div>
                 <p className="text-rose-800 leading-relaxed text-[11px]">
                   {report.rejectionReason ||
-                    "An unexpected error occurred during background analysis. Your uploaded photographs and GPS samples are safely preserved."}
+                    (report.status === "AI_ANALYSIS_FAILED"
+                      ? "AI vision analysis timed out or could not classify defect features. Uploaded photographs are safely preserved."
+                      : report.status === "LOCATION_VERIFICATION_FAILED"
+                        ? "Location geodesic clustering could not resolve spatial consensus within required thresholds. GPS samples are safely preserved."
+                        : "An unexpected error occurred during background analysis. Your uploaded photographs and GPS samples are safely preserved.")}
                 </p>
                 {retryNotice && (
                   <p className="text-emerald-800 font-semibold text-[11px] bg-emerald-100/70 p-2 rounded-lg border border-emerald-300">
@@ -509,7 +547,7 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
 
             {/* PRD §14: Municipal Civic Dossier Email Dispatch Card */}
             {report.canonicalIncident?.municipalDocketNumber && (
-              <div className="border border-emerald-200 bg-gradient-to-r from-emerald-50/70 to-teal-50/70 rounded-xl p-4 sm:p-5 text-xs shadow-xs space-y-3">
+              <div className="border border-emerald-200 bg-linear-to-r from-emerald-50/70 to-teal-50/70 rounded-xl p-4 sm:p-5 text-xs shadow-xs space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-emerald-200/60 pb-3">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="size-4 text-emerald-800 shrink-0" />

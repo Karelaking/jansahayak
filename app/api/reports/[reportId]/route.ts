@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getReportsCollection, getPipelineLogsCollection } from "@/lib/db/mongodb";
 import { db, incidents, incidentReports } from "@/lib/db";
 import { getCurrentUserSession } from "@/lib/auth/session";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 /**
  * PRD §16 Public-Safe Report Progress Endpoint
@@ -331,9 +331,38 @@ export async function DELETE(
     // 1. Delete from MongoDB
     await reportsColl.deleteOne({ _id: report._id });
 
-    // 2. Clean up incident_reports junction if present
+    // 2. Clean up incident_reports junction and update canonical incident counters (PRD §11 & §13)
     try {
       await db.delete(incidentReports).where(eq(incidentReports.reportId, report.reportId));
+
+      if (report.associatedIncidentId) {
+        const remainingLinks = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(incidentReports)
+          .where(eq(incidentReports.incidentId, report.associatedIncidentId));
+        const count = Number(remainingLinks[0]?.count) || 0;
+
+        if (count === 0) {
+          // Orphan incident: no remaining citizen reports, unpublish and suspend
+          await db
+            .update(incidents)
+            .set({
+              reportCount: 0,
+              isPublished: false,
+              status: "suspended",
+              updatedAt: new Date(),
+            })
+            .where(eq(incidents.id, report.associatedIncidentId));
+        } else {
+          await db
+            .update(incidents)
+            .set({
+              reportCount: count,
+              updatedAt: new Date(),
+            })
+            .where(eq(incidents.id, report.associatedIncidentId));
+        }
+      }
     } catch {
       // non-blocking
     }

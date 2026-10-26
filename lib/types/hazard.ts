@@ -17,10 +17,12 @@ export type HazardStatusKey =
   | "escalated"
   | "resolved"
   | "rejected"
-  | "processing-failed";
+  | "processing-failed"
+  | "suspended";
 
 export interface HazardReport {
   id: string;
+  userId?: string;
   title: string;
   category: string;
   categoryLabel?: string;

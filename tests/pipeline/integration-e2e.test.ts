@@ -43,11 +43,11 @@ import { GET as getVotesRoute } from "@/app/api/incidents/[incidentId]/votes/rou
 import { GET as getSessionRoute } from "@/app/api/auth/session/route";
 import { GET as getAnalyticsRoute } from "@/app/api/admin/analytics/route";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limit";
-import { db, incidents, moderationActions, outboxEvents } from "@/lib/db";
+import { db, incidents, incidentReports, moderationActions, outboxEvents, users } from "@/lib/db";
 import { getReportsCollection } from "@/lib/db/mongodb";
 import { eq } from "drizzle-orm";
 
-describe("PRD §19 End-to-End Integration Test Suite (72 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (76 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -2726,5 +2726,284 @@ describe("PRD §19 End-to-End Integration Test Suite (72 Scenarios)", () => {
     expect(normalizeStatus("SUBMITTED")).toBe("under-review");
     expect(normalizeStatus("PROCESSING")).toBe("under-review");
     expect(normalizeStatus("UNKNOWN")).toBe("open");
+  });
+
+  // Scenario 73: Citizen Personal Reports API Projects userId and Isolates Citizen View (PRD §2, §14B, §16)
+  it("Scenario 73: GET /api/reports?scope=mine projects userId and isolates citizen personal docket from unowned reports", async () => {
+    const reportsColl = await getReportsCollection();
+    const myReportId = `REP-ISO-A-${Date.now()}`;
+    const otherReportId = `REP-ISO-B-${Date.now()}`;
+    const testUserId = `citizen_isolated_tester_${Date.now()}`;
+
+    // 1. Seed two reports with different userIds
+    await reportsColl.insertMany([
+      {
+        reportId: myReportId,
+        userId: testUserId,
+        status: "SUBMITTED",
+        category: "Road Surface / Pothole",
+        description: "My personal pothole report",
+        evidencePhotos: [],
+        submissionLocation: {
+          latitude: 28.4744,
+          longitude: 77.504,
+          accuracyMeters: 8,
+          capturedAt: new Date().toISOString(),
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        reportId: otherReportId,
+        userId: "someone_else_456",
+        status: "SUBMITTED",
+        category: "Street Lighting",
+        description: "Unrelated citizen lighting hazard",
+        evidencePhotos: [],
+        submissionLocation: {
+          latitude: 28.475,
+          longitude: 77.505,
+          accuracyMeters: 10,
+          capturedAt: new Date().toISOString(),
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    // 2. Query as testUserId with scope=mine
+    const req = new NextRequest("http://localhost:3000/api/reports?scope=mine", {
+      headers: {
+        "x-mock-user-id": testUserId,
+        "x-mock-role": "citizen",
+      },
+    });
+
+    const res = await getReportsRoute(req);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+
+    // 3. Verify user isolation and userId projection
+    const returnedIds = json.reports.map((r: { reportId: string }) => r.reportId);
+    expect(returnedIds).toContain(myReportId);
+    expect(returnedIds).not.toContain(otherReportId);
+
+    const foundReport = json.reports.find((r: { reportId: string }) => r.reportId === myReportId);
+    expect(foundReport).toBeDefined();
+    expect(foundReport.userId).toBe(testUserId);
+
+    // Clean up
+    await reportsColl.deleteMany({ reportId: { $in: [myReportId, otherReportId] } });
+  });
+
+  // Scenario 74: Citizen Tracking Dossier API Exposes Lifecycle Statuses and Recovery Guidance (PRD §3, §5, §14, §14B)
+  it("Scenario 74: GET /api/reports/:reportId exposes accurate lifecycle statuses including RESOLVED and failure recovery details", async () => {
+    const reportsColl = await getReportsCollection();
+    const resolvedReportId = `REP-TRACE-RESOLVED-${Date.now()}`;
+    const failedReportId = `REP-TRACE-FAILED-${Date.now()}`;
+
+    await reportsColl.insertMany([
+      {
+        reportId: resolvedReportId,
+        userId: "citizen_trace_user",
+        status: "RESOLVED",
+        category: "Road Surface / Pothole",
+        description: "Resolved hazard tracking dossier test",
+        evidencePhotos: [],
+        submissionLocation: {
+          latitude: 28.4744,
+          longitude: 77.504,
+          accuracyMeters: 8,
+          capturedAt: new Date().toISOString(),
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        reportId: failedReportId,
+        userId: "citizen_trace_user",
+        status: "AI_ANALYSIS_FAILED",
+        rejectionReason: "Vision extraction provider timeout",
+        category: "Road Surface / Pothole",
+        description: "Failed hazard tracking dossier test",
+        evidencePhotos: [],
+        submissionLocation: {
+          latitude: 28.4744,
+          longitude: 77.504,
+          accuracyMeters: 8,
+          capturedAt: new Date().toISOString(),
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    // Query resolved report
+    const res1 = await getReportDetailRoute(
+      new NextRequest(`http://localhost:3000/api/reports/${resolvedReportId}`),
+      { params: Promise.resolve({ reportId: resolvedReportId }) },
+    );
+    expect(res1.status).toBe(200);
+    const json1 = await res1.json();
+    expect(json1.status).toBe("RESOLVED");
+
+    // Query failed report
+    const res2 = await getReportDetailRoute(
+      new NextRequest(`http://localhost:3000/api/reports/${failedReportId}`),
+      { params: Promise.resolve({ reportId: failedReportId }) },
+    );
+    expect(res2.status).toBe(200);
+    const json2 = await res2.json();
+    expect(json2.status).toBe("AI_ANALYSIS_FAILED");
+    expect(json2.rejectionReason).toBe("Vision extraction provider timeout");
+
+    // Clean up
+    await reportsColl.deleteMany({ reportId: { $in: [resolvedReportId, failedReportId] } });
+  });
+
+  // Scenario 75: Background Processor Persists PROCESSING_FAILED in MongoDB when Processing Encounters Failures (PRD §5 & §15)
+  it("Scenario 75: Background processor persists PROCESSING_FAILED status with rejectionReason in MongoDB upon worker failure", async () => {
+    const reportsColl = await getReportsCollection();
+    const failProcReportId = `REP-WORKER-FAIL-${Date.now()}`;
+
+    // Seed report that will hit unhandled exception or failed mandatory stage in processor
+    await reportsColl.insertOne({
+      reportId: failProcReportId,
+      userId: "citizen_fail_tester",
+      status: "SUBMITTED",
+      category: "Road Surface / Pothole",
+      description: "Trigger unhandled exception in background worker",
+      // Non-iterable or invalid evidencePhotos triggers unhandled error block
+      evidencePhotos: null as unknown as [],
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 8,
+        capturedAt: new Date().toISOString(),
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Run processor
+    const result = await processReportBackground(failProcReportId);
+    expect(result.success).toBe(false);
+    expect(result.status).toBe("PROCESSING_FAILED");
+
+    // Verify persisted status and reason in MongoDB
+    const persisted = await reportsColl.findOne({ reportId: failProcReportId });
+    expect(persisted).toBeDefined();
+    expect(persisted?.status).toBe("PROCESSING_FAILED");
+    expect(persisted?.rejectionReason).toBeDefined();
+
+    // Clean up
+    await reportsColl.deleteOne({ reportId: failProcReportId });
+  });
+
+  // Scenario 76: Citizen Report Retraction/Deletion Decrements Incident reportCount and Unpublishes Orphan Incidents (PRD §2, §4, §11, §13)
+  it("Scenario 76: DELETE /api/reports/:reportId decrements PostgreSQL incident reportCount and unpublishes orphan incidents", async () => {
+    const reportsColl = await getReportsCollection();
+    const orphanReportId = `REP-ORPHAN-${Date.now()}`;
+    const testUserId = `citizen_retract_owner_${Date.now()}`;
+
+    // 1. Seed canonical incident in PostgreSQL as published
+    const [testInc] = await db
+      .insert(incidents)
+      .values({
+        incidentNumber: `INC-ORPHAN-${Date.now()}`,
+        category: "Road Surface / Pothole",
+        severity: "medium",
+        status: "approved",
+        moderationStatus: "approved",
+        latitude: "28.474400",
+        longitude: "77.504000",
+        canonicalGeom: "SRID=4326;POINT(77.504000 28.474400)",
+        spatialUncertaintyMeters: "8.00",
+        title: "Incident with single citizen report",
+        summary: "Orphan test incident",
+        isPublished: true,
+        reportCount: 1,
+      })
+      .returning();
+
+    expect(testInc).toBeDefined();
+    if (!testInc) throw new Error("testInc not seeded");
+
+    // 2. Seed sole report in MongoDB
+    await reportsColl.insertOne({
+      reportId: orphanReportId,
+      userId: testUserId,
+      status: "PUBLISHED",
+      associatedIncidentId: testInc.id,
+      category: "Road Surface / Pothole",
+      description: "Sole report for canonical incident",
+      evidencePhotos: [],
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 8,
+        capturedAt: new Date().toISOString(),
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    // 3. Ensure user exists and insert junction link
+    await db
+      .insert(users)
+      .values({
+        id: testUserId,
+        email: `${testUserId}@jansahayak.internal`,
+        fullName: "Citizen Retract Owner",
+        role: "citizen",
+      })
+      .onConflictDoNothing();
+
+    await db.insert(incidentReports).values({
+      incidentId: testInc.id,
+      reportId: orphanReportId,
+      userId: testUserId,
+      matchScore: "1.0000",
+      matchReason: "Primary report",
+      isPrimaryReport: true,
+    });
+
+    // 4. Delete the report as the owning citizen
+    const deleteReq = new NextRequest(`http://localhost:3000/api/reports/${orphanReportId}`, {
+      method: "DELETE",
+      headers: {
+        "x-mock-user-id": testUserId,
+        "x-mock-role": "citizen",
+      },
+    });
+
+    const deleteRes = await deleteReportRoute(deleteReq, {
+      params: Promise.resolve({ reportId: orphanReportId }),
+    });
+
+    expect(deleteRes.status).toBe(200);
+    const deleteJson = await deleteRes.json();
+    expect(deleteJson.success).toBe(true);
+
+    // 5. Verify MongoDB document is removed
+    const mongoDoc = await reportsColl.findOne({ reportId: orphanReportId });
+    expect(mongoDoc).toBeNull();
+
+    // 6. Verify PostgreSQL incident is unpublished and marked suspended with reportCount = 0
+    const [updatedInc] = await db
+      .select()
+      .from(incidents)
+      .where(eq(incidents.id, testInc.id))
+      .limit(1);
+
+    expect(updatedInc).toBeDefined();
+    expect(updatedInc?.reportCount).toBe(0);
+    expect(updatedInc?.isPublished).toBe(false);
+    expect(updatedInc?.status).toBe("suspended");
+
+    // Clean up
+    await db.delete(incidents).where(eq(incidents.id, testInc.id));
+    await db.delete(users).where(eq(users.id, testUserId));
   });
 });

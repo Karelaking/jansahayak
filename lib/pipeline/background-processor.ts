@@ -216,10 +216,20 @@ export async function processReportBackground(
 
     if (!s5.success || !s5.data) {
       const err = s5.error || "Candidate duplicate matching failed.";
+      await reportsColl.updateOne(
+        { reportId },
+        {
+          $set: {
+            status: "PROCESSING_FAILED",
+            rejectionReason: err,
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      );
       return {
         success: false,
         reportId,
-        status: "MATCHING_FAILED",
+        status: "PROCESSING_FAILED",
         error: err,
         durationMs: Date.now() - startTime,
       };
@@ -232,10 +242,20 @@ export async function processReportBackground(
 
     if (!s6.success || !s6.data) {
       const err = s6.error || "Canonical incident synthesis failed.";
+      await reportsColl.updateOne(
+        { reportId },
+        {
+          $set: {
+            status: "PROCESSING_FAILED",
+            rejectionReason: err,
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      );
       return {
         success: false,
         reportId,
-        status: "INCIDENT_SYNTHESIS_FAILED",
+        status: "PROCESSING_FAILED",
         error: err,
         durationMs: Date.now() - startTime,
       };

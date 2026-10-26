@@ -129,6 +129,13 @@ function getStatusBadge(status: string, publicOpinionStatus?: string) {
           Rejected
         </span>
       );
+    case "suspended":
+      return (
+        <span className="status-suspended inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#f4e8be] text-[#7a540b] border border-[#fed7aa]">
+          <i aria-hidden="true" className="size-1.5 rounded-full bg-[#7a540b]" />
+          Suspended
+        </span>
+      );
     case "processing-failed":
       return (
         <span className="status-failed inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-900 border border-rose-200">
@@ -221,8 +228,10 @@ export default function ReportsPage() {
   const loadReports = React.useCallback(async () => {
     try {
       const [mapRes, reportsRes] = await Promise.all([
-        fetch("/api/map/incidents").catch(() => null),
-        fetch("/api/reports?limit=50").catch(() => null),
+        isStaff ? fetch("/api/map/incidents").catch(() => null) : Promise.resolve(null),
+        fetch(isStaff ? "/api/reports?limit=50" : "/api/reports?limit=50&scope=mine").catch(
+          () => null,
+        ),
       ]);
 
       const mapData = mapRes && mapRes.ok ? await mapRes.json() : null;
@@ -231,7 +240,7 @@ export default function ReportsPage() {
       const combined: HazardReport[] = [];
       const seenIds = new Set<string>();
 
-      if (mapData && Array.isArray(mapData.incidents)) {
+      if (isStaff && mapData && Array.isArray(mapData.incidents)) {
         for (const inc of mapData.incidents) {
           combined.push(inc);
           seenIds.add(inc.id);
@@ -244,6 +253,7 @@ export default function ReportsPage() {
           if (rid && !seenIds.has(rid)) {
             combined.push({
               id: rid,
+              userId: r.userId,
               title: r.description ? r.description.slice(0, 60) : `${r.category} Report`,
               description: r.description || "Citizen road safety report",
               category: r.category || "road-surface",
@@ -254,7 +264,8 @@ export default function ReportsPage() {
                 if (norm === "IN_PROGRESS" || norm === "IN-PROGRESS" || norm === "ASSIGNED")
                   return "in-progress";
                 if (norm === "ESCALATED" || norm === "MUNICIPALLY_DISPATCHED") return "escalated";
-                if (norm === "REJECTED" || norm === "SUSPENDED") return "rejected";
+                if (norm === "REJECTED") return "rejected";
+                if (norm === "SUSPENDED") return "suspended";
                 if (norm === "PROCESSING_FAILED") return "processing-failed";
                 if (
                   norm === "SUBMITTED" ||
@@ -288,7 +299,7 @@ export default function ReportsPage() {
     } catch (e) {
       console.warn("Could not load database reports for registry:", e);
     }
-  }, []);
+  }, [isStaff]);
 
   React.useEffect(() => {
     loadReports();
@@ -297,8 +308,8 @@ export default function ReportsPage() {
   // Filtered reports
   const filteredReports = React.useMemo(() => {
     return reports.filter((r) => {
-      if (scopeFilter === "mine" && sessionUserId && (r as unknown as { userId?: string }).userId) {
-        if ((r as unknown as { userId?: string }).userId !== sessionUserId) return false;
+      if (scopeFilter === "mine" && sessionUserId) {
+        if (r.userId && r.userId !== sessionUserId) return false;
       }
       const matchesTab = activeTab === "all" || r.status === activeTab;
       const q = searchQuery.toLowerCase().trim();

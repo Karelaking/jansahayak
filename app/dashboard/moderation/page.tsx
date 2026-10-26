@@ -892,10 +892,14 @@ export default function ModerationPage() {
             </DialogHeader>
 
             <div className="space-y-3 py-2">
-              <label className="text-xs font-semibold text-[#17382f] block">
+              <label
+                htmlFor="mod-rejection-reason"
+                className="text-xs font-semibold text-[#17382f] block"
+              >
                 Documented Rejection Reason (Required)
               </label>
               <textarea
+                id="mod-rejection-reason"
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
                 placeholder="e.g. Private residential driveway outside municipal Greater Noida maintenance scope."
@@ -942,10 +946,14 @@ export default function ModerationPage() {
             </DialogHeader>
 
             <div className="space-y-3 py-2">
-              <label className="text-xs font-semibold text-[#17382f] block">
+              <label
+                htmlFor="mod-evidence-instructions"
+                className="text-xs font-semibold text-[#17382f] block"
+              >
                 Evidence Instructions for Citizens
               </label>
               <textarea
+                id="mod-evidence-instructions"
                 value={evidenceNotes}
                 onChange={(e) => setEvidenceNotes(e.target.value)}
                 placeholder="e.g. Please capture a wide-angle photograph showing road lane markings and proximity to curb."
@@ -994,8 +1002,14 @@ export default function ModerationPage() {
             <div className="space-y-3 py-2 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold text-[#17382f] block mb-1">Latitude</label>
+                  <label
+                    htmlFor="mod-lat-input"
+                    className="font-semibold text-[#17382f] block mb-1"
+                  >
+                    Latitude
+                  </label>
                   <input
+                    id="mod-lat-input"
                     type="number"
                     step="0.0001"
                     value={latInput}
@@ -1004,8 +1018,14 @@ export default function ModerationPage() {
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-[#17382f] block mb-1">Longitude</label>
+                  <label
+                    htmlFor="mod-lng-input"
+                    className="font-semibold text-[#17382f] block mb-1"
+                  >
+                    Longitude
+                  </label>
                   <input
+                    id="mod-lng-input"
                     type="number"
                     step="0.0001"
                     value={lngInput}
@@ -1016,8 +1036,14 @@ export default function ModerationPage() {
               </div>
 
               <div>
-                <label className="font-semibold text-[#17382f] block mb-1">Verification Note</label>
+                <label
+                  htmlFor="mod-location-notes"
+                  className="font-semibold text-[#17382f] block mb-1"
+                >
+                  Verification Note
+                </label>
                 <input
+                  id="mod-location-notes"
                   type="text"
                   value={locationNotes}
                   onChange={(e) => setLocationNotes(e.target.value)}
@@ -1064,10 +1090,14 @@ export default function ModerationPage() {
 
             <div className="space-y-3 py-2 text-xs">
               <div>
-                <label className="font-semibold text-[#17382f] block mb-1">
+                <label
+                  htmlFor="mod-duplicate-ids"
+                  className="font-semibold text-[#17382f] block mb-1"
+                >
                   Duplicate Incident IDs (Comma-separated)
                 </label>
                 <input
+                  id="mod-duplicate-ids"
                   type="text"
                   value={duplicateIdsInput}
                   onChange={(e) => setDuplicateIdsInput(e.target.value)}
@@ -1077,8 +1107,14 @@ export default function ModerationPage() {
               </div>
 
               <div>
-                <label className="font-semibold text-[#17382f] block mb-1">Merge Reason</label>
+                <label
+                  htmlFor="mod-merge-reason"
+                  className="font-semibold text-[#17382f] block mb-1"
+                >
+                  Merge Reason
+                </label>
                 <input
+                  id="mod-merge-reason"
                   type="text"
                   value={mergeReason}
                   onChange={(e) => setMergeReason(e.target.value)}
@@ -1124,10 +1160,14 @@ export default function ModerationPage() {
 
             <div className="space-y-3 py-2 text-xs">
               <div>
-                <label className="font-semibold text-[#17382f] block mb-1">
+                <label
+                  htmlFor="mod-split-reports-input"
+                  className="font-semibold text-[#17382f] block mb-1"
+                >
                   Report IDs to Partition (Comma-separated)
                 </label>
                 <input
+                  id="mod-split-reports-input"
                   type="text"
                   value={splitReportIdsInput}
                   onChange={(e) => setSplitReportIdsInput(e.target.value)}
@@ -1137,10 +1177,14 @@ export default function ModerationPage() {
               </div>
 
               <div>
-                <label className="font-semibold text-[#17382f] block mb-1">
+                <label
+                  htmlFor="mod-split-reason-input"
+                  className="font-semibold text-[#17382f] block mb-1"
+                >
                   Partition Rationale
                 </label>
                 <input
+                  id="mod-split-reason-input"
                   type="text"
                   value={splitReason}
                   onChange={(e) => setSplitReason(e.target.value)}
@@ -1185,10 +1229,11 @@ export default function ModerationPage() {
             </DialogHeader>
 
             <div className="space-y-3 py-2 text-xs">
-              <label className="font-semibold text-[#17382f] block">
+              <label htmlFor="mod-unpublish-reason" className="font-semibold text-[#17382f] block">
                 Reason for Revocation (Required)
               </label>
               <textarea
+                id="mod-unpublish-reason"
                 value={unpublishReason}
                 onChange={(e) => setUnpublishReason(e.target.value)}
                 placeholder="e.g. Road repair completed by GNIDA or incorrect hazard coordinates."
