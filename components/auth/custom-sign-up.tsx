@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSignUp } from "@clerk/nextjs";
 import { Brand } from "@/components/brand";
+import { GoogleIcon } from "@/components/icons";
 import {
   Card,
   CardHeader,
@@ -32,7 +33,7 @@ export function CustomSignUp({ hasClerkKeys = false }: CustomSignUpProps) {
 
 /**
  * Clerk-Connected Custom Sign-Up Flow
- * Implements Clerk SDK v7+ useSignUp() with email verification and finalize().
+ * Implements Clerk SDK v7+ useSignUp() with Google SSO, email verification, and finalize().
  */
 function ClerkConnectedSignUp() {
   const router = useRouter();
@@ -48,6 +49,43 @@ function ClerkConnectedSignUp() {
   const [code, setCode] = React.useState("");
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
+
+  const handleGoogleSignUp = async () => {
+    setLocalError(null);
+    setIsGoogleLoading(true);
+    try {
+      if (signUp?.sso) {
+        const { error } = await signUp.sso({
+          strategy: "oauth_google",
+          redirectUrl: redirectUrl || "/dashboard",
+          redirectCallbackUrl: "/sso-callback",
+        });
+        if (error) {
+          setLocalError(error.message || "Failed to initialize Google authentication.");
+          setIsGoogleLoading(false);
+        }
+      } else if (
+        (signUp as unknown as { authenticateWithRedirect?: (opts: unknown) => Promise<unknown> })
+          ?.authenticateWithRedirect
+      ) {
+        await (
+          signUp as unknown as { authenticateWithRedirect: (opts: unknown) => Promise<unknown> }
+        ).authenticateWithRedirect({
+          strategy: "oauth_google",
+          redirectUrl: "/sso-callback",
+          redirectUrlComplete: redirectUrl || "/dashboard",
+        });
+      } else {
+        setLocalError("OAuth authentication service is unavailable.");
+        setIsGoogleLoading(false);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Google registration encountered an error.";
+      setLocalError(msg);
+      setIsGoogleLoading(false);
+    }
+  };
 
   const handleInitialSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,6 +190,8 @@ function ClerkConnectedSignUp() {
   return (
     <SignUpLayout
       onSubmit={handleInitialSignUp}
+      onGoogleSignUp={handleGoogleSignUp}
+      isGoogleLoading={isGoogleLoading}
       fullName={fullName}
       setFullName={setFullName}
       email={email}
@@ -181,6 +221,33 @@ function LocalBridgeSignUp() {
   const [password, setPassword] = React.useState("");
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
+
+  const handleGoogleSignUp = async () => {
+    setLocalError(null);
+    setIsGoogleLoading(true);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: "Google Verified Citizen",
+          email: "citizen.google@jansahayak.in",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Google registration simulation failed.");
+      }
+
+      router.push(redirectUrl);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Google sign-up failed.";
+      setLocalError(msg);
+      setIsGoogleLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -218,6 +285,8 @@ function LocalBridgeSignUp() {
   return (
     <SignUpLayout
       onSubmit={handleSubmit}
+      onGoogleSignUp={handleGoogleSignUp}
+      isGoogleLoading={isGoogleLoading}
       fullName={fullName}
       setFullName={setFullName}
       email={email}
@@ -236,6 +305,8 @@ function LocalBridgeSignUp() {
  */
 function SignUpLayout({
   onSubmit,
+  onGoogleSignUp,
+  isGoogleLoading,
   fullName,
   setFullName,
   email,
@@ -247,6 +318,8 @@ function SignUpLayout({
   redirectUrl,
 }: {
   onSubmit: (e: React.FormEvent) => void;
+  onGoogleSignUp: () => void;
+  isGoogleLoading: boolean;
   fullName: string;
   setFullName: (val: string) => void;
   email: string;
@@ -300,6 +373,34 @@ function SignUpLayout({
               </div>
             )}
 
+            {/* Google Social Authentication */}
+            <div className="space-y-3 mb-4">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isLoading || isGoogleLoading}
+                onClick={onGoogleSignUp}
+                className="w-full h-9 bg-white hover:bg-[#f0eee6] border-[#cbd5cb] text-[#0e2b24] font-medium text-xs flex items-center justify-center gap-2.5 shadow-xs transition-colors"
+                aria-label="Continue with Google Authentication"
+              >
+                {isGoogleLoading ? (
+                  <Spinner className="size-3.5" />
+                ) : (
+                  <GoogleIcon className="size-4 shrink-0" />
+                )}
+                <span>Continue with Google</span>
+              </Button>
+
+              <div className="relative my-3">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-[#cbd5cb]" />
+                </div>
+                <div className="relative flex justify-center text-[10px] uppercase font-mono tracking-wider">
+                  <span className="bg-[#faf9f5] px-2 text-[#5c6f66]">or register with email</span>
+                </div>
+              </div>
+            </div>
+
             <form onSubmit={onSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <label
@@ -316,7 +417,7 @@ function SignUpLayout({
                   placeholder="e.g. Rahul Sharma"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  disabled={isLoading}
+                  disabled={isLoading || isGoogleLoading}
                   className="bg-white border-[#cbd5cb] text-[#17382f] text-xs h-9"
                 />
               </div>
@@ -336,7 +437,7 @@ function SignUpLayout({
                   placeholder="rahul@example.in"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  disabled={isLoading}
+                  disabled={isLoading || isGoogleLoading}
                   className="bg-white border-[#cbd5cb] text-[#17382f] text-xs h-9"
                 />
               </div>
@@ -356,7 +457,7 @@ function SignUpLayout({
                   placeholder="At least 8 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading}
+                  disabled={isLoading || isGoogleLoading}
                   className="bg-white border-[#cbd5cb] text-[#17382f] text-xs h-9"
                 />
               </div>
@@ -374,7 +475,7 @@ function SignUpLayout({
 
               <Button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || isGoogleLoading}
                 className="w-full bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] text-xs font-medium h-9 shadow-xs"
               >
                 {isLoading ? (

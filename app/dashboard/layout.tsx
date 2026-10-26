@@ -232,15 +232,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate font-semibold text-[11px] text-foreground">
-                {userFullName ||
-                  (userRole === "admin"
-                    ? "Civic Admin"
-                    : userRole === "moderator"
-                      ? "Staff Moderator"
-                      : "Citizen User")}
+                {userFullName || (isStaff ? "Civic Official" : "Civic Citizen")}
               </p>
               <p className="truncate text-[10px] text-muted-foreground">
-                {userEmail || `${userRole}@jansahayak.in`}
+                {userEmail || "Verified Civic Account"}
               </p>
             </div>
           </div>

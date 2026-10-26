@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSignIn } from "@clerk/nextjs";
 import { Brand } from "@/components/brand";
+import { GoogleIcon } from "@/components/icons";
 import {
   Card,
   CardHeader,
@@ -17,15 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  ShieldCheck,
-  UserCheck,
-  Lock,
-  AlertCircle,
-  ArrowRight,
-  ShieldAlert,
-  Sparkles,
-} from "lucide-react";
+import { Lock, AlertCircle, ArrowRight } from "lucide-react";
 
 interface CustomSignInProps {
   hasClerkKeys?: boolean;
@@ -40,7 +33,7 @@ export function CustomSignIn({ hasClerkKeys = false }: CustomSignInProps) {
 
 /**
  * Clerk-Connected Custom Sign-In Flow
- * Implements Clerk SDK v7+ useSignIn() hook with password, errors, and finalize().
+ * Implements Clerk SDK v7+ useSignIn() hook with password, Google SSO, errors, and finalize().
  */
 function ClerkConnectedSignIn() {
   const router = useRouter();
@@ -53,6 +46,43 @@ function ClerkConnectedSignIn() {
   const [password, setPassword] = React.useState("");
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
+
+  const handleGoogleSignIn = async () => {
+    setLocalError(null);
+    setIsGoogleLoading(true);
+    try {
+      if (signIn?.sso) {
+        const { error } = await signIn.sso({
+          strategy: "oauth_google",
+          redirectUrl: redirectUrl || "/dashboard",
+          redirectCallbackUrl: "/sso-callback",
+        });
+        if (error) {
+          setLocalError(error.message || "Failed to initialize Google sign-in.");
+          setIsGoogleLoading(false);
+        }
+      } else if (
+        (signIn as unknown as { authenticateWithRedirect?: (opts: unknown) => Promise<unknown> })
+          ?.authenticateWithRedirect
+      ) {
+        await (
+          signIn as unknown as { authenticateWithRedirect: (opts: unknown) => Promise<unknown> }
+        ).authenticateWithRedirect({
+          strategy: "oauth_google",
+          redirectUrl: "/sso-callback",
+          redirectUrlComplete: redirectUrl || "/dashboard",
+        });
+      } else {
+        setLocalError("OAuth authentication service is unavailable.");
+        setIsGoogleLoading(false);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Google sign-in encountered an error.";
+      setLocalError(msg);
+      setIsGoogleLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,6 +133,8 @@ function ClerkConnectedSignIn() {
   return (
     <SignInLayout
       onSubmit={handleSubmit}
+      onGoogleSignIn={handleGoogleSignIn}
+      isGoogleLoading={isGoogleLoading}
       identifier={identifier}
       setIdentifier={setIdentifier}
       password={password}
@@ -122,8 +154,7 @@ function ClerkConnectedSignIn() {
 
 /**
  * Local Bridge Sign-In Flow
- * Backed by /api/auth/login for local offline development, automated tests,
- * and rapid persona simulation across Citizen, Moderator, and Admin roles.
+ * Backed by /api/auth/login for local offline development and automated testing.
  */
 function LocalBridgeSignIn() {
   const router = useRouter();
@@ -134,6 +165,33 @@ function LocalBridgeSignIn() {
   const [password, setPassword] = React.useState("");
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
+
+  const handleGoogleSignIn = async () => {
+    setLocalError(null);
+    setIsGoogleLoading(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "citizen.google@jansahayak.in",
+          role: "citizen",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Google sign-in simulation failed.");
+      }
+
+      router.push(redirectUrl);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Google sign-in failed.";
+      setLocalError(msg);
+      setIsGoogleLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -175,6 +233,8 @@ function LocalBridgeSignIn() {
   return (
     <SignInLayout
       onSubmit={handleSubmit}
+      onGoogleSignIn={handleGoogleSignIn}
+      isGoogleLoading={isGoogleLoading}
       identifier={identifier}
       setIdentifier={setIdentifier}
       password={password}
@@ -192,6 +252,8 @@ function LocalBridgeSignIn() {
  */
 function SignInLayout({
   onSubmit,
+  onGoogleSignIn,
+  isGoogleLoading,
   identifier,
   setIdentifier,
   password,
@@ -202,6 +264,8 @@ function SignInLayout({
   isClerkActive,
 }: {
   onSubmit: (e: React.FormEvent) => void;
+  onGoogleSignIn: () => void;
+  isGoogleLoading: boolean;
   identifier: string;
   setIdentifier: (val: string) => void;
   password: string;
@@ -211,24 +275,6 @@ function SignInLayout({
   redirectUrl: string;
   isClerkActive: boolean;
 }) {
-  const router = useRouter();
-
-  // Rapid persona simulation for dev / review
-  const handleQuickLogin = async (role: "citizen" | "moderator" | "admin") => {
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
-      });
-      if (res.ok) {
-        router.push(redirectUrl);
-      }
-    } catch {
-      // non-blocking
-    }
-  };
-
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 py-8 bg-[#f5f3ed]">
       <div className="w-full max-w-md space-y-6">
@@ -271,6 +317,34 @@ function SignInLayout({
               </div>
             )}
 
+            {/* Google Social Authentication */}
+            <div className="space-y-3 mb-4">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isLoading || isGoogleLoading}
+                onClick={onGoogleSignIn}
+                className="w-full h-9 bg-white hover:bg-[#f0eee6] border-[#cbd5cb] text-[#0e2b24] font-medium text-xs flex items-center justify-center gap-2.5 shadow-xs transition-colors"
+                aria-label="Sign in with Google Authentication"
+              >
+                {isGoogleLoading ? (
+                  <Spinner className="size-3.5" />
+                ) : (
+                  <GoogleIcon className="size-4 shrink-0" />
+                )}
+                <span>Continue with Google</span>
+              </Button>
+
+              <div className="relative my-3">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-[#cbd5cb]" />
+                </div>
+                <div className="relative flex justify-center text-[10px] uppercase font-mono tracking-wider">
+                  <span className="bg-[#faf9f5] px-2 text-[#5c6f66]">or sign in with email</span>
+                </div>
+              </div>
+            </div>
+
             <form onSubmit={onSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <label
@@ -287,7 +361,7 @@ function SignInLayout({
                   placeholder="name@example.in or civic_user"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  disabled={isLoading}
+                  disabled={isLoading || isGoogleLoading}
                   className="bg-white border-[#cbd5cb] text-[#17382f] text-xs h-9"
                 />
               </div>
@@ -310,14 +384,14 @@ function SignInLayout({
                   placeholder="••••••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading}
+                  disabled={isLoading || isGoogleLoading}
                   className="bg-white border-[#cbd5cb] text-[#17382f] text-xs h-9"
                 />
               </div>
 
               <Button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || isGoogleLoading}
                 className="w-full bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] text-xs font-medium h-9 shadow-xs"
               >
                 {isLoading ? (
@@ -334,49 +408,6 @@ function SignInLayout({
                 )}
               </Button>
             </form>
-
-            {/* Quick Demo Persona Switcher (For local evaluation) */}
-            <div className="mt-5 pt-4 border-t border-[#eef1e9]">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-semibold text-[#0e2b24] flex items-center gap-1">
-                  <Sparkles className="size-3 text-amber-700" />
-                  <span>One-Click Role Simulation</span>
-                </span>
-                <span className="text-[10px] text-[#5c6f66]">Dev &amp; Evaluation</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  onClick={() => handleQuickLogin("citizen")}
-                  className="border-[#cbd5cb] text-[#17382f] hover:bg-[#eef1e9] text-[11px] h-8 flex flex-col justify-center items-center py-1"
-                >
-                  <UserCheck className="size-3 text-emerald-800 mb-0.5" />
-                  <span>Citizen</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  onClick={() => handleQuickLogin("moderator")}
-                  className="border-[#cbd5cb] text-[#17382f] hover:bg-[#eef1e9] text-[11px] h-8 flex flex-col justify-center items-center py-1"
-                >
-                  <ShieldCheck className="size-3 text-blue-800 mb-0.5" />
-                  <span>Moderator</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  onClick={() => handleQuickLogin("admin")}
-                  className="border-[#cbd5cb] text-[#17382f] hover:bg-[#eef1e9] text-[11px] h-8 flex flex-col justify-center items-center py-1"
-                >
-                  <ShieldAlert className="size-3 text-rose-800 mb-0.5" />
-                  <span>Admin</span>
-                </Button>
-              </div>
-            </div>
           </CardContent>
 
           <CardFooter className="flex items-center justify-between border-t border-[#eef1e9] py-3 text-xs text-[#5c6f66]">
