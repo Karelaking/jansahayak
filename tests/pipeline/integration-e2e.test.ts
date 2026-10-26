@@ -44,12 +44,14 @@ import { GET as getSessionRoute } from "@/app/api/auth/session/route";
 import { GET as getAnalyticsRoute } from "@/app/api/admin/analytics/route";
 import { GET as getPipelineReportRoute } from "@/app/api/pipeline/reports/[reportId]/route";
 import { GET as getPipelineIncidentsRoute } from "@/app/api/pipeline/incidents/route";
+import { GET as getReportProcessingRoute } from "@/app/api/reports/[reportId]/processing/route";
+import { POST as postEvidenceRoute } from "@/app/api/reports/[reportId]/evidence/route";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limit";
 import { db, incidents, incidentReports, moderationActions, outboxEvents, users } from "@/lib/db";
 import { getReportsCollection } from "@/lib/db/mongodb";
 import { eq } from "drizzle-orm";
 
-describe("PRD §19 End-to-End Integration Test Suite (80 Scenarios)", () => {
+describe("PRD §19 End-to-End Integration Test Suite (84 Scenarios)", () => {
   // Scenario 1: Valid report flow validation
   it("Scenario 1: Valid report calculation passes geodesic and coordinate integrity checks", () => {
     const lat = 28.4744;
@@ -3410,6 +3412,255 @@ describe("PRD §19 End-to-End Integration Test Suite (80 Scenarios)", () => {
     } finally {
       await reportsColl.deleteOne({ reportId: testRepId });
       await db.delete(incidents).where(eq(incidents.id, testInc.id));
+    }
+  });
+
+  // Scenario 81: GET /api/reports/:reportId/processing Existence Validation & Telemetry (PRD §3, §16)
+  it("Scenario 81: GET /api/reports/:reportId/processing validates existence, returns 404 for unknown report, and returns sanitized stage progression", async () => {
+    // 1. Unknown report returns 404 Not Found
+    const notFoundReq = new NextRequest(
+      "http://localhost:3000/api/reports/REP-UNKNOWN-9999/processing",
+    );
+    const notFoundRes = await getReportProcessingRoute(notFoundReq, {
+      params: Promise.resolve({ reportId: "REP-UNKNOWN-9999" }),
+    });
+    expect(notFoundRes.status).toBe(404);
+    const notFoundJson = await notFoundRes.json();
+    expect(notFoundJson.error).toContain("Report not found");
+
+    // 2. Seed a report in MongoDB with failure state
+    const timestamp = Date.now();
+    const testRepId = `REP-PROC-${timestamp}`;
+    const reportsColl = await getReportsCollection();
+    await reportsColl.insertOne({
+      reportId: testRepId,
+      userId: `usr_${timestamp}`,
+      status: "AI_ANALYSIS_FAILED",
+      rejectionReason: "Multimodal AI provider timeout",
+      category: "Road Surface / Pothole",
+      description: "Processing telemetry test",
+      evidencePhotos: [],
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 8,
+        capturedAt: new Date().toISOString(),
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    try {
+      const validReq = new NextRequest(`http://localhost:3000/api/reports/${testRepId}/processing`);
+      const validRes = await getReportProcessingRoute(validReq, {
+        params: Promise.resolve({ reportId: testRepId }),
+      });
+      expect(validRes.status).toBe(200);
+      const validJson = await validRes.json();
+      expect(validJson.success).toBe(true);
+      expect(validJson.reportId).toBe(testRepId);
+      expect(validJson.status).toBe("AI_ANALYSIS_FAILED");
+      expect(validJson.rejectionReason).toBe("Multimodal AI provider timeout");
+      expect(typeof validJson.currentStage).toBe("number");
+      expect(Array.isArray(validJson.stages)).toBe(true);
+    } finally {
+      await reportsColl.deleteOne({ reportId: testRepId });
+    }
+  });
+
+  // Scenario 82: Background Processor Failure Diagnostic Persistence (PRD §5, §15)
+  it("Scenario 82: processReportBackground persists explicit rejectionReason upon Stage 3 and Stage 4 failures", async () => {
+    const timestamp = Date.now();
+    const testRepId = `REP-DIAG-${timestamp}`;
+    const reportsColl = await getReportsCollection();
+
+    // Seed a report with invalid coordinates to trigger Stage 4 location failure
+    await reportsColl.insertOne({
+      reportId: testRepId,
+      userId: `usr_diag_${timestamp}`,
+      status: "SUBMITTED",
+      category: "Road Surface / Pothole",
+      description: "Diagnostics test for location verification failure",
+      evidencePhotos: [
+        {
+          fileId: "file_diag_1",
+          sha256: "hash_diag_1",
+          filename: "photo1.jpg",
+          contentType: "image/jpeg",
+          byteSize: 1024,
+          captureTimestamp: new Date().toISOString(),
+          isCameraCapture: true,
+          gpsSamples: [
+            {
+              latitude: 999.0, // Non-finite / out of range coordinate
+              longitude: 999.0,
+              horizontalAccuracyMeters: 60,
+              sampleTimestamp: new Date().toISOString(),
+            },
+          ],
+        },
+      ],
+      submissionLocation: {
+        latitude: 999.0,
+        longitude: 999.0,
+        accuracyMeters: 60,
+        capturedAt: new Date().toISOString(),
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    try {
+      const result = await processReportBackground(testRepId, { force: true });
+      expect(result.success).toBe(false);
+      expect(result.rejectionReason).toBeDefined();
+
+      const updatedDoc = await reportsColl.findOne({ reportId: testRepId });
+      expect(updatedDoc).toBeDefined();
+      expect(updatedDoc?.rejectionReason).toBeTruthy();
+    } finally {
+      await reportsColl.deleteOne({ reportId: testRepId });
+    }
+  });
+
+  // Scenario 83: POST /api/reports/:reportId/evidence Recovery Transition (PRD §5, §7, §15, §16)
+  it("Scenario 83: POST /api/reports/:reportId/evidence transitions reports in PROCESSING_FAILED or AI_ANALYSIS_FAILED back to PROCESSING and clears rejectionReason", async () => {
+    const timestamp = Date.now();
+    const testRepId = `REP-RECOV-${timestamp}`;
+    const testUserId = `usr_recov_${timestamp}`;
+    const reportsColl = await getReportsCollection();
+
+    await reportsColl.insertOne({
+      reportId: testRepId,
+      userId: testUserId,
+      status: "PROCESSING_FAILED",
+      rejectionReason: "Simulated worker interruption",
+      category: "Road Surface / Pothole",
+      description: "Supplementary recovery test",
+      evidencePhotos: [],
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 8,
+        capturedAt: new Date().toISOString(),
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    try {
+      // Citizen uploads fresh supplementary photo
+      const uploadReq = new NextRequest(`http://localhost:3000/api/reports/${testRepId}/evidence`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-mock-user-id": testUserId,
+          "x-mock-role": "citizen",
+        },
+        body: JSON.stringify({
+          photos: [
+            {
+              filename: "supp_photo.jpg",
+              base64:
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+              latitude: 28.4744,
+              longitude: 77.504,
+              accuracyMeters: 5,
+              capturedAt: new Date().toISOString(),
+            },
+          ],
+        }),
+      });
+
+      const uploadRes = await postEvidenceRoute(uploadReq, {
+        params: Promise.resolve({ reportId: testRepId }),
+      });
+
+      expect(uploadRes.status).toBe(200);
+      const uploadJson = await uploadRes.json();
+      expect(uploadJson.success).toBe(true);
+      expect(uploadJson.status).toBe("PROCESSING");
+
+      // Verify MongoDB document state
+      const updatedDoc = await reportsColl.findOne({ reportId: testRepId });
+      expect(updatedDoc).toBeDefined();
+      expect(updatedDoc?.status).toBe("PROCESSING");
+      expect(updatedDoc?.rejectionReason).toBeNull();
+    } finally {
+      await reportsColl.deleteOne({ reportId: testRepId });
+    }
+  });
+
+  // Scenario 84: GET /api/reports Public Directory Privacy Shield (PRD §12, §13)
+  it("Scenario 84: GET /api/reports sanitizes userId for unauthenticated callers while preserving userId for authenticated owners and staff", async () => {
+    const timestamp = Date.now();
+    const testRepId = `REP-PRIV-${timestamp}`;
+    const testUserId = `usr_priv_${timestamp}`;
+    const reportsColl = await getReportsCollection();
+
+    await reportsColl.insertOne({
+      reportId: testRepId,
+      userId: testUserId,
+      status: "PUBLISHED",
+      category: "Road Surface / Pothole",
+      description: "Privacy directory test report",
+      evidencePhotos: [],
+      submissionLocation: {
+        latitude: 28.4744,
+        longitude: 77.504,
+        accuracyMeters: 8,
+        capturedAt: new Date().toISOString(),
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    try {
+      // Test A: Unauthenticated public caller cannot harvest userId
+      const unauthReq = new NextRequest("http://localhost:3000/api/reports?limit=10");
+      const unauthRes = await getReportsRoute(unauthReq);
+      expect(unauthRes.status).toBe(200);
+      const unauthJson = await unauthRes.json();
+      const targetUnauth = unauthJson.reports.find(
+        (r: { reportId: string }) => r.reportId === testRepId,
+      );
+      if (targetUnauth) {
+        expect(targetUnauth.userId).toBeUndefined();
+      }
+
+      // Test B: Authenticated owner citizen querying scope=mine receives their userId
+      const ownerReq = new NextRequest("http://localhost:3000/api/reports?scope=mine", {
+        headers: {
+          "x-mock-user-id": testUserId,
+          "x-mock-role": "citizen",
+        },
+      });
+      const ownerRes = await getReportsRoute(ownerReq);
+      expect(ownerRes.status).toBe(200);
+      const ownerJson = await ownerRes.json();
+      const targetOwner = ownerJson.reports.find(
+        (r: { reportId: string }) => r.reportId === testRepId,
+      );
+      expect(targetOwner).toBeDefined();
+      expect(targetOwner.userId).toBe(testUserId);
+
+      // Test C: Authenticated staff member receives userId for administrative audit
+      const staffReq = new NextRequest("http://localhost:3000/api/reports?limit=10", {
+        headers: {
+          "x-mock-user-id": "usr_moderator_staff",
+          "x-mock-role": "moderator",
+        },
+      });
+      const staffRes = await getReportsRoute(staffReq);
+      expect(staffRes.status).toBe(200);
+      const staffJson = await staffRes.json();
+      const targetStaff = staffJson.reports.find(
+        (r: { reportId: string }) => r.reportId === testRepId,
+      );
+      expect(targetStaff).toBeDefined();
+      expect(targetStaff.userId).toBe(testUserId);
+    } finally {
+      await reportsColl.deleteOne({ reportId: testRepId });
     }
   });
 });

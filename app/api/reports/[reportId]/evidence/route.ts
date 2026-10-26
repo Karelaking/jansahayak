@@ -152,11 +152,14 @@ export async function POST(
       );
     }
 
-    // Append new photos to report and reset status if it was awaiting evidence or previously failed
+    // Append new photos to report and reset status if it was awaiting evidence or previously failed (PRD §5, §7, §15, §16)
     const nextStatus =
       reportDoc.status === "ADDITIONAL_EVIDENCE_REQUIRED" ||
       reportDoc.status === "REJECTED" ||
-      reportDoc.status === "EVIDENCE_VALIDATION_FAILED"
+      reportDoc.status === "EVIDENCE_VALIDATION_FAILED" ||
+      reportDoc.status === "PROCESSING_FAILED" ||
+      reportDoc.status === "AI_ANALYSIS_FAILED" ||
+      reportDoc.status === "LOCATION_VERIFICATION_FAILED"
         ? "PROCESSING"
         : reportDoc.status;
 

@@ -171,6 +171,7 @@ export async function processReportBackground(
         {
           $set: {
             status: "AI_ANALYSIS_FAILED",
+            rejectionReason: err,
             updatedAt: new Date().toISOString(),
           },
         },
@@ -180,6 +181,7 @@ export async function processReportBackground(
         reportId,
         status: "AI_ANALYSIS_FAILED",
         error: err,
+        rejectionReason: err,
         durationMs: Date.now() - startTime,
       };
     }
@@ -196,6 +198,7 @@ export async function processReportBackground(
         {
           $set: {
             status: "LOCATION_VERIFICATION_FAILED",
+            rejectionReason: err,
             updatedAt: new Date().toISOString(),
           },
         },
@@ -205,6 +208,7 @@ export async function processReportBackground(
         reportId,
         status: "LOCATION_VERIFICATION_FAILED",
         error: err,
+        rejectionReason: err,
         durationMs: Date.now() - startTime,
       };
     }

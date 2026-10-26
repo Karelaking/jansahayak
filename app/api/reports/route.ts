@@ -60,9 +60,13 @@ export async function GET(req: NextRequest) {
         }),
       );
 
+      // PRD §12 & §13: Mask/omit citizen userId for unauthenticated or unauthorized public callers
+      const canViewUserId = isStaff || (session.isAuthenticated && session.userId === r.userId);
+      const safeUserId = canViewUserId ? r.userId : undefined;
+
       return {
         ...r,
-        userId: r.userId,
+        userId: safeUserId,
         photoCount: photos.length,
         photos,
       };
