@@ -87,6 +87,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [userRole, setUserRole] = React.useState<string>("citizen");
   const [userEmail, setUserEmail] = React.useState<string>("");
   const [userFullName, setUserFullName] = React.useState<string>("");
+  const [userAvatar, setUserAvatar] = React.useState<string>("");
   const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
 
   React.useEffect(() => {
@@ -106,6 +107,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               setUserRole(data.session.role || "citizen");
               setUserEmail(data.session.email || "");
               setUserFullName(data.session.fullName || "");
+              setUserAvatar(data.session.avatarUrl || "");
             } else {
               setIsAuthenticated(false);
               router.replace(`/sign-in?redirect_url=${encodeURIComponent(pathname)}`);
@@ -132,6 +134,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const handleSignOut = async () => {
     try {
+      if (
+        typeof window !== "undefined" &&
+        (window as unknown as { Clerk?: { signOut: () => Promise<void> } }).Clerk
+      ) {
+        await (window as unknown as { Clerk: { signOut: () => Promise<void> } }).Clerk.signOut();
+      }
       await fetch("/api/auth/logout", { method: "POST" });
       router.push("/sign-in");
     } catch {
@@ -227,8 +235,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* User Identity & Sign Out Widget */}
         <div className="rounded-lg bg-muted/40 p-2.5 mx-1 border border-border/50 text-xs space-y-2">
           <div className="flex items-center gap-2">
-            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#0e2b24] text-white">
-              <User className="size-3.5" />
+            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#0e2b24] text-white overflow-hidden border border-[#cbd5cb]/50">
+              {userAvatar ? (
+                <img
+                  src={userAvatar}
+                  alt={userFullName || "User Avatar"}
+                  className="size-full object-cover"
+                />
+              ) : (
+                <User className="size-3.5" />
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate font-semibold text-[11px] text-foreground">

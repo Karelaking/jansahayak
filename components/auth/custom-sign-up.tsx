@@ -24,8 +24,15 @@ interface CustomSignUpProps {
   hasClerkKeys?: boolean;
 }
 
-export function CustomSignUp({ hasClerkKeys = false }: CustomSignUpProps) {
-  if (hasClerkKeys) {
+export function CustomSignUp({ hasClerkKeys }: CustomSignUpProps) {
+  const isClerk =
+    hasClerkKeys ??
+    Boolean(
+      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.startsWith("pk_") &&
+      !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.includes("placeholder"),
+    );
+
+  if (isClerk) {
     return <ClerkConnectedSignUp />;
   }
   return <LocalBridgeSignUp />;
@@ -221,32 +228,12 @@ function LocalBridgeSignUp() {
   const [password, setPassword] = React.useState("");
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
+  const [isGoogleLoading] = React.useState(false);
 
   const handleGoogleSignUp = async () => {
-    setLocalError(null);
-    setIsGoogleLoading(true);
-    try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fullName: "Google Verified Citizen",
-          email: "citizen.google@jansahayak.in",
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Google registration simulation failed.");
-      }
-
-      router.push(redirectUrl);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Google sign-up failed.";
-      setLocalError(msg);
-      setIsGoogleLoading(false);
-    }
+    setLocalError(
+      "Google Authentication requires active Clerk credentials. Please ensure NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is configured.",
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -50,6 +50,8 @@ export default function SSOCallbackPage() {
                 <AuthenticateWithRedirectCallback
                   signInFallbackRedirectUrl="/dashboard"
                   signUpFallbackRedirectUrl="/dashboard"
+                  signInForceRedirectUrl="/dashboard"
+                  signUpForceRedirectUrl="/dashboard"
                 />
               </div>
             )}

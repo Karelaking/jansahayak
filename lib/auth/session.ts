@@ -3,6 +3,7 @@ import { db, users } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
 import { findUserById } from "./user-store";
+import { auth, currentUser } from "@clerk/nextjs/server";
 
 /**
  * Server-side helper to retrieve the current authenticated user session.
@@ -10,83 +11,82 @@ import { findUserById } from "./user-store";
  * session bridge for local development without mock data.
  */
 export async function getCurrentUserSession(req?: Request): Promise<UserSession> {
-  // Check if Clerk environment variables are configured
+  // 1. Check if Clerk environment variables are configured
   const clerkPubKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   const clerkSecret = process.env.CLERK_SECRET_KEY;
+  const isClerkConfigured = Boolean(
+    clerkPubKey &&
+    clerkSecret &&
+    clerkPubKey.startsWith("pk_") &&
+    !clerkPubKey.includes("placeholder"),
+  );
 
-  if (clerkPubKey && clerkSecret && !clerkPubKey.includes("placeholder")) {
+  if (isClerkConfigured) {
     try {
-      // Dynamic import using variable to avoid build-time failure before user runs manual pnpm add @clerk/nextjs
-      const clerkPkgName = "@clerk/nextjs/server";
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const clerkServer: any = await Function(
-        "moduleName",
-        "return import(moduleName)",
-      )(clerkPkgName).catch(() => null);
+      const { userId } = await auth();
 
-      if (clerkServer && typeof clerkServer.auth === "function") {
-        const { userId } = await clerkServer.auth();
-
-        if (userId) {
-          // Look up user role in PostgreSQL
-          try {
-            const [dbUser] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-
-            if (dbUser) {
-              return {
-                userId: dbUser.id,
-                email: dbUser.email,
-                fullName: dbUser.fullName || undefined,
-                role: (dbUser.role as UserRole) || "citizen",
-                avatarUrl: dbUser.avatarUrl || undefined,
-                isAuthenticated: true,
-              };
-            }
-          } catch {
-            // DB query fallback if DB is still starting
-          }
-
-          // Fetch user details from Clerk client
-          if (typeof clerkServer.currentUser === "function") {
-            const clerkUser = await clerkServer.currentUser();
-            const email = clerkUser?.emailAddresses?.[0]?.emailAddress || "user@jansahayak.in";
-            const role = (clerkUser?.publicMetadata?.role as UserRole) || "citizen";
-
-            return {
-              userId,
-              email,
-              fullName:
-                `${clerkUser?.firstName || ""} ${clerkUser?.lastName || ""}`.trim() || undefined,
-              role,
-              avatarUrl: clerkUser?.imageUrl || undefined,
-              isAuthenticated: true,
-            };
-          }
-
-          return {
-            userId,
-            email: "user@jansahayak.in",
-            role: "citizen",
-            isAuthenticated: true,
-          };
+      if (userId) {
+        let clerkUser = null;
+        try {
+          clerkUser = await currentUser();
+        } catch (fetchErr) {
+          console.warn("Clerk currentUser() retrieval note:", fetchErr);
         }
+
+        const email =
+          clerkUser?.emailAddresses?.[0]?.emailAddress ||
+          clerkUser?.primaryEmailAddress?.emailAddress ||
+          "";
+
+        const firstName = clerkUser?.firstName?.trim() || "";
+        const lastName = clerkUser?.lastName?.trim() || "";
+        const fullName =
+          [firstName, lastName].filter(Boolean).join(" ") || clerkUser?.username || undefined;
+
+        const avatarUrl = clerkUser?.imageUrl || undefined;
+        const role = (clerkUser?.publicMetadata?.role as UserRole) || "citizen";
+
+        // Upsert into PostgreSQL users table so relational constraints and dashboards match
+        try {
+          await db
+            .insert(users)
+            .values({
+              id: userId,
+              email: email || `${userId}@jansahayak.in`,
+              fullName: fullName || null,
+              role,
+              avatarUrl: avatarUrl || null,
+              updatedAt: new Date(),
+            })
+            .onConflictDoUpdate({
+              target: users.id,
+              set: {
+                email: email || `${userId}@jansahayak.in`,
+                fullName: fullName || null,
+                role,
+                avatarUrl: avatarUrl || null,
+                updatedAt: new Date(),
+              },
+            });
+        } catch {
+          // Non-blocking in case DB is warming up
+        }
+
+        return {
+          userId,
+          email: email || `${userId}@jansahayak.in`,
+          fullName,
+          role,
+          avatarUrl,
+          isAuthenticated: true,
+        };
       }
     } catch (err) {
       console.warn("Clerk auth evaluation fallback:", err);
     }
   }
 
-  // 2. Cookie or Header Session Bridge (for development or custom auth tokens)
-  let cookieUserId: string | undefined;
-  let cookieRole: string | undefined;
-  try {
-    const cookieStore = await cookies();
-    cookieUserId = cookieStore.get("jansahayak_user_id")?.value;
-    cookieRole = cookieStore.get("jansahayak_role")?.value;
-  } catch {
-    // Outside request scope (e.g. CLI or unit test)
-  }
-
+  // 2. Explicit Test Suite Headers (for automated Vitest / CI tests)
   let headerUserId: string | undefined;
   let headerRole: string | undefined;
 
@@ -105,8 +105,44 @@ export async function getCurrentUserSession(req?: Request): Promise<UserSession>
     }
   }
 
-  const resolvedUserId = headerUserId || cookieUserId;
-  const resolvedRole = (headerRole || cookieRole) as UserRole | undefined;
+  if (headerUserId) {
+    const role = (headerRole as UserRole) || "citizen";
+    return {
+      userId: headerUserId,
+      email: `${headerUserId}@jansahayak.internal`,
+      fullName: headerUserId.includes("admin")
+        ? "Civic Administrator"
+        : headerUserId.includes("mod")
+          ? "Civic Staff Moderator"
+          : "Verified Citizen",
+      role,
+      isAuthenticated: true,
+    };
+  }
+
+  // If Clerk is active and no test header is provided, do NOT fall back to stale mock cookies
+  if (isClerkConfigured) {
+    return {
+      userId: "",
+      email: "",
+      role: "citizen",
+      isAuthenticated: false,
+    };
+  }
+
+  // 3. Offline Local Bridge (Only used when Clerk keys are not configured)
+  let cookieUserId: string | undefined;
+  let cookieRole: string | undefined;
+  try {
+    const cookieStore = await cookies();
+    cookieUserId = cookieStore.get("jansahayak_user_id")?.value;
+    cookieRole = cookieStore.get("jansahayak_role")?.value;
+  } catch {
+    // Outside request scope
+  }
+
+  const resolvedUserId = cookieUserId;
+  const resolvedRole = cookieRole as UserRole | undefined;
 
   if (resolvedUserId) {
     try {
@@ -141,57 +177,6 @@ export async function getCurrentUserSession(req?: Request): Promise<UserSession>
     } catch {
       // Non-blocking
     }
-  }
-
-  // 3. Local Development Mode / Cookie / Header User Resolution
-  if (resolvedRole === "moderator" || resolvedRole === "admin") {
-    const devModId = resolvedUserId || "mod_dev_admin";
-    try {
-      await db
-        .insert(users)
-        .values({
-          id: devModId,
-          email: "moderator@jansahayak.internal",
-          fullName: "Civic Staff Moderator",
-          role: resolvedRole || "moderator",
-        })
-        .onConflictDoNothing();
-    } catch {
-      // Non-blocking
-    }
-
-    return {
-      userId: devModId,
-      email: "moderator@jansahayak.internal",
-      fullName: "Civic Staff Moderator",
-      role: resolvedRole || "moderator",
-      isAuthenticated: true,
-    };
-  }
-
-  if (resolvedUserId) {
-    const devCitizenId = resolvedUserId;
-    try {
-      await db
-        .insert(users)
-        .values({
-          id: devCitizenId,
-          email: "citizen@jansahayak.internal",
-          fullName: "Verified Citizen",
-          role: "citizen",
-        })
-        .onConflictDoNothing();
-    } catch {
-      // Non-blocking
-    }
-
-    return {
-      userId: devCitizenId,
-      email: "citizen@jansahayak.internal",
-      fullName: "Verified Citizen",
-      role: (resolvedRole as UserRole) || "citizen",
-      isAuthenticated: true,
-    };
   }
 
   // 4. Default Unauthenticated Session
