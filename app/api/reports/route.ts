@@ -28,9 +28,9 @@ export async function GET(req: NextRequest) {
     const scope = searchParams.get("scope");
 
     // PRD §2 & §16 Privacy Isolation & Staff Scope:
-    // Regular citizens see their own authenticated reports plus any filed from their browser device.
+    // Non-staff citizens can strictly ONLY view reports they submitted.
     // Authorized municipal staff can inspect all reports across Greater Noida unless scope=mine is specified.
-    if (!isStaff || scope === "mine") {
+    if (!isStaff) {
       const orClauses: Record<string, unknown>[] = [];
       if (session.isAuthenticated && session.userId) {
         orClauses.push({ userId: session.userId });
@@ -39,9 +39,34 @@ export async function GET(req: NextRequest) {
         orClauses.push({ reportId: { $in: requestedIds } });
       }
 
-      if (orClauses.length > 0) {
-        query.$or = orClauses;
+      // If a non-staff caller has neither an authenticated session nor local report IDs, return empty immediately.
+      if (orClauses.length === 0) {
+        return NextResponse.json({
+          success: true,
+          count: 0,
+          reports: [],
+        });
       }
+
+      query.$or = orClauses;
+    } else if (scope === "mine") {
+      const orClauses: Record<string, unknown>[] = [];
+      if (session.isAuthenticated && session.userId) {
+        orClauses.push({ userId: session.userId });
+      }
+      if (requestedIds.length > 0) {
+        orClauses.push({ reportId: { $in: requestedIds } });
+      }
+
+      if (orClauses.length === 0) {
+        return NextResponse.json({
+          success: true,
+          count: 0,
+          reports: [],
+        });
+      }
+
+      query.$or = orClauses;
     }
 
     const reports = await reportsColl

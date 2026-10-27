@@ -220,13 +220,17 @@ export default function ReportsPage() {
           : [];
       const idsParam =
         localReportIds.length > 0 ? `&ids=${encodeURIComponent(localReportIds.join(","))}` : "";
+
+      const effectiveScope = isStaff ? scopeFilter : "mine";
       const reportsUrl =
-        scopeFilter === "mine"
+        effectiveScope === "mine"
           ? `/api/reports?limit=100&scope=mine${idsParam}`
           : `/api/reports?limit=100${idsParam}`;
 
       const [mapRes, reportsRes] = await Promise.all([
-        fetch("/api/map/incidents").catch(() => null),
+        isStaff && effectiveScope === "all"
+          ? fetch("/api/map/incidents").catch(() => null)
+          : Promise.resolve(null),
         fetch(reportsUrl).catch(() => null),
       ]);
 
@@ -306,8 +310,8 @@ export default function ReportsPage() {
         }
       }
 
-      // 2. Canonical incidents from PostgreSQL (staff overview)
-      if (isStaff && mapData && Array.isArray(mapData.incidents)) {
+      // 2. Canonical incidents from PostgreSQL (staff overview ONLY when viewing all community reports)
+      if (isStaff && effectiveScope === "all" && mapData && Array.isArray(mapData.incidents)) {
         for (const inc of mapData.incidents) {
           if (!seenIds.has(inc.id)) {
             combined.push(inc);
@@ -345,7 +349,8 @@ export default function ReportsPage() {
         : [];
 
     return reports.filter((r) => {
-      if (scopeFilter === "mine") {
+      // Regular citizens can strictly ONLY view their own submissions
+      if (!isStaff || scopeFilter === "mine") {
         const isMine =
           (sessionUserId && r.userId === sessionUserId) ||
           localReportIds.includes(r.id);
@@ -587,10 +592,10 @@ export default function ReportsPage() {
                   ? "bg-[#f3d9cf] text-[#8c2e1b] border-[#fecaca]"
                   : userRole === "moderator"
                     ? "bg-[#d6e5d2] text-[#234a29] border-[#cbd5cb]"
-                    : "bg-[#d6e5d2] text-[#234a29] border-[#cbd5cb]"
+                    : "bg-[#eef1e9] text-[#17382f] border-[#d2d9d0]"
               }`}
             >
-              {userRole}
+              {isStaff ? `${userRole} Access` : "Citizen"}
             </Badge>
           </div>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
@@ -601,26 +606,28 @@ export default function ReportsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border text-xs w-full sm:w-auto">
-            <Button
-              type="button"
-              variant={scopeFilter === "mine" ? "secondary" : "ghost"}
-              size="xs"
-              onClick={() => setScopeFilter("mine")}
-              className="h-8 sm:h-7 text-xs font-medium flex-1 sm:flex-none"
-            >
-              My Submissions
-            </Button>
-            <Button
-              type="button"
-              variant={scopeFilter === "all" ? "secondary" : "ghost"}
-              size="xs"
-              onClick={() => setScopeFilter("all")}
-              className="h-8 sm:h-7 text-xs font-medium flex-1 sm:flex-none"
-            >
-              All Community Reports
-            </Button>
-          </div>
+          {isStaff && (
+            <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border text-xs w-full sm:w-auto">
+              <Button
+                type="button"
+                variant={scopeFilter === "mine" ? "secondary" : "ghost"}
+                size="xs"
+                onClick={() => setScopeFilter("mine")}
+                className="h-8 sm:h-7 text-xs font-medium flex-1 sm:flex-none"
+              >
+                My Submissions
+              </Button>
+              <Button
+                type="button"
+                variant={scopeFilter === "all" ? "secondary" : "ghost"}
+                size="xs"
+                onClick={() => setScopeFilter("all")}
+                className="h-8 sm:h-7 text-xs font-medium flex-1 sm:flex-none"
+              >
+                All Community Reports
+              </Button>
+            </div>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -723,7 +730,35 @@ export default function ReportsPage() {
         </CardHeader>
 
         <CardContent className="p-0">
-          {filteredReports.length === 0 ? (
+          {reports.length === 0 ? (
+            <div className="p-8">
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <FileText className="size-6 text-muted-foreground" />
+                  </EmptyMedia>
+                  <EmptyTitle className="text-sm font-semibold">
+                    {isStaff ? "No reports in civic registry" : "You haven't submitted any hazard reports yet"}
+                  </EmptyTitle>
+                  <EmptyDescription className="text-xs max-w-sm mx-auto">
+                    {isStaff
+                      ? "Citizen hazard reports logged for Greater Noida will populate here."
+                      : "Notice a pothole, open manhole, waterlogging, or dark street? File a report with photo evidence to alert municipal authorities."}
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button
+                    size="sm"
+                    className="text-xs h-8 bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed]"
+                    render={<Link href="/reports/new" />}
+                  >
+                    <Plus className="mr-1.5 size-3.5" />
+                    <span>Report a Hazard</span>
+                  </Button>
+                </EmptyContent>
+              </Empty>
+            </div>
+          ) : filteredReports.length === 0 ? (
             <div className="p-8">
               <Empty>
                 <EmptyHeader>
@@ -734,7 +769,7 @@ export default function ReportsPage() {
                     No reports match your filters
                   </EmptyTitle>
                   <EmptyDescription className="text-xs">
-                    Try adjusting your search criteria or report a new roadway hazard.
+                    No records found under &quot;{activeTab}&quot;{searchQuery ? ` matching "${searchQuery}"` : ""}. Try adjusting your criteria.
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
@@ -1297,24 +1332,28 @@ export default function ReportsPage() {
 
             <DialogFooter className="flex items-center justify-between gap-2 border-t border-border pt-3">
               <div className="flex items-center gap-1">
-                <Button
-                  size="xs"
-                  variant="outline"
-                  onClick={() => handleOpenEdit(selectedReport)}
-                  className="gap-1 text-xs text-[#0e2b24]"
-                >
-                  <Pencil className="size-3" />
-                  <span>Edit Details</span>
-                </Button>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  onClick={() => setDeletingReport(selectedReport)}
-                  className="gap-1 text-xs text-rose-700 hover:text-rose-800 hover:bg-rose-50 border-rose-200"
-                >
-                  <Trash2 className="size-3" />
-                  <span>Retract</span>
-                </Button>
+                {(isStaff || (sessionUserId && selectedReport.userId === sessionUserId)) && (
+                  <>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() => handleOpenEdit(selectedReport)}
+                      className="gap-1 text-xs text-[#0e2b24]"
+                    >
+                      <Pencil className="size-3" />
+                      <span>Edit Details</span>
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() => setDeletingReport(selectedReport)}
+                      className="gap-1 text-xs text-rose-700 hover:text-rose-800 hover:bg-rose-50 border-rose-200"
+                    >
+                      <Trash2 className="size-3" />
+                      <span>Retract</span>
+                    </Button>
+                  </>
+                )}
               </div>
 
               <div className="flex items-center gap-2">

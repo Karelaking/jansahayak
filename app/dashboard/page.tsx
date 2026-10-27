@@ -228,7 +228,7 @@ export default function DashboardPage() {
           : `/api/reports?limit=50&scope=mine${idsParam}`;
 
         const [incidentsRes, reviewRes, reportsRes] = await Promise.all([
-          fetch("/api/map/incidents").catch(() => null),
+          showStaffPanel ? fetch("/api/map/incidents").catch(() => null) : Promise.resolve(null),
           canViewModeration
             ? fetch("/api/admin/review-queue").catch(() => null)
             : Promise.resolve(null),
@@ -252,8 +252,8 @@ export default function DashboardPage() {
           }
         }
 
-        // 2. Process published canonical incidents
-        if (incidentsRes?.ok) {
+        // 2. Process published canonical incidents ONLY for staff/moderator overview
+        if (showStaffPanel && incidentsRes?.ok) {
           const incData = await incidentsRes.json();
           if (incData.success && Array.isArray(incData.incidents)) {
             for (const inc of incData.incidents) {
@@ -321,21 +321,32 @@ export default function DashboardPage() {
         <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="font-heading text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground">
-              Civic Operations Overview
+              {showStaffPanel
+                ? "Civic Operations Command Center"
+                : `Namaste, ${session.fullName || "Citizen"}`}
             </h1>
-            <Badge variant="outline" className="text-[11px] font-mono">
-              Live Database
+            <Badge
+              variant="outline"
+              className={`text-[11px] font-mono ${
+                showStaffPanel
+                  ? "bg-[#d6e5d2] text-[#234a29] border-[#cbd5cb]"
+                  : "bg-[#eef1e9] text-[#17382f] border-[#d2d9d0]"
+              }`}
+            >
+              {showStaffPanel ? `${session.role.toUpperCase()} Hub` : "Citizen Portal"}
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            Greater Noida road-safety hazard command center · Monitoring, triage &amp; SLA tracking
+            {showStaffPanel
+              ? "Greater Noida road-safety hazard command center · Monitoring, triage & SLA tracking"
+              : "Your Greater Noida road-safety portal · Track the live progress and resolution of your submitted reports"}
           </p>
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button
             size="sm"
-            className="w-full sm:w-auto h-9 sm:h-8 text-xs font-medium bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] justify-center"
+            className="w-full sm:w-auto h-9 sm:h-8 text-xs font-medium bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] justify-center shadow-xs"
             render={<Link href="/reports/new" />}
           >
             <Plus className="size-3.5 mr-1" />
@@ -345,114 +356,194 @@ export default function DashboardPage() {
       </div>
 
       {/* ── KPI Telemetry Grid ─── */}
-      <div className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-5 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
-        <Card className="shadow-xs">
-          <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
-            <div className="flex items-center justify-between">
-              <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
-                Active Hazards
-              </CardDescription>
-              <Flame className="size-4 text-muted-foreground/70 shrink-0" />
-            </div>
-            <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
-              {reports.length}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6 pt-0">
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              {reports.length > 0 ? "Published on public map" : "No active hazards"}
-            </p>
-          </CardContent>
-        </Card>
+      {showStaffPanel ? (
+        <div className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-5 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
+          <Card className="shadow-xs">
+            <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
+              <div className="flex items-center justify-between">
+                <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
+                  Active Hazards
+                </CardDescription>
+                <Flame className="size-4 text-muted-foreground/70 shrink-0" />
+              </div>
+              <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
+                {reports.length}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {reports.length > 0 ? "Published on public map" : "No active hazards"}
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card className="shadow-xs">
-          <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
-            <div className="flex items-center justify-between">
-              <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
-                Pending Verification
-              </CardDescription>
-              <Clock className="size-4 text-muted-foreground/70 shrink-0" />
-            </div>
-            <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
-              {canViewModeration ? pendingReviewCount : "—"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6 pt-0">
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              {!canViewModeration
-                ? "Visible to municipal staff"
-                : pendingReviewCount > 0
-                  ? "Awaiting moderator review"
-                  : "Review queue clean"}
-            </p>
-          </CardContent>
-        </Card>
+          <Card className="shadow-xs">
+            <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
+              <div className="flex items-center justify-between">
+                <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
+                  Pending Verification
+                </CardDescription>
+                <Clock className="size-4 text-muted-foreground/70 shrink-0" />
+              </div>
+              <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
+                {canViewModeration ? pendingReviewCount : "—"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {!canViewModeration
+                  ? "Visible to municipal staff"
+                  : pendingReviewCount > 0
+                    ? "Awaiting moderator review"
+                    : "Review queue clean"}
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card className="shadow-xs">
-          <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
-            <div className="flex items-center justify-between">
-              <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
-                Community Quorum
-              </CardDescription>
-              <Users className="size-4 text-muted-foreground/70 shrink-0" />
-            </div>
-            <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
-              {
-                reports.filter(
-                  (r) =>
-                    r.publicOpinionStatus === "reopened_by_community" ||
-                    (r.votes || r.verificationsCount || 0) > 0,
-                ).length
-              }
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6 pt-0">
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              {reports.filter((r) => r.publicOpinionStatus === "reopened_by_community").length > 0
-                ? `${reports.filter((r) => r.publicOpinionStatus === "reopened_by_community").length} disputed by citizens`
-                : "Active citizen consensus"}
-            </p>
-          </CardContent>
-        </Card>
+          <Card className="shadow-xs">
+            <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
+              <div className="flex items-center justify-between">
+                <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
+                  Community Quorum
+                </CardDescription>
+                <Users className="size-4 text-muted-foreground/70 shrink-0" />
+              </div>
+              <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
+                {
+                  reports.filter(
+                    (r) =>
+                      r.publicOpinionStatus === "reopened_by_community" ||
+                      (r.votes || r.verificationsCount || 0) > 0,
+                  ).length
+                }
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {reports.filter((r) => r.publicOpinionStatus === "reopened_by_community").length > 0
+                  ? `${reports.filter((r) => r.publicOpinionStatus === "reopened_by_community").length} disputed by citizens`
+                  : "Active citizen consensus"}
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card className="shadow-xs">
-          <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
-            <div className="flex items-center justify-between">
-              <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
-                Target Resolution SLA
-              </CardDescription>
-              <TrendingDown className="size-4 text-muted-foreground/70 shrink-0" />
-            </div>
-            <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
-              7.0d
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6 pt-0">
-            <p className="text-xs sm:text-sm text-muted-foreground">Standard GNIDA civil SLA</p>
-          </CardContent>
-        </Card>
+          <Card className="shadow-xs">
+            <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
+              <div className="flex items-center justify-between">
+                <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
+                  Target Resolution SLA
+                </CardDescription>
+                <TrendingDown className="size-4 text-muted-foreground/70 shrink-0" />
+              </div>
+              <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
+                7.0d
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <p className="text-xs sm:text-sm text-muted-foreground">Standard GNIDA civil SLA</p>
+            </CardContent>
+          </Card>
 
-        <Card className="shadow-xs">
-          <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
-            <div className="flex items-center justify-between">
-              <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
-                Resolved Incidents
-              </CardDescription>
-              <CheckCircle2 className="size-4 text-muted-foreground/70 shrink-0" />
-            </div>
-            <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
-              {reports.filter((r) => r.status === "resolved").length}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6 pt-0">
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              {reports.filter((r) => r.status === "resolved").length > 0
-                ? "Verified remediations"
-                : "Awaiting closure"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+          <Card className="shadow-xs">
+            <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
+              <div className="flex items-center justify-between">
+                <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
+                  Resolved Incidents
+                </CardDescription>
+                <CheckCircle2 className="size-4 text-muted-foreground/70 shrink-0" />
+              </div>
+              <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
+                {reports.filter((r) => r.status === "resolved").length}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {reports.filter((r) => r.status === "resolved").length > 0
+                  ? "Verified remediations"
+                  : "Awaiting closure"}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
+          <Card className="shadow-xs">
+            <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
+              <div className="flex items-center justify-between">
+                <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
+                  My Reports
+                </CardDescription>
+                <FileText className="size-4 text-muted-foreground/70 shrink-0" />
+              </div>
+              <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
+                {reports.length}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {reports.length > 0 ? "Total hazards submitted" : "No reports filed yet"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-xs">
+            <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
+              <div className="flex items-center justify-between">
+                <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
+                  Under Review
+                </CardDescription>
+                <Clock className="size-4 text-amber-600/70 shrink-0" />
+              </div>
+              <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
+                {reports.filter((r) => r.status === "under-review" || r.status === "open").length}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Awaiting municipal triage
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-xs">
+            <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
+              <div className="flex items-center justify-between">
+                <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
+                  Action In Progress
+                </CardDescription>
+                <Flame className="size-4 text-orange-600/70 shrink-0" />
+              </div>
+              <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
+                {reports.filter((r) => r.status === "in-progress" || r.status === "escalated").length}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Field work / repair underway
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-xs">
+            <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
+              <div className="flex items-center justify-between">
+                <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
+                  Resolved &amp; Fixed
+                </CardDescription>
+                <CheckCircle2 className="size-4 text-emerald-600/70 shrink-0" />
+              </div>
+              <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
+                {reports.filter((r) => r.status === "resolved").length}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Verified remediations
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* ── Main Dashboard Workspace Grid ─── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
@@ -463,10 +554,12 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <CardTitle className="text-base font-semibold">
-                    Recent Hazard Submissions
+                    {showStaffPanel ? "Recent Hazard Submissions" : "My Hazard Submissions"}
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Community reports registered in database
+                    {showStaffPanel
+                      ? "Community reports registered in database"
+                      : "Real-time status tracking for issues you have reported"}
                   </CardDescription>
                 </div>
 
@@ -478,8 +571,13 @@ export default function DashboardPage() {
                         <TabsTrigger value="under-review" className="text-xs px-2.5">Under Review</TabsTrigger>
                         <TabsTrigger value="open" className="text-xs px-2.5">Open</TabsTrigger>
                         <TabsTrigger value="in-progress" className="text-xs px-2.5">In Progress</TabsTrigger>
-                        <TabsTrigger value="escalated" className="text-xs px-2.5">Escalated</TabsTrigger>
-                        <TabsTrigger value="disputed" className="text-xs px-2.5">Disputed</TabsTrigger>
+                        <TabsTrigger value="resolved" className="text-xs px-2.5">Resolved</TabsTrigger>
+                        {showStaffPanel && (
+                          <>
+                            <TabsTrigger value="escalated" className="text-xs px-2.5">Escalated</TabsTrigger>
+                            <TabsTrigger value="disputed" className="text-xs px-2.5">Disputed</TabsTrigger>
+                          </>
+                        )}
                       </TabsList>
                     </Tabs>
                   </div>
@@ -506,16 +604,23 @@ export default function DashboardPage() {
                     <EmptyMedia variant="icon">
                       <FileText className="size-6 text-muted-foreground" />
                     </EmptyMedia>
-                    <EmptyTitle>No reports logged yet</EmptyTitle>
+                    <EmptyTitle>
+                      {showStaffPanel ? "No reports logged yet" : "You haven't reported any hazards yet"}
+                    </EmptyTitle>
                     <EmptyDescription>
-                      Citizen road-safety reports for Greater Noida will populate here with live
-                      verification status.
+                      {showStaffPanel
+                        ? "Citizen road-safety reports for Greater Noida will populate here with live verification status."
+                        : "Notice a dangerous pothole, open manhole, waterlogging, or dark street? File a report to alert municipal authorities."}
                     </EmptyDescription>
                   </EmptyHeader>
                   <EmptyContent>
-                    <Button size="sm" render={<Link href="/reports/new" />}>
+                    <Button
+                      size="sm"
+                      className="bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed]"
+                      render={<Link href="/reports/new" />}
+                    >
                       <Plus className="mr-1.5 size-3.5" />
-                      <span>File First Report</span>
+                      <span>{showStaffPanel ? "File First Report" : "Report a Hazard"}</span>
                     </Button>
                   </EmptyContent>
                 </Empty>
