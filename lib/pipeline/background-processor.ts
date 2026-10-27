@@ -3,7 +3,7 @@ import {
   getPipelineLogsCollection,
   downloadEvidencePhotoFromGridFS,
 } from "@/lib/db/mongodb";
-import { db, outboxEvents } from "@/lib/db";
+import { db, isDatabaseReachable, outboxEvents } from "@/lib/db";
 import { executeStage2EvidenceValidation } from "./evidence-validation";
 import { executeStage3AIAnalysis } from "./ai-analysis";
 import { executeStage4LocationVerification } from "./location-verification";
@@ -143,13 +143,19 @@ export async function processReportBackground(
         },
       );
 
-      // Record rejection outbox event
-      await db.insert(outboxEvents).values({
-        eventType: "report.rejected",
-        aggregateType: "report",
-        aggregateId: reportId,
-        payload: { reportId, rejectionReason },
-      });
+      // Record rejection outbox event when database is reachable
+      try {
+        if (await isDatabaseReachable()) {
+          await db.insert(outboxEvents).values({
+            eventType: "report.rejected",
+            aggregateType: "report",
+            aggregateId: reportId,
+            payload: { reportId, rejectionReason },
+          });
+        }
+      } catch (outboxErr) {
+        console.warn("[Background] Non-blocking rejection outbox warning:", outboxErr);
+      }
 
       return {
         success: false,

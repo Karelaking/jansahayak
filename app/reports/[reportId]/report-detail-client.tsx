@@ -26,6 +26,13 @@ import { SiteNav, SiteFooter } from "@/components/sections";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { CommunityProgressVotingWidget } from "@/components/reports/community-progress-voting-widget";
 
 interface StageLog {
@@ -107,6 +114,9 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
   // Reprocessing Retry State (PRD §5 & §15)
   const [isRetrying, setIsRetrying] = React.useState(false);
   const [retryNotice, setRetryNotice] = React.useState<string | null>(null);
+
+  // Photo Lightbox Zoom Modal State
+  const [selectedPhoto, setSelectedPhoto] = React.useState<EvidencePhoto | null>(null);
 
   const reportRef = React.useRef<ReportDetail | null>(null);
 
@@ -273,7 +283,7 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
       return logged.status === "FAILED" ? "failed" : "completed";
     }
 
-    if (report.status === "REJECTED") {
+    if (report.status === "REJECTED" || report.status === "EVIDENCE_VALIDATION_FAILED") {
       // If evidence validation rejected, stage 2 is failed, otherwise stage 7 moderation
       return stageNum === 2 ? "failed" : "pending";
     }
@@ -495,19 +505,26 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
 
             {(report.status === "PROCESSING_FAILED" ||
               report.status === "AI_ANALYSIS_FAILED" ||
-              report.status === "LOCATION_VERIFICATION_FAILED") && (
+              report.status === "LOCATION_VERIFICATION_FAILED" ||
+              report.status === "EVIDENCE_VALIDATION_FAILED") && (
               <div className="border border-rose-300 bg-rose-50/80 rounded-xl p-4 sm:p-5 text-xs text-rose-900 space-y-3">
                 <div className="flex items-center gap-2 font-bold text-rose-950 text-sm">
                   <AlertTriangle className="size-4 text-rose-700 shrink-0" />
-                  <span>Automated Processing Interrupted</span>
+                  <span>
+                    {report.status === "EVIDENCE_VALIDATION_FAILED"
+                      ? "Evidence Integrity Validation Issue Detected"
+                      : "Automated Processing Interrupted"}
+                  </span>
                 </div>
                 <p className="text-rose-800 leading-relaxed text-[11px]">
                   {report.rejectionReason ||
-                    (report.status === "AI_ANALYSIS_FAILED"
-                      ? "AI vision analysis timed out or could not classify defect features. Uploaded photographs are safely preserved."
-                      : report.status === "LOCATION_VERIFICATION_FAILED"
-                        ? "Location geodesic clustering could not resolve spatial consensus within required thresholds. GPS samples are safely preserved."
-                        : "An unexpected error occurred during background analysis. Your uploaded photographs and GPS samples are safely preserved.")}
+                    (report.status === "EVIDENCE_VALIDATION_FAILED"
+                      ? "One or more uploaded evidence photographs failed validation (e.g. duplicate files, corrupted streams, or sub-resolution captures). Review evidence below."
+                      : report.status === "AI_ANALYSIS_FAILED"
+                        ? "AI vision analysis timed out or could not classify defect features. Uploaded photographs are safely preserved."
+                        : report.status === "LOCATION_VERIFICATION_FAILED"
+                          ? "Location geodesic clustering could not resolve spatial consensus within required thresholds. GPS samples are safely preserved."
+                          : "An unexpected error occurred during background analysis. Your uploaded photographs and GPS samples are safely preserved.")}
                 </p>
                 {retryNotice && (
                   <p className="text-emerald-800 font-semibold text-[11px] bg-emerald-100/70 p-2 rounded-lg border border-emerald-300">
@@ -736,18 +753,143 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
               </CardContent>
             </Card>
 
+            {/* ── PRD §8 AI Vision & Defect Extraction Assessment ── */}
+            {(() => {
+              const stage3Log = report.stages?.find((s) => s.stage === 3);
+              const aiData = stage3Log?.details?.data as
+                | {
+                    predictedCategory?: string;
+                    severity?: string;
+                    confidenceScore?: number;
+                    defectSummary?: string;
+                    visualCharacteristics?: string[];
+                    usabilityAssessment?: { isUsable?: boolean; issuesDetected?: string[] };
+                    contradictionsDetected?: boolean;
+                    modelUsed?: string;
+                  }
+                | undefined;
+
+              if (!aiData && !stage3Log) return null;
+
+              return (
+                <Card className="border-[#cbd5cb] bg-[#faf9f5] shadow-xs">
+                  <CardHeader className="p-4 sm:p-5 border-b border-[#eef1e9]">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Cpu className="size-4 text-emerald-800" />
+                        <CardTitle className="text-base font-bold text-[#0e2b24]">
+                          AI Vision Defect Extraction &amp; Usability
+                        </CardTitle>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {aiData?.confidenceScore !== undefined && (
+                          <Badge
+                            variant="outline"
+                            className="font-mono text-xs bg-emerald-50 text-emerald-900 border-emerald-300"
+                          >
+                            Confidence: {Math.round(aiData.confidenceScore * 100)}%
+                          </Badge>
+                        )}
+                        {aiData?.severity && (
+                          <Badge
+                            variant="outline"
+                            className="font-mono text-xs uppercase tracking-wider bg-white"
+                          >
+                            {aiData.severity} Severity
+                          </Badge>
+                        )}
+                        {stage3Log?.status && (
+                          <Badge
+                            variant="outline"
+                            className={
+                              stage3Log.status === "SUCCESS"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-300 text-xs"
+                                : "bg-rose-50 text-rose-800 border-rose-300 text-xs"
+                            }
+                          >
+                            {stage3Log.status === "SUCCESS" ? "AI Verified" : "AI Inconclusive"}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <CardDescription className="text-xs text-[#5c6f66]">
+                      Multimodal defect classification and physical damage extraction processed via{" "}
+                      <span className="font-mono text-[11px] text-[#0e2b24]">
+                        {aiData?.modelUsed || "openrouter/vision"}
+                      </span>
+                      .
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-4 sm:p-5 space-y-4">
+                    {aiData?.defectSummary ? (
+                      <div className="rounded-lg bg-white border border-[#cbd5cb] p-3 text-xs">
+                        <span className="font-semibold text-[#0e2b24] block mb-1">
+                          Visual Inspection Findings:
+                        </span>
+                        <p className="text-[#2c4038] leading-relaxed font-sans">{aiData.defectSummary}</p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-[#5c6f66] italic">
+                        AI vision extraction is queued or pending background completion.
+                      </p>
+                    )}
+
+                    {aiData?.visualCharacteristics && aiData.visualCharacteristics.length > 0 && (
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#5c6f66] uppercase tracking-wider block mb-2">
+                          Identified Defect Characteristics:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {aiData.visualCharacteristics.map((char, i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-[#eef1e9] text-[#0e2b24] border border-[#cbd5cb]"
+                            >
+                              {char}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {aiData?.usabilityAssessment && (
+                      <div className="flex items-center gap-2 text-xs pt-1 border-t border-[#eef1e9]">
+                        <span className="text-[#5c6f66]">Evidence Quality:</span>
+                        {aiData.usabilityAssessment.isUsable !== false ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-800 font-medium">
+                            <CheckCircle2 className="size-3.5" /> High-contrast usable captures
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-amber-800 font-medium">
+                            <AlertTriangle className="size-3.5" />{" "}
+                            {aiData.usabilityAssessment.issuesDetected?.join("; ") ||
+                              "Quality flags detected"}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
             {/* ── PRD §5 & §16 Supplementary Evidence Uploader ── */}
-            {report.status === "ADDITIONAL_EVIDENCE_REQUIRED" && (
+            {(report.status === "ADDITIONAL_EVIDENCE_REQUIRED" ||
+              report.status === "EVIDENCE_VALIDATION_FAILED") && (
               <Card className="border-amber-300 bg-amber-50/40 shadow-xs">
                 <CardHeader className="p-4 sm:p-5 border-b border-amber-200">
                   <div className="flex items-center gap-2 text-amber-900 font-bold text-base">
                     <Camera className="size-4 text-amber-800" />
-                    <span>Supplementary Evidence Required by Reviewers</span>
+                    <span>
+                      {report.status === "EVIDENCE_VALIDATION_FAILED"
+                        ? "Attach Replacement Evidence Photographs"
+                        : "Supplementary Evidence Required by Reviewers"}
+                    </span>
                   </div>
                   <CardDescription className="text-xs text-amber-900/80">
-                    Municipal engineering staff inspected this report and requested supplementary
-                    wide-angle or ground-level defect photographs to verify exact carriageway
-                    impact.
+                    {report.status === "EVIDENCE_VALIDATION_FAILED"
+                      ? "Your submission requires independent, distinct evidence photos to satisfy PRD §6 and §7 camera integrity standards. Upload replacements below."
+                      : "Municipal engineering staff inspected this report and requested supplementary wide-angle or ground-level defect photographs to verify exact carriageway impact."}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-5 space-y-4">
@@ -847,31 +989,34 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
                     {report.photos.map((photo) => (
                       <div
                         key={photo.index}
-                        className="rounded-lg border border-[#cbd5cb] bg-white overflow-hidden text-xs flex flex-col justify-between"
+                        className="rounded-lg border border-[#cbd5cb] bg-white overflow-hidden text-xs flex flex-col justify-between shadow-2xs"
                       >
-                        <div className="aspect-video bg-gray-900 relative flex items-center justify-center">
-                          {/* Fallback clean SVG representation if direct fileId stream unavailable */}
-                          <svg
-                            className="w-full h-full object-cover"
-                            viewBox="0 0 400 250"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <rect width="400" height="250" fill="#374151" />
-                            <ellipse cx="200" cy="140" rx="90" ry="50" fill="#111827" />
-                            <ellipse cx="195" cy="145" rx="65" ry="35" fill="#030712" />
-                            <line
-                              x1="360"
-                              y1="0"
-                              x2="360"
-                              y2="250"
-                              stroke="#eab308"
-                              strokeWidth="8"
+                        <div
+                          className="aspect-video bg-gray-900 relative flex items-center justify-center cursor-pointer overflow-hidden group"
+                          onClick={() => setSelectedPhoto(photo)}
+                        >
+                          {photo.downloadUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={photo.downloadUrl}
+                              alt={photo.filename || `Photo #${photo.index}`}
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              loading="lazy"
                             />
-                          </svg>
-                          <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/70 text-white font-mono text-[10px]">
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gray-800 text-gray-400">
+                              <Camera className="size-8 opacity-40" />
+                            </div>
+                          )}
+                          <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/70 text-white font-mono text-[10px] pointer-events-none">
                             Photo #{photo.index}
                           </div>
+                          {photo.downloadUrl && (
+                            <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1.5 pointer-events-none backdrop-blur-2xs">
+                              <ExternalLink className="size-3.5" />
+                              <span>Click to enlarge</span>
+                            </div>
+                          )}
                         </div>
                         <div className="p-2.5 font-mono text-[11px] space-y-1">
                           <p className="truncate font-semibold text-[#0e2b24]">{photo.filename}</p>
@@ -881,15 +1026,24 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
                               : "In-App Camera"}
                           </p>
                           {photo.downloadUrl && (
-                            <a
-                              href={photo.downloadUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-[10px] text-emerald-800 hover:underline pt-1 font-sans"
-                            >
-                              <span>View high-res</span>
-                              <ExternalLink className="size-2.5" />
-                            </a>
+                            <div className="flex items-center justify-between pt-1 font-sans">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPhoto(photo)}
+                                className="inline-flex items-center gap-1 text-[10px] text-emerald-800 hover:underline cursor-pointer"
+                              >
+                                <span>Inspect full-size</span>
+                              </button>
+                              <a
+                                href={photo.downloadUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] text-gray-500 hover:text-[#0e2b24] hover:underline"
+                              >
+                                <span>Direct stream</span>
+                                <ExternalLink className="size-2.5" />
+                              </a>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -925,6 +1079,65 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
             )}
           </div>
         )}
+
+        {/* Photo Lightbox Dialog */}
+        <Dialog open={!!selectedPhoto} onOpenChange={(open) => !open && setSelectedPhoto(null)}>
+          <DialogContent className="max-w-3xl w-[calc(100vw-2rem)] bg-[#0e2b24] border-gray-700 text-white p-4 sm:p-6 overflow-hidden">
+            {selectedPhoto && (
+              <div className="space-y-4">
+                <DialogHeader className="text-left">
+                  <div className="flex items-center justify-between">
+                    <DialogTitle className="text-sm font-mono text-emerald-400 truncate pr-4">
+                      {selectedPhoto.filename || `Photo #${selectedPhoto.index}`}
+                    </DialogTitle>
+                    <span className="text-xs font-mono text-gray-400">
+                      {selectedPhoto.byteSize
+                        ? `${Math.round(selectedPhoto.byteSize / 1024)} KB`
+                        : "In-App Capture"}
+                    </span>
+                  </div>
+                  <DialogDescription className="text-xs text-gray-400">
+                    JanSahayak Verified Camera Capture · MongoDB GridFS Object{" "}
+                    {selectedPhoto.fileId || "Local Storage"}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="relative rounded-lg overflow-hidden bg-black aspect-video flex items-center justify-center max-h-[60vh]">
+                  {selectedPhoto.downloadUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={selectedPhoto.downloadUrl}
+                      alt={selectedPhoto.filename || `Photo #${selectedPhoto.index}`}
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <p className="text-gray-400 text-xs">Image stream unavailable</p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <span className="text-gray-400 text-[11px] font-mono">
+                    Captured:{" "}
+                    {selectedPhoto.captureTimestamp
+                      ? new Date(selectedPhoto.captureTimestamp).toLocaleString()
+                      : "Viewfinder Record"}
+                  </span>
+                  {selectedPhoto.downloadUrl && (
+                    <a
+                      href={selectedPhoto.downloadUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-700 hover:bg-emerald-600 text-white font-medium text-xs transition-colors"
+                    >
+                      <Download className="size-3.5" />
+                      <span>Download Original</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
 
       <div className="box-grid">

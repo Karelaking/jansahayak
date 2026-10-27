@@ -5,7 +5,8 @@ import Link from "next/link";
 import { MapPin, Plus, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import { UserRole, ROLE_PERMISSIONS } from "@/lib/auth/roles";
 
 interface UserSessionState {
@@ -25,12 +26,16 @@ interface RoleGuardProps {
   description?: string;
 }
 
+/**
+ * Keeps staff consoles out of reach for citizen accounts and, when it does,
+ * explains the boundary in plain language with routes back to useful work.
+ */
 export function RoleGuard({
   children,
   requiredPermission,
   allowedRoles,
-  title = "Civic Staff & Moderator Authorization Required",
-  description = "This operational console is reserved for verified municipal engineers, GNIDA/PWD officers, and authorized moderation personnel under PRD §2 and §14B Role-Based Access Control.",
+  title = "This console is for staff",
+  description = "Municipal engineers, field officers, and moderators use this area to review and act on reports. Your account keeps its own reports, the public map, and hazard reporting.",
 }: RoleGuardProps) {
   const [session, setSession] = React.useState<UserSessionState | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -47,7 +52,7 @@ export function RoleGuard({
           setSession(data.session);
         }
       } catch (err) {
-        console.warn("Failed to introspect user session:", err);
+        console.warn("Unable to check the current session:", err);
       } finally {
         if (active) setIsLoading(false);
       }
@@ -61,10 +66,10 @@ export function RoleGuard({
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[350px] items-center justify-center p-6 text-xs text-[#5c6f66]">
-        <div className="flex flex-col items-center gap-2">
-          <div className="size-6 animate-spin rounded-full border-2 border-[#17382f] border-t-transparent" />
-          <p className="font-medium text-[#17382f]">Verifying civic staff authorization...</p>
+      <div className="flex min-h-87.5 items-center justify-center p-6">
+        <div className="flex flex-col items-center gap-2.5 text-center">
+          <Spinner className="size-5 text-[#17382f]" aria-hidden="true" />
+          <p className="text-[13px] font-medium text-[#17382f]">Checking your access…</p>
         </div>
       </div>
     );
@@ -84,62 +89,58 @@ export function RoleGuard({
     return <>{children}</>;
   }
 
-  // Respectful Unauthorized Fallback View
   return (
-    <div className="max-w-2xl mx-auto py-10 px-4">
-      <Card className="border-[#cbd5cb] bg-[#faf9f5] shadow-xs overflow-hidden">
-        <CardHeader className="p-6 border-b border-[#eef1e9] bg-[#f5f3ed]/70">
+    <div className="mx-auto max-w-2xl px-4 py-10">
+      <Card className="overflow-hidden border-[#cbd5cb] bg-[#faf9f5]">
+        <div className="border-b border-[#eef1e9] p-6">
           <div className="flex items-start gap-3">
-            <div className="size-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-900 shrink-0">
-              <Lock className="size-5" />
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-[#cbd5cb] bg-[#dce8d9] text-[#17382f]">
+              <Lock className="size-5" aria-hidden="true" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[#486057]">
-                  PRD §14B Role-Based Access Control
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-[11px] font-bold uppercase tracking-[0.125em] text-[#486057]">
+                  Staff area
                 </span>
                 <Badge
                   variant="outline"
-                  className="text-[10px] bg-white text-[#5c6f66] border-[#cbd5cb]"
+                  className="border-[#cbd5cb] bg-[#f5f3ed] text-[11px] font-normal text-[#486057]"
                 >
-                  Current Role: {role.toUpperCase()}
+                  Signed in as {role.replaceAll("_", " ")}
                 </Badge>
               </div>
-              <CardTitle className="text-lg font-bold text-[#0e2b24] mt-1">{title}</CardTitle>
+              <h2 className="mt-1 text-lg font-bold tracking-tight text-[#0e2b24]">{title}</h2>
             </div>
           </div>
-          <CardDescription className="text-xs text-[#5c6f66] mt-2 leading-relaxed">
-            {description}
-          </CardDescription>
-        </CardHeader>
+          <p className="mt-3 text-[13px] leading-relaxed text-[#5c6f66]">{description}</p>
+        </div>
 
-        <CardContent className="p-6 space-y-5">
-          <div className="rounded-xl border border-[#cbd5cb] bg-white p-4 space-y-2 text-xs text-[#17382f]">
-            <p className="font-semibold text-[#0e2b24]">Citizen Public Capabilities</p>
-            <p className="text-[#5c6f66] text-[11px] leading-relaxed">
-              As a general citizen, you have full access to view all verified road safety hazards on
-              the live interactive map, submit new GPS-tagged hazard reports, follow civic redressal
-              timelines, and vote on community repair verification.
+        <CardContent className="space-y-5 p-6">
+          <div className="border-y border-[#eef1e9] py-4">
+            <p className="text-[13px] font-semibold text-[#0e2b24]">What you can do as a citizen</p>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-[#5c6f66]">
+              See every verified hazard on the live map, file a new report with its location
+              attached, follow redressal timelines, and confirm repairs reported near you.
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-1">
-            <Link href="/map" className="flex-1">
-              <Button
-                variant="outline"
-                className="w-full text-xs h-9 justify-center bg-white border-[#cbd5cb] text-[#0e2b24] hover:bg-[#eef1e9]"
-              >
-                <MapPin className="size-3.5 mr-1.5 text-emerald-800" />
-                <span>Explore Public Map</span>
-              </Button>
-            </Link>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              className="min-h-11 border-[#cbd5cb] bg-white text-[13px] text-[#0e2b24] hover:bg-[#eef1e9] sm:flex-1"
+              render={<Link href="/map" />}
+            >
+              <MapPin className="size-4 text-[#17382f]" aria-hidden="true" />
+              <span>Explore the public map</span>
+            </Button>
 
-            <Link href="/reports/new" className="flex-1">
-              <Button className="w-full text-xs h-9 justify-center bg-[#0e2b24] hover:bg-[#1c4b3e] text-white">
-                <Plus className="size-3.5 mr-1.5" />
-                <span>Report New Hazard</span>
-              </Button>
-            </Link>
+            <Button
+              className="min-h-11 bg-[#0e2b24] text-[13px] text-[#f5f3ed] hover:bg-[#1c4b3e] sm:flex-1"
+              render={<Link href="/reports/new" />}
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              <span>Report a hazard</span>
+            </Button>
           </div>
         </CardContent>
       </Card>

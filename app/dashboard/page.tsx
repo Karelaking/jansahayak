@@ -145,6 +145,59 @@ function getSeverityBadge(severity: string) {
   }
 }
 
+function mapRawReportToHazardReport(r: any): HazardReport {
+  const rid = r.reportId || r._id;
+  const statusNorm = (r.status || "").toUpperCase();
+  const mappedStatus = (() => {
+    if (statusNorm === "RESOLVED") return "resolved";
+    if (statusNorm === "IN_PROGRESS" || statusNorm === "IN-PROGRESS" || statusNorm === "ASSIGNED")
+      return "in-progress";
+    if (statusNorm === "ESCALATED" || statusNorm === "MUNICIPALLY_DISPATCHED") return "escalated";
+    if (statusNorm === "REJECTED") return "rejected";
+    if (statusNorm === "SUSPENDED") return "suspended";
+    if (statusNorm === "PROCESSING_FAILED") return "processing-failed";
+    if (
+      statusNorm === "SUBMITTED" ||
+      statusNorm === "PROCESSING" ||
+      statusNorm === "MODERATION_PENDING" ||
+      statusNorm === "UNDER_REVIEW"
+    )
+      return "under-review";
+    return "open";
+  })();
+
+  return {
+    id: rid,
+    userId: r.userId,
+    title: r.description
+      ? r.description.length > 60
+        ? r.description.slice(0, 57) + "..."
+        : r.description
+      : `${r.category || "Road Hazard"} Report`,
+    description: r.description || "Citizen road safety report",
+    category: r.category || "road-surface",
+    categoryLabel: (r.category || "Road Hazard")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c: string) => c.toUpperCase()),
+    severity: "medium",
+    status: mappedStatus as any,
+    latitude: r.submissionLocation?.latitude || 28.4744,
+    longitude: r.submissionLocation?.longitude || 77.504,
+    coordinates: `${Number(r.submissionLocation?.latitude || 28.4744).toFixed(4)}° N, ${Number(r.submissionLocation?.longitude || 77.504).toFixed(4)}° E`,
+    landmark: r.submissionLocation?.landmark || r.deviceMetadata?.landmark || "Greater Noida",
+    location: r.submissionLocation?.landmark || r.deviceMetadata?.landmark || "Greater Noida",
+    time: r.createdAt
+      ? new Date(r.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : "Recently",
+    reportedAt: r.createdAt
+      ? new Date(r.createdAt).toLocaleDateString("en-IN")
+      : "Recently",
+    publicOpinionStatus: mappedStatus === "under-review" ? "under_review" : "verified_hazard",
+    verificationsCount: 1,
+    votes: 1,
+  };
+}
+
 export default function DashboardPage() {
   const session = useDashboardSession();
   const canViewModeration = hasPermission(session.role, "canViewModerationQueue");
@@ -160,17 +213,56 @@ export default function DashboardPage() {
 
     async function fetchDashboardData() {
       try {
-        // The review queue is staff-only; citizens would only receive a 403.
-        const [incidentsRes, reviewRes] = await Promise.all([
-          fetch("/api/map/incidents"),
-          canViewModeration ? fetch("/api/admin/review-queue") : Promise.resolve(null),
+        const localReportIds =
+          typeof window !== "undefined"
+            ? JSON.parse(window.localStorage.getItem("jansahayak_user_reports") || "[]")
+            : [];
+        const idsParam =
+          localReportIds.length > 0 ? `&ids=${encodeURIComponent(localReportIds.join(","))}` : "";
+        const reportsUrl = showStaffPanel
+          ? `/api/reports?limit=50${idsParam}`
+          : `/api/reports?limit=50&scope=mine${idsParam}`;
+
+        const [incidentsRes, reviewRes, reportsRes] = await Promise.all([
+          fetch("/api/map/incidents").catch(() => null),
+          canViewModeration
+            ? fetch("/api/admin/review-queue").catch(() => null)
+            : Promise.resolve(null),
+          fetch(reportsUrl).catch(() => null),
         ]);
 
-        if (incidentsRes.ok) {
-          const incData = await incidentsRes.json();
-          if (active && incData.success && Array.isArray(incData.incidents)) {
-            setReports(incData.incidents);
+        const combined: HazardReport[] = [];
+        const seenIds = new Set<string>();
+
+        // 1. Process citizen reports
+        if (reportsRes?.ok) {
+          const repData = await reportsRes.json();
+          if (repData.success && Array.isArray(repData.reports)) {
+            for (const r of repData.reports) {
+              const mapped = mapRawReportToHazardReport(r);
+              if (!seenIds.has(mapped.id)) {
+                combined.push(mapped);
+                seenIds.add(mapped.id);
+              }
+            }
           }
+        }
+
+        // 2. Process published canonical incidents
+        if (incidentsRes?.ok) {
+          const incData = await incidentsRes.json();
+          if (incData.success && Array.isArray(incData.incidents)) {
+            for (const inc of incData.incidents) {
+              if (!seenIds.has(inc.id)) {
+                combined.push(inc);
+                seenIds.add(inc.id);
+              }
+            }
+          }
+        }
+
+        if (active) {
+          setReports(combined);
         }
 
         if (reviewRes?.ok) {
@@ -189,10 +281,13 @@ export default function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [canViewModeration]);
+  }, [canViewModeration, showStaffPanel]);
 
   const filteredReports = React.useMemo(() => {
     if (activeTab === "all") return reports;
+    if (activeTab === "under-review") {
+      return reports.filter((r) => r.status === "under-review");
+    }
     if (activeTab === "disputed") {
       return reports.filter(
         (r) =>
@@ -365,6 +460,7 @@ export default function DashboardPage() {
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
                       <TabsList className="h-8 w-max min-w-full justify-start sm:w-auto">
                         <TabsTrigger value="all" className="text-xs px-2.5">All</TabsTrigger>
+                        <TabsTrigger value="under-review" className="text-xs px-2.5">Under Review</TabsTrigger>
                         <TabsTrigger value="open" className="text-xs px-2.5">Open</TabsTrigger>
                         <TabsTrigger value="in-progress" className="text-xs px-2.5">In Progress</TabsTrigger>
                         <TabsTrigger value="escalated" className="text-xs px-2.5">Escalated</TabsTrigger>

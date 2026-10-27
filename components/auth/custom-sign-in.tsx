@@ -4,25 +4,73 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSignIn } from "@clerk/nextjs";
-import { Brand } from "@/components/brand";
-import { GoogleIcon } from "@/components/icons";
+
+import { AuthShell, type AuthNotice } from "@/components/auth/auth-shell";
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Spinner } from "@/components/ui/spinner";
-import { Lock, AlertCircle, ArrowRight } from "lucide-react";
+  AuthAlert,
+  AuthDivider,
+  AuthField,
+  AuthHeader,
+  AuthOAuthButton,
+  AuthSubmit,
+  useResendCooldown,
+} from "@/components/auth/auth-ui";
 
 interface CustomSignInProps {
   hasClerkKeys?: boolean;
 }
+
+const SIGN_IN_NOTICE: AuthNotice = {
+  title: "A record you can follow",
+  body: "Reports you file stay attached to your account, along with the public trail of what followed.",
+  points: [
+    {
+      title: "Report a hazard",
+      body: "Pin the location and add what you saw.",
+    },
+    {
+      title: "Verify local reports",
+      body: "Support hazards neighbours have already documented.",
+    },
+    {
+      title: "Track the follow-up",
+      body: "Read each case from report to recorded action.",
+    },
+  ],
+  meta: "Pilot area · Greater Noida, Uttar Pradesh",
+};
+
+const MFA_NOTICE: AuthNotice = {
+  title: "One more check",
+  body: "Your password was accepted. This second step confirms the account belongs to you.",
+  points: [
+    {
+      title: "Why this step",
+      body: "It appears when a second factor is switched on for the account.",
+    },
+    {
+      title: "Lost access?",
+      body: "Contact the municipal team that manages staff accounts.",
+    },
+  ],
+  meta: "Second-step verification",
+};
+
+const RESET_NOTICE: AuthNotice = {
+  title: "A way back in",
+  body: "We send a single-use code to the email on your account, then you choose a new password.",
+  points: [
+    {
+      title: "Use your account email",
+      body: "The code goes to the address you signed up with.",
+    },
+    {
+      title: "Codes are personal",
+      body: "Share the code with no one, including anyone who asks.",
+    },
+  ],
+  meta: "Password reset · JanSahayak SafeStreets",
+};
 
 export function CustomSignIn({ hasClerkKeys }: CustomSignInProps) {
   const isClerk =
@@ -39,8 +87,8 @@ export function CustomSignIn({ hasClerkKeys }: CustomSignInProps) {
 }
 
 /**
- * Clerk-Connected Custom Sign-In Flow
- * Implements Clerk SDK v7+ useSignIn() hook with password, Google SSO, errors, and finalize().
+ * Clerk-connected sign-in: password, Google SSO, a second factor, and the
+ * email-code password reset flow.
  */
 function ClerkConnectedSignIn() {
   const router = useRouter();
@@ -52,12 +100,19 @@ function ClerkConnectedSignIn() {
   const [identifier, setIdentifier] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [localError, setLocalError] = React.useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
   const [mfaStrategy, setMfaStrategy] = React.useState<
     "email_code" | "phone_code" | "totp" | "backup_code" | null
   >(null);
   const [mfaCode, setMfaCode] = React.useState("");
+
+  const [resetStep, setResetStep] = React.useState<"request" | "code" | "password" | null>(null);
+  const [resetEmail, setResetEmail] = React.useState("");
+  const [resetCode, setResetCode] = React.useState("");
+  const [newPassword, setNewPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
 
   const finalizeSignIn = React.useCallback(async () => {
     await signIn.finalize({
@@ -78,79 +133,63 @@ function ClerkConnectedSignIn() {
   /**
    * Prepares the strongest second factor the account supports. Email codes are
    * preferred because they need no extra setup; authenticators and phone codes
-   * fall back to a plain code field.
+   * fall back to a single code field.
    */
-  const beginSecondFactor = React.useCallback(async () => {
+  const beginSecondFactor = React.useCallback(async (): Promise<boolean> => {
     const factors = signIn.supportedSecondFactors ?? [];
     const has = (strategy: string) => factors.some((factor) => factor.strategy === strategy);
 
     if (has("email_code")) {
       const { error } = await signIn.mfa.sendEmailCode();
       if (error) {
-        setLocalError(error.message || "Could not send a verification code to your email.");
-        return;
+        setLocalError(error.message || "We couldn't send a code to your email. Try again.");
+        return false;
       }
       setMfaStrategy("email_code");
-      return;
+      return true;
     }
 
     if (has("totp")) {
       setMfaStrategy("totp");
-      return;
+      return true;
     }
 
     if (has("phone_code")) {
       const { error } = await signIn.mfa.sendPhoneCode();
       if (error) {
-        setLocalError(error.message || "Could not send a verification code to your phone.");
-        return;
+        setLocalError(error.message || "We couldn't send a code to your phone. Try again.");
+        return false;
       }
       setMfaStrategy("phone_code");
-      return;
+      return true;
     }
 
     if (has("backup_code")) {
       setMfaStrategy("backup_code");
-      return;
+      return true;
     }
 
     setLocalError(
-      "This account requires a second verification factor that this form cannot complete. Please contact your municipal administrator.",
+      "This account needs a second step this form cannot complete. Contact the team that manages your account.",
     );
+    return false;
   }, [signIn]);
 
   const handleGoogleSignIn = async () => {
     setLocalError(null);
     setIsGoogleLoading(true);
     try {
-      if (signIn?.sso) {
-        const { error } = await signIn.sso({
-          strategy: "oauth_google",
-          redirectUrl: redirectUrl || "/dashboard",
-          redirectCallbackUrl: "/sso-callback",
-        });
-        if (error) {
-          setLocalError(error.message || "Failed to initialize Google sign-in.");
-          setIsGoogleLoading(false);
-        }
-      } else if (
-        (signIn as unknown as { authenticateWithRedirect?: (opts: unknown) => Promise<unknown> })
-          ?.authenticateWithRedirect
-      ) {
-        await (
-          signIn as unknown as { authenticateWithRedirect: (opts: unknown) => Promise<unknown> }
-        ).authenticateWithRedirect({
-          strategy: "oauth_google",
-          redirectUrl: "/sso-callback",
-          redirectUrlComplete: redirectUrl || "/dashboard",
-        });
-      } else {
-        setLocalError("OAuth authentication service is unavailable.");
+      const { error } = await signIn.sso({
+        strategy: "oauth_google",
+        redirectUrl: redirectUrl || "/dashboard",
+        redirectCallbackUrl: "/sso-callback",
+      });
+      if (error) {
+        setLocalError(error.message || "We couldn't start Google sign-in. Please try again.");
         setIsGoogleLoading(false);
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Google sign-in encountered an error.";
-      setLocalError(msg);
+    } catch {
+      setLocalError("We couldn't start Google sign-in. Please try again.");
       setIsGoogleLoading(false);
     }
   };
@@ -158,22 +197,23 @@ function ClerkConnectedSignIn() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError(null);
+    setInfoMessage(null);
 
-    if (!identifier || !password) {
-      setLocalError("Please enter both your email/username and password.");
+    if (!identifier.trim() || !password) {
+      setLocalError("Enter your email or username and password to continue.");
       return;
     }
 
     setIsSubmitting(true);
     try {
       const { error } = await signIn.password({
-        identifier,
+        identifier: identifier.trim(),
         password,
       });
 
       if (error) {
         setLocalError(
-          error.message || "Invalid credentials. Please verify your email and password.",
+          error.message || "That email and password did not match. Check them and try again.",
         );
         return;
       }
@@ -190,22 +230,21 @@ function ClerkConnectedSignIn() {
 
       if (signIn.status === "needs_new_password") {
         setLocalError(
-          "This account needs a new password before it can sign in. Use the password reset option and try again.",
+          "This account needs a new password before it can sign in. Use “Forgot password?” to set one.",
         );
         return;
       }
 
       if (signIn.isTransferable) {
         setLocalError(
-          "No JanSahayak account matches these credentials. Create a citizen account to continue.",
+          "We couldn't find a JanSahayak account with those details. Create a citizen account to get started.",
         );
         return;
       }
 
-      setLocalError("Additional verification is required before you can sign in.");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Authentication encountered an error.";
-      setLocalError(msg);
+      setLocalError("One more verification step is needed. Please try again.");
+    } catch {
+      setLocalError("Sign-in could not be completed. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -216,7 +255,7 @@ function ClerkConnectedSignIn() {
     setLocalError(null);
 
     if (!mfaCode.trim()) {
-      setLocalError("Please enter the verification code.");
+      setLocalError("Enter the verification code to continue.");
       return;
     }
 
@@ -224,15 +263,15 @@ function ClerkConnectedSignIn() {
     try {
       const { error } =
         mfaStrategy === "email_code"
-          ? await signIn.mfa.verifyEmailCode({ code: mfaCode })
+          ? await signIn.mfa.verifyEmailCode({ code: mfaCode.trim() })
           : mfaStrategy === "phone_code"
-            ? await signIn.mfa.verifyPhoneCode({ code: mfaCode })
+            ? await signIn.mfa.verifyPhoneCode({ code: mfaCode.trim() })
             : mfaStrategy === "totp"
-              ? await signIn.mfa.verifyTOTP({ code: mfaCode })
-              : await signIn.mfa.verifyBackupCode({ code: mfaCode });
+              ? await signIn.mfa.verifyTOTP({ code: mfaCode.trim() })
+              : await signIn.mfa.verifyBackupCode({ code: mfaCode.trim() });
 
       if (error) {
-        setLocalError(error.message || "That verification code could not be accepted.");
+        setLocalError(error.message || "That code was not accepted. Check it and try again.");
         return;
       }
 
@@ -243,17 +282,172 @@ function ClerkConnectedSignIn() {
 
       if (signIn.status === "needs_new_password") {
         setLocalError(
-          "This account needs a new password before it can sign in. Use the password reset option and try again.",
+          "Your password needs to be reset before sign-in can finish. Go back and use “Forgot password?”.",
         );
         return;
       }
 
-      setLocalError("Additional verification is still required to complete sign-in.");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Verification failed.";
-      setLocalError(msg);
+      setLocalError("Another verification step is still needed. Please try again.");
+    } catch {
+      setLocalError("Verification could not be completed. Please try again.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const openReset = React.useCallback(() => {
+    setLocalError(null);
+    setInfoMessage(null);
+    setResetEmail(identifier.includes("@") ? identifier.trim() : "");
+    setResetCode("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setResetStep("request");
+  }, [identifier]);
+
+  const cancelReset = async () => {
+    setResetStep(null);
+    setResetCode("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setLocalError(null);
+    setInfoMessage(null);
+    await signIn.reset();
+  };
+
+  const handleResetRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+    setInfoMessage(null);
+
+    const email = resetEmail.trim();
+
+    if (!email || !email.includes("@")) {
+      setLocalError("Enter the email address on your account.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await signIn.reset();
+
+      const { error } = await signIn.create({ identifier: email });
+      if (error) {
+        setLocalError(
+          error.message || "We couldn't find an account with that email. Check it and try again.",
+        );
+        return;
+      }
+
+      const { error: sendError } = await signIn.resetPasswordEmailCode.sendCode();
+      if (sendError) {
+        setLocalError(
+          sendError.message || "We couldn't send the reset code. Try again in a moment.",
+        );
+        return;
+      }
+
+      setResetStep("code");
+      setInfoMessage("A six-digit code is on its way.");
+    } catch {
+      setLocalError("The reset code could not be sent. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResetVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+    setInfoMessage(null);
+
+    if (!resetCode.trim()) {
+      setLocalError("Enter the six-digit code from your email.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await signIn.resetPasswordEmailCode.verifyCode({
+        code: resetCode.trim(),
+      });
+
+      if (error) {
+        setLocalError(error.message || "That code was not accepted. Check it and try again.");
+        return;
+      }
+
+      if (signIn.status === "needs_new_password") {
+        setResetStep("password");
+        return;
+      }
+
+      setLocalError("The code was accepted, but the reset could not continue. Request a new code.");
+    } catch {
+      setLocalError("The code could not be checked. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+
+    if (newPassword.length < 8) {
+      setLocalError("Use at least 8 characters for your new password.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setLocalError("The two passwords do not match.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await signIn.resetPasswordEmailCode.submitPassword({
+        password: newPassword,
+      });
+
+      if (error) {
+        setLocalError(error.message || "We couldn't set that password. Try a different one.");
+        return;
+      }
+
+      if (signIn.status === "complete") {
+        await finalizeSignIn();
+        return;
+      }
+
+      if (signIn.status === "needs_second_factor" || signIn.status === "needs_client_trust") {
+        setResetStep(null);
+        await beginSecondFactor();
+        return;
+      }
+
+      setLocalError(
+        "Your password was updated, but sign-in did not finish. Return to sign in and use the new password.",
+      );
+    } catch {
+      setLocalError("Your new password could not be saved. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResetResend = async (): Promise<boolean> => {
+    setLocalError(null);
+    try {
+      const { error } = await signIn.resetPasswordEmailCode.sendCode();
+      if (error) {
+        setLocalError(error.message || "We couldn't send another code. Try again in a moment.");
+        return false;
+      }
+      return true;
+    } catch {
+      setLocalError("We couldn't send another code. Try again in a moment.");
+      return false;
     }
   };
 
@@ -261,12 +455,14 @@ function ClerkConnectedSignIn() {
 
   if (mfaStrategy) {
     return (
-      <SecondFactorLayout
+      <SecondFactorView
         strategy={mfaStrategy}
         code={mfaCode}
         setCode={setMfaCode}
         onSubmit={handleVerifySecondFactor}
+        onResend={beginSecondFactor}
         onBack={() => {
+          void signIn.reset();
           setMfaStrategy(null);
           setMfaCode("");
           setLocalError(null);
@@ -277,8 +473,57 @@ function ClerkConnectedSignIn() {
     );
   }
 
+  if (resetStep === "request") {
+    return (
+      <ResetRequestView
+        email={resetEmail}
+        setEmail={setResetEmail}
+        onSubmit={handleResetRequest}
+        onCancel={cancelReset}
+        isLoading={isLoading}
+        errorMessage={localError}
+      />
+    );
+  }
+
+  if (resetStep === "code") {
+    return (
+      <ResetCodeView
+        email={resetEmail}
+        code={resetCode}
+        setCode={setResetCode}
+        onSubmit={handleResetVerify}
+        onResend={handleResetResend}
+        onEditEmail={() => {
+          setResetStep("request");
+          setLocalError(null);
+          setInfoMessage(null);
+        }}
+        onCancel={cancelReset}
+        isLoading={isLoading}
+        errorMessage={localError}
+        infoMessage={infoMessage}
+      />
+    );
+  }
+
+  if (resetStep === "password") {
+    return (
+      <ResetPasswordView
+        password={newPassword}
+        setPassword={setNewPassword}
+        confirmPassword={confirmPassword}
+        setConfirmPassword={setConfirmPassword}
+        onSubmit={handleResetPassword}
+        onCancel={cancelReset}
+        isLoading={isLoading}
+        errorMessage={localError}
+      />
+    );
+  }
+
   return (
-    <SignInLayout
+    <PasswordSignInView
       onSubmit={handleSubmit}
       onGoogleSignIn={handleGoogleSignIn}
       isGoogleLoading={isGoogleLoading}
@@ -286,6 +531,7 @@ function ClerkConnectedSignIn() {
       setIdentifier={setIdentifier}
       password={password}
       setPassword={setPassword}
+      onForgotPassword={openReset}
       isLoading={isLoading}
       errorMessage={
         localError ||
@@ -294,14 +540,13 @@ function ClerkConnectedSignIn() {
         errors?.fields?.password?.message
       }
       redirectUrl={redirectUrl}
-      isClerkActive={true}
+      isClerkActive
     />
   );
 }
 
 /**
- * Local Bridge Sign-In Flow
- * Backed by /api/auth/login for local offline development and automated testing.
+ * Local bridge sign-in, backed by /api/auth/login for development and tests.
  */
 function LocalBridgeSignIn() {
   const router = useRouter();
@@ -309,23 +554,15 @@ function LocalBridgeSignIn() {
   const redirectUrl = searchParams.get("redirect_url") || "/dashboard";
 
   const [identifier, setIdentifier] = React.useState("");
-  const [password, setPassword] = React.useState("");
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
-  const [isGoogleLoading] = React.useState(false);
-
-  const handleGoogleSignIn = async () => {
-    setLocalError(
-      "Google Authentication requires active Clerk credentials. Please ensure NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is configured.",
-    );
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError(null);
 
-    if (!identifier) {
-      setLocalError("Please enter your registered civic email or username.");
+    if (!identifier.trim()) {
+      setLocalError("Enter your account email to continue.");
       return;
     }
 
@@ -335,7 +572,7 @@ function LocalBridgeSignIn() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: identifier,
+          email: identifier.trim(),
           role: identifier.includes("admin")
             ? "admin"
             : identifier.includes("mod")
@@ -346,26 +583,23 @@ function LocalBridgeSignIn() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Unable to sign in");
+        throw new Error(data.error || "Sign-in could not be completed.");
       }
 
       router.push(redirectUrl);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Sign-in failed.";
+      const msg = err instanceof Error ? err.message : "Sign-in could not be completed.";
       setLocalError(msg);
       setIsLoading(false);
     }
   };
 
   return (
-    <SignInLayout
+    <PasswordSignInView
       onSubmit={handleSubmit}
-      onGoogleSignIn={handleGoogleSignIn}
-      isGoogleLoading={isGoogleLoading}
+      isGoogleLoading={false}
       identifier={identifier}
       setIdentifier={setIdentifier}
-      password={password}
-      setPassword={setPassword}
       isLoading={isLoading}
       errorMessage={localError}
       redirectUrl={redirectUrl}
@@ -374,10 +608,7 @@ function LocalBridgeSignIn() {
   );
 }
 
-/**
- * Shared Noticeboard Sign-In Layout
- */
-function SignInLayout({
+function PasswordSignInView({
   onSubmit,
   onGoogleSignIn,
   isGoogleLoading,
@@ -385,202 +616,131 @@ function SignInLayout({
   setIdentifier,
   password,
   setPassword,
+  onForgotPassword,
   isLoading,
   errorMessage,
   redirectUrl,
   isClerkActive,
 }: {
   onSubmit: (e: React.FormEvent) => void;
-  onGoogleSignIn: () => void;
+  onGoogleSignIn?: () => void;
   isGoogleLoading: boolean;
   identifier: string;
-  setIdentifier: (val: string) => void;
-  password: string;
-  setPassword: (val: string) => void;
+  setIdentifier: (value: string) => void;
+  password?: string;
+  setPassword?: (value: string) => void;
+  onForgotPassword?: () => void;
   isLoading: boolean;
   errorMessage?: string | null;
   redirectUrl: string;
   isClerkActive: boolean;
 }) {
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 py-8 bg-[#f5f3ed]">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-2">
-          <Link href="/" className="inline-block transition-opacity hover:opacity-85">
-            <Brand />
-          </Link>
-          <h1 className="text-2xl font-bold tracking-tight text-[#0e2b24]">Civic Sign In</h1>
-          <p className="text-xs text-[#486057]">
-            Sign in to access your civic reporting space, tracking dockets, and verified updates.
-          </p>
-        </div>
+    <AuthShell notice={SIGN_IN_NOTICE}>
+      <AuthHeader
+        title="Sign in"
+        description="Open your reports, verifications, and tracked cases."
+      />
 
-        <Card className="border border-[#cbd5cb] bg-[#faf9f5] shadow-xs">
-          <CardHeader className="pb-3 border-b border-[#eef1e9]">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold text-[#17382f]">
-                Account Credentials
-              </CardTitle>
-              <Badge
-                variant="outline"
-                className="text-[10px] uppercase font-mono tracking-wider border-[#cbd5cb] text-[#486057]"
-              >
-                {isClerkActive ? "Clerk Auth" : "Civic Secure"}
-              </Badge>
-            </div>
-            <CardDescription className="text-xs text-[#5c6f66]">
-              Enter your credentials to enter the JanSahayak dashboard.
-            </CardDescription>
-          </CardHeader>
+      {errorMessage ? <AuthAlert tone="error">{errorMessage}</AuthAlert> : null}
 
-          <CardContent className="pt-4">
-            {errorMessage && (
-              <div
-                role="alert"
-                className="mb-4 flex items-start gap-2.5 rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900"
-              >
-                <AlertCircle className="size-4 shrink-0 text-rose-700 mt-0.5" />
-                <span className="leading-relaxed">{errorMessage}</span>
-              </div>
-            )}
+      {onGoogleSignIn ? (
+        <>
+          <AuthOAuthButton
+            loading={isGoogleLoading}
+            disabled={isLoading}
+            onClick={onGoogleSignIn}
+          />
+          <AuthDivider>or use your email</AuthDivider>
+        </>
+      ) : null}
 
-            {/* Google Social Authentication */}
-            <div className="space-y-3 mb-4">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isLoading || isGoogleLoading}
-                onClick={onGoogleSignIn}
-                className="w-full h-9 bg-white hover:bg-[#f0eee6] border-[#cbd5cb] text-[#0e2b24] font-medium text-xs flex items-center justify-center gap-2.5 shadow-xs transition-colors"
-                aria-label="Sign in with Google Authentication"
-              >
-                {isGoogleLoading ? (
-                  <Spinner className="size-3.5" />
-                ) : (
-                  <GoogleIcon className="size-4 shrink-0" />
-                )}
-                <span>Continue with Google</span>
-              </Button>
+      <form className="auth-form" onSubmit={onSubmit}>
+        <AuthField
+          id="sign-in-identifier"
+          label={isClerkActive ? "Email or username" : "Email address"}
+          type="text"
+          autoComplete="username"
+          required
+          placeholder="name@example.in"
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
+          disabled={isLoading || isGoogleLoading}
+        />
 
-              <div className="relative my-3">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-[#cbd5cb]" />
-                </div>
-                <div className="relative flex justify-center text-[10px] uppercase font-mono tracking-wider">
-                  <span className="bg-[#faf9f5] px-2 text-[#5c6f66]">or sign in with email</span>
-                </div>
-              </div>
-            </div>
-
-            <form onSubmit={onSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="sign-in-identifier"
-                  className="block text-xs font-semibold text-[#17382f]"
+        {isClerkActive ? (
+          <AuthField
+            id="sign-in-password"
+            label="Password"
+            type="password"
+            autoComplete="current-password"
+            required
+            placeholder="Your password"
+            revealable
+            value={password}
+            onChange={(e) => setPassword?.(e.target.value)}
+            disabled={isLoading || isGoogleLoading}
+            action={
+              onForgotPassword ? (
+                <button
+                  type="button"
+                  className="auth-inline-action"
+                  onClick={onForgotPassword}
+                  disabled={isLoading || isGoogleLoading}
                 >
-                  Email Address or Username
-                </label>
-                <Input
-                  id="sign-in-identifier"
-                  type="text"
-                  autoComplete="username"
-                  required
-                  placeholder="name@example.in or civic_user"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  disabled={isLoading || isGoogleLoading}
-                  className="bg-white border-[#cbd5cb] text-[#17382f] text-xs h-9"
-                />
-              </div>
+                  Forgot password?
+                </button>
+              ) : undefined
+            }
+          />
+        ) : null}
 
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="sign-in-password"
-                    className="block text-xs font-semibold text-[#17382f]"
-                  >
-                    Password
-                  </label>
-                  <span className="text-[11px] text-[#5c6f66]">Protected by RBAC</span>
-                </div>
-                <Input
-                  id="sign-in-password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  placeholder="••••••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading || isGoogleLoading}
-                  className="bg-white border-[#cbd5cb] text-[#17382f] text-xs h-9"
-                />
-              </div>
+        <AuthSubmit
+          loading={isLoading}
+          loadingLabel={isClerkActive ? "Signing in…" : "Opening…"}
+        >
+          {isClerkActive ? "Sign in" : "Continue"}
+        </AuthSubmit>
+      </form>
 
-              <Button
-                type="submit"
-                disabled={isLoading || isGoogleLoading}
-                className="w-full bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] text-xs font-medium h-9 shadow-xs"
-              >
-                {isLoading ? (
-                  <span className="flex items-center gap-2">
-                    <Spinner className="size-3.5" />
-                    <span>Authenticating...</span>
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1.5">
-                    <Lock className="size-3.5" />
-                    <span>Sign In to Dashboard</span>
-                    <ArrowRight className="size-3.5 ml-1" />
-                  </span>
-                )}
-              </Button>
-            </form>
-          </CardContent>
-
-          <CardFooter className="flex items-center justify-between border-t border-[#eef1e9] py-3 text-xs text-[#5c6f66]">
-            <span>Don&apos;t have an account?</span>
-            <Link
-              href={`/sign-up?redirect_url=${encodeURIComponent(redirectUrl)}`}
-              className="font-semibold text-[#0e2b24] hover:underline"
-            >
-              Sign Up as Citizen
-            </Link>
-          </CardFooter>
-        </Card>
-
-        <div className="text-center">
-          <Link href="/" className="text-xs text-[#486057] hover:text-[#0e2b24] transition-colors">
-            ← Back to Public Civic Portal
-          </Link>
-        </div>
+      <div className="auth-footer">
+        <span>New to JanSahayak?</span>
+        <Link
+          href={`/sign-up?redirect_url=${encodeURIComponent(redirectUrl)}`}
+          className="auth-text-link"
+        >
+          Create a citizen account
+        </Link>
       </div>
-    </div>
+    </AuthShell>
   );
 }
 
-/**
- * Second Factor (MFA / device trust) Layout
- *
- * Shown when Clerk reports `needs_second_factor` or `needs_client_trust` after a
- * password attempt. The form submits the code to whichever factor was prepared.
- */
-function SecondFactorLayout({
+function SecondFactorView({
   strategy,
   code,
   setCode,
   onSubmit,
+  onResend,
   onBack,
   isLoading,
   errorMessage,
 }: {
   strategy: "email_code" | "phone_code" | "totp" | "backup_code";
   code: string;
-  setCode: (val: string) => void;
+  setCode: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
+  onResend: () => Promise<boolean>;
   onBack: () => void;
   isLoading: boolean;
   errorMessage?: string | null;
 }) {
+  const cooldown = useResendCooldown(30);
+  const [resent, setResent] = React.useState(false);
+
+  const isNumeric = strategy === "email_code" || strategy === "phone_code" || strategy === "totp";
+  const canResend = strategy === "email_code" || strategy === "phone_code";
+
   const label =
     strategy === "email_code"
       ? "Email verification code"
@@ -597,101 +757,287 @@ function SecondFactorLayout({
         ? "We sent a one-time code to the phone number on your account."
         : strategy === "totp"
           ? "Enter the current code from your authenticator app."
-          : "Enter one of the backup codes you saved when enabling two-step verification.";
+          : "Enter one of the backup codes you saved when you turned on two-step verification.";
+
+  const handleResend = async () => {
+    setResent(false);
+    const sent = await onResend();
+    if (sent) {
+      setResent(true);
+      cooldown.restart();
+    }
+  };
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 py-8 bg-[#f5f3ed]">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-2">
-          <Link href="/" className="inline-block transition-opacity hover:opacity-85">
-            <Brand />
-          </Link>
-          <h1 className="text-2xl font-bold tracking-tight text-[#0e2b24]">Confirm It&apos;s You</h1>
-          <p className="text-xs text-[#486057]">{helper}</p>
+    <AuthShell notice={MFA_NOTICE}>
+      <AuthHeader title="Confirm it’s you" description={helper} />
+
+      {errorMessage ? <AuthAlert tone="error">{errorMessage}</AuthAlert> : null}
+
+      <form className="auth-form" onSubmit={onSubmit}>
+        <AuthField
+          id="sign-in-mfa-code"
+          label={label}
+          code={isNumeric}
+          inputMode={isNumeric ? "numeric" : "text"}
+          autoComplete="one-time-code"
+          autoFocus
+          maxLength={isNumeric ? 6 : undefined}
+          required
+          placeholder={isNumeric ? "123456" : "Backup code"}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          disabled={isLoading}
+        />
+
+        <AuthSubmit loading={isLoading} loadingLabel="Verifying…">
+          Verify and sign in
+        </AuthSubmit>
+      </form>
+
+      {canResend ? (
+        <div className="auth-footer">
+          <button
+            type="button"
+            className="auth-inline-action"
+            onClick={handleResend}
+            disabled={isLoading || !cooldown.ready}
+          >
+            {cooldown.ready ? "Resend code" : `Resend code in ${cooldown.remaining}s`}
+          </button>
+          {resent ? <span className="auth-hint">A new code is on its way.</span> : null}
         </div>
+      ) : (
+        <div className="auth-footer">
+          <span>Keep this code private.</span>
+        </div>
+      )}
 
-        <Card className="border border-[#cbd5cb] bg-[#faf9f5] shadow-xs">
-          <CardHeader className="pb-3 border-b border-[#eef1e9]">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold text-[#17382f]">
-                Second-Step Verification
-              </CardTitle>
-              <Badge
-                variant="outline"
-                className="text-[10px] uppercase font-mono tracking-wider border-[#cbd5cb] text-[#486057]"
-              >
-                Clerk Auth
-              </Badge>
-            </div>
-            <CardDescription className="text-xs text-[#5c6f66]">
-              Your password was accepted. Complete this step to open your civic workspace.
-            </CardDescription>
-          </CardHeader>
+      <button type="button" className="auth-text-button" onClick={onBack} disabled={isLoading}>
+        Use a different account
+      </button>
+    </AuthShell>
+  );
+}
 
-          <CardContent className="pt-4">
-            {errorMessage && (
-              <div
-                role="alert"
-                className="mb-4 flex items-start gap-2.5 rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900"
-              >
-                <AlertCircle className="size-4 shrink-0 text-rose-700 mt-0.5" />
-                <span className="leading-relaxed">{errorMessage}</span>
-              </div>
-            )}
+function ResetRequestView({
+  email,
+  setEmail,
+  onSubmit,
+  onCancel,
+  isLoading,
+  errorMessage,
+}: {
+  email: string;
+  setEmail: (value: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  onCancel: () => void;
+  isLoading: boolean;
+  errorMessage?: string | null;
+}) {
+  return (
+    <AuthShell notice={RESET_NOTICE}>
+      <AuthHeader
+        title="Reset your password"
+        description="Enter the email on your account and we’ll send a six-digit code."
+      />
 
-            <form onSubmit={onSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="sign-in-mfa-code"
-                  className="block text-xs font-semibold text-[#17382f]"
-                >
-                  {label}
-                </label>
-                <Input
-                  id="sign-in-mfa-code"
-                  type="text"
-                  inputMode={strategy === "backup_code" ? "text" : "numeric"}
-                  autoComplete="one-time-code"
-                  required
-                  placeholder={strategy === "backup_code" ? "backup code" : "123456"}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  disabled={isLoading}
-                  className="bg-white border-[#cbd5cb] text-[#17382f] text-center tracking-widest font-mono text-base h-10"
-                />
-              </div>
+      {errorMessage ? <AuthAlert tone="error">{errorMessage}</AuthAlert> : null}
 
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] text-xs font-medium h-9 shadow-xs"
-              >
-                {isLoading ? (
-                  <span className="flex items-center gap-2">
-                    <Spinner className="size-3.5" />
-                    <span>Verifying...</span>
-                  </span>
-                ) : (
-                  <span className="flex items-center justify-center gap-1.5">
-                    <Lock className="size-3.5" />
-                    <span>Verify &amp; Sign In</span>
-                    <ArrowRight className="size-3.5 ml-1" />
-                  </span>
-                )}
-              </Button>
-            </form>
+      <form className="auth-form" onSubmit={onSubmit}>
+        <AuthField
+          id="reset-email"
+          label="Email address"
+          type="email"
+          autoComplete="email"
+          autoFocus
+          required
+          placeholder="name@example.in"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={isLoading}
+        />
 
-            <button
-              type="button"
-              onClick={onBack}
-              disabled={isLoading}
-              className="mt-4 w-full text-center text-[11px] font-medium text-[#486057] hover:text-[#0e2b24] disabled:opacity-50"
-            >
-              Use a different account
-            </button>
-          </CardContent>
-        </Card>
+        <AuthSubmit loading={isLoading} loadingLabel="Sending code…">
+          Send reset code
+        </AuthSubmit>
+      </form>
+
+      <div className="auth-footer">
+        <span>Remembered it?</span>
+        <button type="button" className="auth-link-button" onClick={onCancel} disabled={isLoading}>
+          Back to sign in
+        </button>
       </div>
-    </div>
+    </AuthShell>
+  );
+}
+
+function ResetCodeView({
+  email,
+  code,
+  setCode,
+  onSubmit,
+  onResend,
+  onEditEmail,
+  onCancel,
+  isLoading,
+  errorMessage,
+  infoMessage,
+}: {
+  email: string;
+  code: string;
+  setCode: (value: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  onResend: () => Promise<boolean>;
+  onEditEmail: () => void;
+  onCancel: () => void;
+  isLoading: boolean;
+  errorMessage?: string | null;
+  infoMessage?: string | null;
+}) {
+  const cooldown = useResendCooldown(30);
+  const [resent, setResent] = React.useState(false);
+
+  const handleResend = async () => {
+    setResent(false);
+    const sent = await onResend();
+    if (sent) {
+      setResent(true);
+      cooldown.restart();
+    }
+  };
+
+  return (
+    <AuthShell notice={RESET_NOTICE}>
+      <AuthHeader
+        title="Enter the reset code"
+        description={`We sent a six-digit code to ${email}.`}
+      />
+
+      {errorMessage ? <AuthAlert tone="error">{errorMessage}</AuthAlert> : null}
+      {infoMessage && !errorMessage ? <AuthAlert tone="info">{infoMessage}</AuthAlert> : null}
+
+      <form className="auth-form" onSubmit={onSubmit}>
+        <AuthField
+          id="reset-code"
+          label="Reset code"
+          code
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          autoFocus
+          maxLength={6}
+          required
+          placeholder="123456"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          disabled={isLoading}
+        />
+
+        <AuthSubmit loading={isLoading} loadingLabel="Checking code…">
+          Continue
+        </AuthSubmit>
+      </form>
+
+      <div className="auth-footer">
+        <button
+          type="button"
+          className="auth-inline-action"
+          onClick={handleResend}
+          disabled={isLoading || !cooldown.ready}
+        >
+          {cooldown.ready ? "Resend code" : `Resend code in ${cooldown.remaining}s`}
+        </button>
+        {resent ? <span className="auth-hint">A new code is on its way.</span> : null}
+      </div>
+
+      <div className="auth-footer">
+        <button
+          type="button"
+          className="auth-link-button"
+          onClick={onEditEmail}
+          disabled={isLoading}
+        >
+          Use a different email
+        </button>
+        <span aria-hidden="true">·</span>
+        <button type="button" className="auth-link-button" onClick={onCancel} disabled={isLoading}>
+          Back to sign in
+        </button>
+      </div>
+    </AuthShell>
+  );
+}
+
+function ResetPasswordView({
+  password,
+  setPassword,
+  confirmPassword,
+  setConfirmPassword,
+  onSubmit,
+  onCancel,
+  isLoading,
+  errorMessage,
+}: {
+  password: string;
+  setPassword: (value: string) => void;
+  confirmPassword: string;
+  setConfirmPassword: (value: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  onCancel: () => void;
+  isLoading: boolean;
+  errorMessage?: string | null;
+}) {
+  return (
+    <AuthShell notice={RESET_NOTICE}>
+      <AuthHeader
+        title="Choose a new password"
+        description="Use at least 8 characters. You’ll be signed in once it is set."
+      />
+
+      {errorMessage ? <AuthAlert tone="error">{errorMessage}</AuthAlert> : null}
+
+      <form className="auth-form" onSubmit={onSubmit}>
+        <AuthField
+          id="reset-password"
+          label="New password"
+          type="password"
+          autoComplete="new-password"
+          autoFocus
+          required
+          minLength={8}
+          placeholder="At least 8 characters"
+          hint="Use a password you don’t use anywhere else."
+          revealable
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={isLoading}
+        />
+
+        <AuthField
+          id="reset-password-confirm"
+          label="Confirm new password"
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={8}
+          placeholder="Repeat your new password"
+          revealable
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          disabled={isLoading}
+        />
+
+        <AuthSubmit loading={isLoading} loadingLabel="Saving…">
+          Save and sign in
+        </AuthSubmit>
+      </form>
+
+      <div className="auth-footer">
+        <button type="button" className="auth-link-button" onClick={onCancel} disabled={isLoading}>
+          Cancel and return to sign in
+        </button>
+      </div>
+    </AuthShell>
   );
 }

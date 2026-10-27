@@ -16,6 +16,7 @@ import {
   Workflow,
   LogOut,
   User,
+  Building2,
 } from "lucide-react";
 
 import { Brand } from "@/components/brand";
@@ -64,6 +65,12 @@ const ALL_NAV_ITEMS: NavItem[] = [
     href: "/dashboard/map",
     label: "Live Map",
     icon: MapPin,
+    minRole: "citizen",
+  },
+  {
+    href: "/dashboard/organization",
+    label: "Organization",
+    icon: Building2,
     minRole: "citizen",
   },
   {

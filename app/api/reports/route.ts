@@ -17,6 +17,8 @@ export async function GET(req: NextRequest) {
     const session = await getCurrentUserSession(req);
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "20", 10);
+    const rawIds = searchParams.get("ids");
+    const requestedIds = rawIds ? rawIds.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
     const reportsColl = await getReportsCollection();
     const query: Record<string, unknown> = {};
@@ -25,11 +27,19 @@ export async function GET(req: NextRequest) {
     const scope = searchParams.get("scope");
 
     // PRD §2 & §16 Privacy Isolation & Staff Scope:
-    // Regular citizens are strictly isolated to their own filed reports.
+    // Regular citizens see their own authenticated reports plus any filed from their browser device.
     // Authorized municipal staff can inspect all reports across Greater Noida unless scope=mine is specified.
     if (!isStaff || scope === "mine") {
+      const orClauses: Record<string, unknown>[] = [];
       if (session.isAuthenticated && session.userId) {
-        query.userId = session.userId;
+        orClauses.push({ userId: session.userId });
+      }
+      if (requestedIds.length > 0) {
+        orClauses.push({ reportId: { $in: requestedIds } });
+      }
+
+      if (orClauses.length > 0) {
+        query.$or = orClauses;
       }
     }
 
@@ -51,7 +61,7 @@ export async function GET(req: NextRequest) {
       })
       .toArray();
 
-    const formattedReports = reports.map((r) => {
+    const formattedReports = reports.map((r: Record<string, any>) => {
       const photos = (r.evidencePhotos || []).map(
         (p: { filename?: string; byteSize?: number; fileId?: string }) => ({
           filename: p.filename || "evidence.jpg",
@@ -61,7 +71,8 @@ export async function GET(req: NextRequest) {
       );
 
       // PRD §12 & §13: Mask/omit citizen userId for unauthenticated or unauthorized public callers
-      const canViewUserId = isStaff || (session.isAuthenticated && session.userId === r.userId);
+      const isOwner = (session.isAuthenticated && session.userId === r.userId) || requestedIds.includes(r.reportId);
+      const canViewUserId = isStaff || isOwner;
       const safeUserId = canViewUserId ? r.userId : undefined;
 
       return {

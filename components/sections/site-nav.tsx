@@ -176,8 +176,8 @@ export function SiteNav() {
               <span className="text-[11px] font-mono uppercase tracking-wider text-[#5c6f66]">
                 Navigation Menu
               </span>
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                <span className="size-1.5 rounded-full bg-emerald-600 animate-pulse" />
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#17382f] bg-[#dce8d9] px-2 py-0.5 rounded-full border border-[#cbd5cb]">
+                <span className="size-1.5 rounded-full bg-[var(--green)]" />
                 Greater Noida Pilot
               </span>
             </div>
@@ -193,7 +193,7 @@ export function SiteNav() {
                     <span className="flex items-center gap-1.5">
                       <span>{item.label}</span>
                       {item.href === "/dashboard" && (
-                        <span className="text-[9px] font-semibold text-[#5c6f66] bg-[#eef1e9] px-1.5 py-0.2 rounded border border-[#cbd5cb]">
+                        <span className="text-[11px] font-semibold text-[#5c6f66] bg-[#eef1e9] px-1.5 py-0.2 rounded border border-[#cbd5cb]">
                           Staff
                         </span>
                       )}

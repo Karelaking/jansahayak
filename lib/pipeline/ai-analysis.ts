@@ -43,16 +43,15 @@ export async function executeStage3AIAnalysis(
 
   try {
     const apiKey = process.env.OPENROUTER_API_KEY;
-    const configuredModel = process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-001";
+    const configuredModel = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
     const baseUrl = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
 
     // Candidate models in preference order (handles model deprecations/unavailability)
     const candidateModels = [
       configuredModel,
-      "google/gemini-2.0-flash-001",
-      "google/gemini-flash-1.5",
-      "meta-llama/llama-3.2-11b-vision-instruct",
+      "google/gemini-2.5-flash",
       "openai/gpt-4o-mini",
+      "openai/gpt-4o",
     ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
     let analysis: AIAnalysisResult;

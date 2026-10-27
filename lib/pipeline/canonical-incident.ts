@@ -5,7 +5,7 @@ import {
   StageExecutionResult,
 } from "./types";
 import { RawReportDocument, getReportsCollection } from "@/lib/db/mongodb";
-import { db, users, incidents, incidentReports, outboxEvents, Incident } from "@/lib/db";
+import { db, isDatabaseReachable, users, incidents, incidentReports, outboxEvents, Incident } from "@/lib/db";
 import { eq, sql } from "drizzle-orm";
 import { ANONYMOUS_USER_ID } from "@/lib/auth/roles";
 import { isTestEnvironment } from "@/lib/auth/clerk-config";
@@ -20,6 +20,7 @@ import { isTestEnvironment } from "@/lib/auth/clerk-config";
  */
 async function resolveReporterUserId(reportUserId: string | null | undefined): Promise<string | null> {
   if (!reportUserId || reportUserId === ANONYMOUS_USER_ID) return null;
+  if (!(await isDatabaseReachable())) return null;
 
   const [existing] = await db
     .select({ id: users.id })
@@ -57,6 +58,16 @@ export async function executeStage6CanonicalIncident(
   const stageName = "Canonical Incident & Location Synthesis";
 
   try {
+    if (!(await isDatabaseReachable())) {
+      return {
+        stage: 6,
+        stageName,
+        success: false,
+        error: "PostgreSQL database is currently unreachable. Connect your Neon DB to synthesize canonical incidents.",
+        isRetryable: true,
+      };
+    }
+
     const lat = location.centroidLatitude;
     const lng = location.centroidLongitude;
     const uncertainty = location.spatialUncertaintyMeters.toString();

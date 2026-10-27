@@ -92,7 +92,7 @@ export async function GET(
       .sort({ stage: 1 })
       .toArray();
 
-    const formattedPhotos = (report.evidencePhotos || []).map((p, idx) => ({
+    const formattedPhotos = (report.evidencePhotos || []).map((p: Record<string, unknown>, idx: number) => ({
       index: idx + 1,
       fileId: p.fileId,
       filename: p.filename,
@@ -164,13 +164,20 @@ export async function GET(
       }
     }
 
+    const failedStage = stageLogs.find((s: Record<string, any>) => s.status === "FAILED");
+    const stageError = (failedStage?.details as Record<string, any>)?.error || (failedStage as Record<string, any>)?.error;
+    const finalRejectionReason =
+      (report as unknown as { rejectionReason?: string }).rejectionReason ||
+      stageError ||
+      null;
+
     return NextResponse.json({
       success: true,
       reportId: report.reportId,
       category: report.category,
       description: report.description,
       status: report.status,
-      rejectionReason: (report as unknown as { rejectionReason?: string }).rejectionReason || null,
+      rejectionReason: finalRejectionReason,
       createdAt: report.createdAt,
       location: report.submissionLocation,
       photoCount: formattedPhotos.length,

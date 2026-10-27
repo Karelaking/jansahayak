@@ -71,7 +71,7 @@ export async function GET(
       .sort({ stage: 1 })
       .toArray();
 
-    const sanitizedStages = jobLogs.map((l) => ({
+    const sanitizedStages = jobLogs.map((l: Record<string, unknown>) => ({
       stage: l.stage,
       stageName: l.stageName,
       status: l.status,

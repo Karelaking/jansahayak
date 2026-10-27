@@ -80,9 +80,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ repo
     }
 
     // Format photo evidence with direct serving endpoints
-    const evidencePhotos = (reportDoc.evidencePhotos || []).map((photo) => ({
+    const evidencePhotos = (reportDoc.evidencePhotos || []).map((photo: Record<string, unknown>) => ({
       ...photo,
-      downloadUrl: photo.fileId ? `/api/evidence/${photo.fileId}` : undefined,
+      downloadUrl: photo.fileId ? `/api/pipeline/photos/${photo.fileId}` : undefined,
     }));
 
     return NextResponse.json({

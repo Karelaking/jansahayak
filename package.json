@@ -9,6 +9,8 @@
     "lint": "vp lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "db:init": "node scripts/init-db.mjs",
+    "db:push": "drizzle-kit push",
     "prepare": "vp config"
   },
   "dependencies": {
@@ -53,6 +55,7 @@
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.11",
     "postcss": "^8.5.32",
+    "puppeteer-core": "^25.16.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite-plus": "1.1.0",

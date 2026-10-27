@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, MapPin, Plus, FileText, LayoutDashboard } from "lucide-react";
 
+const AUTH_ROUTES = ["/sign-in", "/sign-up", "/sso-callback"] as const;
+
 export function MobileBottomNav() {
   const pathname = usePathname();
 
@@ -12,11 +14,18 @@ export function MobileBottomNav() {
     return null;
   }
 
+  // Auth screens own the full viewport; the dock would compete with the form.
+  if (AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`))) {
+    return null;
+  }
+
   return (
-    <nav
-      aria-label="Mobile Navigation Dock"
-      className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-[#faf9f5]/95 backdrop-blur-md border-t border-[#cbd5cb] px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(14,43,36,0.06)]"
-    >
+    <>
+      <div aria-hidden="true" className="h-[72px] md:hidden" />
+      <nav
+        aria-label="Mobile Navigation Dock"
+        className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-[#faf9f5]/95 backdrop-blur-md border-t border-[#cbd5cb] px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(14,43,36,0.06)]"
+      >
       <div className="flex items-center justify-around max-w-md mx-auto">
         {/* 1. Home */}
         <Link
@@ -28,7 +37,7 @@ export function MobileBottomNav() {
           }`}
         >
           <Home className={`h-5 w-5 ${pathname === "/" ? "stroke-[2.5]" : "stroke-2"}`} />
-          <span className="text-[10px] mt-0.5 tracking-tight">Home</span>
+          <span className="text-[11px] mt-0.5 tracking-tight">Home</span>
         </Link>
 
         {/* 2. Public Live Map */}
@@ -41,7 +50,7 @@ export function MobileBottomNav() {
           }`}
         >
           <MapPin className={`h-5 w-5 ${pathname === "/map" ? "stroke-[2.5]" : "stroke-2"}`} />
-          <span className="text-[10px] mt-0.5 tracking-tight">Live Map</span>
+          <span className="text-[11px] mt-0.5 tracking-tight">Live Map</span>
         </Link>
 
         {/* 3. Primary Field Report Action (Thumb-Elevated Center Button) */}
@@ -60,7 +69,7 @@ export function MobileBottomNav() {
             <Plus className="h-6 w-6 stroke-[2.5]" />
           </div>
           <span
-            className={`text-[10px] font-semibold mt-0.5 ${
+            className={`text-[11px] font-semibold mt-0.5 ${
               pathname === "/reports/new" ? "text-[#bd7b3b]" : "text-[#0e2b24]"
             }`}
           >
@@ -80,7 +89,7 @@ export function MobileBottomNav() {
           <FileText
             className={`h-5 w-5 ${pathname.startsWith("/dashboard/reports") ? "stroke-[2.5]" : "stroke-2"}`}
           />
-          <span className="text-[10px] mt-0.5 tracking-tight">Incidents</span>
+          <span className="text-[11px] mt-0.5 tracking-tight">Incidents</span>
         </Link>
 
         {/* 5. Dashboard / Staff Overview */}
@@ -95,9 +104,10 @@ export function MobileBottomNav() {
           <LayoutDashboard
             className={`h-5 w-5 ${pathname === "/dashboard" ? "stroke-[2.5]" : "stroke-2"}`}
           />
-          <span className="text-[10px] mt-0.5 tracking-tight">Ops Hub</span>
+          <span className="text-[11px] mt-0.5 tracking-tight">Ops Hub</span>
         </Link>
       </div>
-    </nav>
+      </nav>
+    </>
   );
 }

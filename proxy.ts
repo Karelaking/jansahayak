@@ -1,13 +1,30 @@
 import { NextResponse } from "next/server";
-import { clerkMiddleware } from "@clerk/nextjs/server";
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { isClerkConfigured } from "@/lib/auth/clerk-config";
+
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/reports(.*)",
+  "/api/reports(.*)",
+  "/api/pipeline(.*)",
+  "/api/auth(.*)",
+]);
 
 /**
  * Clerk middleware is only mounted when both Clerk keys are present. Without
  * them the proxy is a no-op so local development and the automated harness can
  * run without contacting Clerk.
+ *
+ * Public citizen reporting routes return immediately to avoid Clerk dev-browser
+ * handshake redirect loops on local HTTP development.
  */
-const handler = isClerkConfigured() ? clerkMiddleware() : () => NextResponse.next();
+const handler = isClerkConfigured()
+  ? clerkMiddleware(async (auth, req) => {
+      if (isPublicRoute(req)) {
+        return NextResponse.next();
+      }
+    })
+  : () => NextResponse.next();
 
 export default handler;
 export const proxy = handler;

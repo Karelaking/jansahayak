@@ -6,7 +6,8 @@ import { Spinner } from "@/components/ui/spinner";
 export const metadata: Metadata = {
   title: "Sign In | JanSahayak SafeStreets",
   description:
-    "Sign in to access your JanSahayak civic dashboard, submit reports, and track civic progress.",
+    "Sign in to your JanSahayak account to file reports and follow local road-safety cases.",
+  robots: { index: false, follow: false },
 };
 
 export default function SignInPage() {
@@ -18,7 +19,7 @@ export default function SignInPage() {
   return (
     <React.Suspense
       fallback={
-        <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-[#f5f3ed]">
+        <div className="flex min-h-dvh items-center justify-center bg-[#f5f3ed]">
           <Spinner className="size-6 text-[#0e2b24]" />
         </div>
       }

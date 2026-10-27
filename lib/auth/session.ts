@@ -1,5 +1,5 @@
 import { ANONYMOUS_USER_ID, normalizeUserRole, parseUserRole, UserRole, UserSession } from "./roles";
-import { db, users } from "@/lib/db";
+import { db, isDatabaseReachable, users } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { auth, currentUser } from "@clerk/nextjs/server";
@@ -63,11 +63,13 @@ async function readClerkSession(userId: string): Promise<UserSession> {
   // Preserve a role that was previously granted in Postgres when Clerk metadata
   // has not been populated yet. Never reset staff accounts back to "citizen".
   let existingUser: typeof users.$inferSelect | undefined;
-  try {
-    const rows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-    existingUser = rows[0];
-  } catch {
-    // Non-blocking: the database may still be warming up.
+  if (await isDatabaseReachable()) {
+    try {
+      const rows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      existingUser = rows[0];
+    } catch {
+      // Non-blocking: database query error.
+    }
   }
 
   const role =
@@ -78,7 +80,7 @@ async function readClerkSession(userId: string): Promise<UserSession> {
   const email = primaryEmail || existingUser?.email || "";
   const resolvedFullName = fullName || existingUser?.fullName || undefined;
 
-  if (email) {
+  if (email && (await isDatabaseReachable())) {
     try {
       await db
         .insert(users)
@@ -141,8 +143,10 @@ export async function getCurrentUserSession(req?: Request): Promise<UserSession>
       if (userId) {
         return await readClerkSession(userId);
       }
-    } catch (error) {
-      console.warn("Clerk auth evaluation failed:", error);
+    } catch (error: any) {
+      if (error?.digest !== "HANGING_PROMISE_REJECTION") {
+        console.warn("Clerk auth evaluation failed:", error?.message || error);
+      }
     }
 
     return emptySession();
@@ -165,21 +169,23 @@ export async function getCurrentUserSession(req?: Request): Promise<UserSession>
     return emptySession();
   }
 
-  try {
-    const [dbUser] = await db.select().from(users).where(eq(users.id, cookieUserId)).limit(1);
+  if (await isDatabaseReachable()) {
+    try {
+      const [dbUser] = await db.select().from(users).where(eq(users.id, cookieUserId)).limit(1);
 
-    if (dbUser) {
-      return {
-        userId: dbUser.id,
-        email: dbUser.email,
-        fullName: dbUser.fullName || undefined,
-        role: normalizeUserRole(dbUser.role),
-        avatarUrl: dbUser.avatarUrl || undefined,
-        isAuthenticated: true,
-      };
+      if (dbUser) {
+        return {
+          userId: dbUser.id,
+          email: dbUser.email,
+          fullName: dbUser.fullName || undefined,
+          role: normalizeUserRole(dbUser.role),
+          avatarUrl: dbUser.avatarUrl || undefined,
+          isAuthenticated: true,
+        };
+      }
+    } catch {
+      // Non-blocking: database unavailable.
     }
-  } catch {
-    // Non-blocking: database unavailable.
   }
 
   return emptySession();

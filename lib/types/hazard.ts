@@ -46,6 +46,7 @@ export interface HazardReport {
   officialRouting?: string;
   authority?: string;
   description: string;
+  photos?: { filename?: string; byteSize?: number; downloadUrl?: string }[];
 }
 
 export interface ModerationQueueItem {

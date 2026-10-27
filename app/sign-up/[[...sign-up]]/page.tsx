@@ -4,9 +4,10 @@ import { CustomSignUp } from "@/components/auth/custom-sign-up";
 import { Spinner } from "@/components/ui/spinner";
 
 export const metadata: Metadata = {
-  title: "Sign Up | JanSahayak SafeStreets",
+  title: "Create an Account | JanSahayak SafeStreets",
   description:
-    "Create your citizen account to report road hazards and participate in local neighborhood consensus.",
+    "Create a citizen account to report road hazards and follow local road-safety cases.",
+  robots: { index: false, follow: false },
 };
 
 export default function SignUpPage() {
@@ -18,7 +19,7 @@ export default function SignUpPage() {
   return (
     <React.Suspense
       fallback={
-        <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-[#f5f3ed]">
+        <div className="flex min-h-dvh items-center justify-center bg-[#f5f3ed]">
           <Spinner className="size-6 text-[#0e2b24]" />
         </div>
       }

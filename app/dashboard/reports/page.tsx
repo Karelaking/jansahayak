@@ -16,6 +16,7 @@ import {
   Trash2,
   AlertCircle,
   CheckCircle2,
+  Camera,
 } from "lucide-react";
 
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
@@ -50,6 +51,7 @@ import {
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import type { HazardReport } from "@/lib/types/hazard";
+import { useDashboardSession } from "../dashboard-shell";
 
 /** Status vs severity are separate vocabularies (Severity/Status Split). */
 function getStatusBadge(status: string, publicOpinionStatus?: string) {
@@ -177,14 +179,16 @@ function getSeverityBadge(severity: string) {
 }
 
 export default function ReportsPage() {
+  const session = useDashboardSession();
+  const isStaff = session.role === "moderator" || session.role === "admin";
+  const sessionUserId = session.userId || "";
+  const userRole = session.role || "citizen";
+
   const [reports, setReports] = React.useState<HazardReport[]>([]);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [activeTab, setActiveTab] = React.useState("all");
   const [selectedReport, setSelectedReport] = React.useState<HazardReport | null>(null);
-  const [isStaff, setIsStaff] = React.useState(false);
-  const [sessionUserId, setSessionUserId] = React.useState<string>("");
-  const [userRole, setUserRole] = React.useState<string>("citizen");
-  const [scopeFilter, setScopeFilter] = React.useState<"mine" | "all">("all");
+  const [scopeFilter, setScopeFilter] = React.useState<"mine" | "all">(isStaff ? "all" : "mine");
 
   // Edit Report State
   const [editingReport, setEditingReport] = React.useState<HazardReport | null>(null);
@@ -205,33 +209,25 @@ export default function ReportsPage() {
     text: string;
   } | null>(null);
 
-  React.useEffect(() => {
-    fetch("/api/auth/session")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.session) {
-          setSessionUserId(data.session.userId || "");
-          setUserRole(data.session.role || "citizen");
-          if (data.session.role === "moderator" || data.session.role === "admin") {
-            setIsStaff(true);
-            setScopeFilter("all");
-          } else {
-            setIsStaff(false);
-            setScopeFilter("mine");
-          }
-        }
-      })
-      .catch(() => {});
-  }, []);
+
 
   // Fetch database reports
   const loadReports = React.useCallback(async () => {
     try {
+      const localReportIds: string[] =
+        typeof window !== "undefined"
+          ? JSON.parse(window.localStorage.getItem("jansahayak_user_reports") || "[]")
+          : [];
+      const idsParam =
+        localReportIds.length > 0 ? `&ids=${encodeURIComponent(localReportIds.join(","))}` : "";
+      const reportsUrl =
+        scopeFilter === "mine"
+          ? `/api/reports?limit=100&scope=mine${idsParam}`
+          : `/api/reports?limit=100${idsParam}`;
+
       const [mapRes, reportsRes] = await Promise.all([
-        isStaff ? fetch("/api/map/incidents").catch(() => null) : Promise.resolve(null),
-        fetch(isStaff ? "/api/reports?limit=50" : "/api/reports?limit=50&scope=mine").catch(
-          () => null,
-        ),
+        fetch("/api/map/incidents").catch(() => null),
+        fetch(reportsUrl).catch(() => null),
       ]);
 
       const mapData = mapRes && mapRes.ok ? await mapRes.json() : null;
@@ -289,6 +285,7 @@ export default function ReportsPage() {
               reportedAt: r.createdAt
                 ? new Date(r.createdAt).toLocaleDateString("en-IN")
                 : "Recently",
+              photos: r.photos || [],
             });
             seenIds.add(rid);
           }
@@ -299,7 +296,7 @@ export default function ReportsPage() {
     } catch (e) {
       console.warn("Could not load database reports for registry:", e);
     }
-  }, [isStaff]);
+  }, [isStaff, scopeFilter]);
 
   React.useEffect(() => {
     loadReports();
@@ -307,11 +304,26 @@ export default function ReportsPage() {
 
   // Filtered reports
   const filteredReports = React.useMemo(() => {
+    const localReportIds: string[] =
+      typeof window !== "undefined"
+        ? JSON.parse(window.localStorage.getItem("jansahayak_user_reports") || "[]")
+        : [];
+
     return reports.filter((r) => {
-      if (scopeFilter === "mine" && sessionUserId) {
-        if (r.userId && r.userId !== sessionUserId) return false;
+      if (scopeFilter === "mine") {
+        const isMine =
+          (sessionUserId && r.userId === sessionUserId) ||
+          localReportIds.includes(r.id);
+        if (!isMine && !isStaff) return false;
       }
-      const matchesTab = activeTab === "all" || r.status === activeTab;
+
+      const matchesTab =
+        activeTab === "all"
+          ? true
+          : activeTab === "under-review"
+            ? r.status === "under-review"
+            : r.status === activeTab;
+
       const q = searchQuery.toLowerCase().trim();
       const loc = r.location || r.landmark || "";
       const matchesSearch =
@@ -319,11 +331,11 @@ export default function ReportsPage() {
         r.id.toLowerCase().includes(q) ||
         r.title.toLowerCase().includes(q) ||
         loc.toLowerCase().includes(q) ||
-        r.category.toLowerCase().includes(q);
+        (r.category && r.category.toLowerCase().includes(q));
 
       return matchesTab && matchesSearch;
     });
-  }, [reports, activeTab, searchQuery, scopeFilter, sessionUserId]);
+  }, [reports, activeTab, searchQuery, scopeFilter, sessionUserId, isStaff]);
 
   const [isUpdatingStatus, setIsUpdatingStatus] = React.useState(false);
 
@@ -554,28 +566,26 @@ export default function ReportsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          {isStaff && (
-            <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border text-xs w-full sm:w-auto">
-              <Button
-                type="button"
-                variant={scopeFilter === "all" ? "secondary" : "ghost"}
-                size="xs"
-                onClick={() => setScopeFilter("all")}
-                className="h-8 sm:h-7 text-xs font-medium flex-1 sm:flex-none"
-              >
-                All Dockets
-              </Button>
-              <Button
-                type="button"
-                variant={scopeFilter === "mine" ? "secondary" : "ghost"}
-                size="xs"
-                onClick={() => setScopeFilter("mine")}
-                className="h-8 sm:h-7 text-xs font-medium flex-1 sm:flex-none"
-              >
-                My Submissions
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border text-xs w-full sm:w-auto">
+            <Button
+              type="button"
+              variant={scopeFilter === "mine" ? "secondary" : "ghost"}
+              size="xs"
+              onClick={() => setScopeFilter("mine")}
+              className="h-8 sm:h-7 text-xs font-medium flex-1 sm:flex-none"
+            >
+              My Submissions
+            </Button>
+            <Button
+              type="button"
+              variant={scopeFilter === "all" ? "secondary" : "ghost"}
+              size="xs"
+              onClick={() => setScopeFilter("all")}
+              className="h-8 sm:h-7 text-xs font-medium flex-1 sm:flex-none"
+            >
+              All Community Reports
+            </Button>
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -656,9 +666,12 @@ export default function ReportsPage() {
 
             {/* Status Filter Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full md:w-auto">
-              <TabsList className="grid w-full grid-cols-4 md:w-auto">
+              <TabsList className="grid w-full grid-cols-5 md:w-auto">
                 <TabsTrigger value="all" className="text-xs">
                   All
+                </TabsTrigger>
+                <TabsTrigger value="under-review" className="text-xs">
+                  Under Review
                 </TabsTrigger>
                 <TabsTrigger value="open" className="text-xs">
                   Open
@@ -1120,6 +1133,48 @@ export default function ReportsPage() {
                   </p>
                 </div>
               </div>
+
+              {/* Attached Evidence Photographs */}
+              {selectedReport.photos && selectedReport.photos.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-foreground">Attached Evidence Photographs</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      {selectedReport.photos.length} captures recorded
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {selectedReport.photos.map((p, idx) => (
+                      <div
+                        key={idx}
+                        className="group relative rounded-lg border border-border overflow-hidden bg-muted aspect-video flex items-center justify-center"
+                      >
+                        {p.downloadUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={p.downloadUrl}
+                            alt={p.filename || `Evidence photo ${idx + 1}`}
+                            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <Camera className="size-5 text-muted-foreground opacity-50" />
+                        )}
+                        {p.downloadUrl && (
+                          <a
+                            href={p.downloadUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-medium transition-opacity"
+                          >
+                            View Original
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Status transition controls (Role Gated) */}
               {isStaff ? (

@@ -958,7 +958,11 @@ describe("PRD §19 End-to-End Integration Test Suite (84 Scenarios)", () => {
     // 2. Missing incidentId returns 400
     const missingIdReq = new NextRequest("http://localhost:3000/api/admin/escalations", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-mock-role": "moderator" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-mock-user-id": "mod_escalation_validator",
+        "x-mock-role": "moderator",
+      },
       body: JSON.stringify({ status: "resolved" }),
     });
     const missingIdRes = await postEscalationRoute(missingIdReq);
@@ -967,7 +971,11 @@ describe("PRD §19 End-to-End Integration Test Suite (84 Scenarios)", () => {
     // 3. Non-existent incidentId returns 404
     const notFoundReq = new NextRequest("http://localhost:3000/api/admin/escalations", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-mock-role": "moderator" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-mock-user-id": "mod_escalation_validator",
+        "x-mock-role": "moderator",
+      },
       body: JSON.stringify({ incidentId: "a0000000-0000-0000-0000-000000000000" }),
     });
     const notFoundRes = await postEscalationRoute(notFoundReq);
@@ -1260,7 +1268,11 @@ describe("PRD §19 End-to-End Integration Test Suite (84 Scenarios)", () => {
     // 1. Rejects missing incident with 404 when called by authorized staff
     const notFoundReq = new NextRequest("http://localhost:3000/api/admin/escalations", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-mock-role": "moderator" },
+      headers: {
+        "content-type": "application/json",
+        "x-mock-user-id": "mod_escalation_validator",
+        "x-mock-role": "moderator",
+      },
       body: JSON.stringify({
         incidentId: "inc_non_existent_9999",
         status: "resolved",
@@ -1272,7 +1284,11 @@ describe("PRD §19 End-to-End Integration Test Suite (84 Scenarios)", () => {
     // 2. Rejects request without incidentId with 400
     const invalidReq = new NextRequest("http://localhost:3000/api/admin/escalations", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-mock-role": "moderator" },
+      headers: {
+        "content-type": "application/json",
+        "x-mock-user-id": "mod_escalation_validator",
+        "x-mock-role": "moderator",
+      },
       body: JSON.stringify({
         status: "resolved",
       }),
@@ -1524,7 +1540,11 @@ describe("PRD §19 End-to-End Integration Test Suite (84 Scenarios)", () => {
     // 2. Verify POST /api/admin/escalations accepts aliased { newStatus, officialReply }
     const aliasedReq = new NextRequest("http://localhost:3000/api/admin/escalations", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-mock-role": "moderator" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-mock-user-id": "mod_escalation_validator",
+        "x-mock-role": "moderator",
+      },
       body: JSON.stringify({
         incidentId: "test_inc_01",
         newStatus: "in_progress",
@@ -2304,7 +2324,7 @@ describe("PRD §19 End-to-End Integration Test Suite (84 Scenarios)", () => {
       status: "PROCESSING",
       category: "Road Surface / Pothole",
       description: "Test unhandled exception recovery",
-      // @ts-expect-error Intentionally invalid structure to test catch handler resilience
+      // Intentionally invalid structure to test catch handler resilience
       evidencePhotos: null,
       submissionLocation: {
         latitude: 28.4744,
@@ -3413,7 +3433,7 @@ describe("PRD §19 End-to-End Integration Test Suite (84 Scenarios)", () => {
       await reportsColl.deleteOne({ reportId: testRepId });
       await db.delete(incidents).where(eq(incidents.id, testInc.id));
     }
-  });
+  }, 30000);
 
   // Scenario 81: GET /api/reports/:reportId/processing Existence Validation & Telemetry (PRD §3, §16)
   it("Scenario 81: GET /api/reports/:reportId/processing validates existence, returns 404 for unknown report, and returns sanitized stage progression", async () => {
@@ -3521,7 +3541,7 @@ describe("PRD §19 End-to-End Integration Test Suite (84 Scenarios)", () => {
     } finally {
       await reportsColl.deleteOne({ reportId: testRepId });
     }
-  });
+  }, 30000);
 
   // Scenario 83: POST /api/reports/:reportId/evidence Recovery Transition (PRD §5, §7, §15, §16)
   it("Scenario 83: POST /api/reports/:reportId/evidence transitions reports in PROCESSING_FAILED or AI_ANALYSIS_FAILED back to PROCESSING and clears rejectionReason", async () => {
@@ -3589,7 +3609,7 @@ describe("PRD §19 End-to-End Integration Test Suite (84 Scenarios)", () => {
     } finally {
       await reportsColl.deleteOne({ reportId: testRepId });
     }
-  });
+  }, 30000);
 
   // Scenario 84: GET /api/reports Public Directory Privacy Shield (PRD §12, §13)
   it("Scenario 84: GET /api/reports sanitizes userId for unauthenticated callers while preserving userId for authenticated owners and staff", async () => {

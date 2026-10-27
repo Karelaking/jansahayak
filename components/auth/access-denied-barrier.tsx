@@ -14,66 +14,60 @@ interface AccessDeniedBarrierProps {
 }
 
 /**
- * AccessDeniedBarrier
- *
- * Rendered when a civilian reporter navigates to a municipal staff docket
- * (e.g. Moderation, Escalations, PRD Pipeline). Respects PRD §2 & §14B
- * role boundaries without throwing uncaught exceptions.
+ * Rendered when a citizen navigates to a municipal staff area. It explains the
+ * boundary without internal policy references and points back to useful work.
  */
 export function AccessDeniedBarrier({
   pageTitle,
-  requiredTier = "Staff Moderator or Civic Admin",
-  description = "This internal civic docket is reserved for municipal authority officers, field engineers, and verified administrators.",
+  description = "This area is kept for municipal engineers, field officers, and moderators. Citizen accounts keep their own reports and the public map.",
 }: AccessDeniedBarrierProps) {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center p-6">
-      <Card className="max-w-md border border-[#cbd5cb] bg-[#faf9f5] shadow-xs text-center p-6 space-y-4">
-        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-amber-100 text-amber-900 border border-amber-300">
-          <ShieldAlert className="size-6 stroke-[2]" />
+      <Card className="max-w-md border border-[#cbd5cb] bg-[#faf9f5] text-center p-6 space-y-4">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#dce8d9] text-[#17382f] border border-[#cbd5cb]">
+          <ShieldAlert className="size-6 stroke-2" />
         </div>
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-center gap-2">
             <Badge
               variant="outline"
-              className="border-amber-400 bg-amber-50 text-[10px] uppercase font-mono text-amber-900"
+              className="border-[#cbd5cb] bg-[#f5f3ed] text-[11px] uppercase font-mono text-[#486057]"
             >
-              Clearance: {requiredTier}
+              Staff area
             </Badge>
           </div>
           <h2 className="text-lg font-bold text-[#0e2b24] tracking-tight">
-            {pageTitle} Restricted
+            {pageTitle} is for staff
           </h2>
-          <p className="text-xs text-[#486057] leading-relaxed">{description}</p>
+          <p className="text-[13px] leading-relaxed text-[#486057]">{description}</p>
         </div>
 
-        <CardContent className="p-0 pt-2 space-y-2">
-          <div className="rounded-lg bg-[#f5f3ed] border border-[#eef1e9] p-3 text-left text-xs text-[#5c6f66] space-y-1">
-            <p className="font-semibold text-[#17382f]">
-              Civilian Transparency Rights (PRD §2 &amp; §14B):
-            </p>
-            <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
-              <li>Submit roadway hazard reports with geotagged evidence</li>
-              <li>Inspect and manage your submitted reports</li>
-              <li>Cast 500m community quorum verification votes</li>
+        <CardContent className="p-0 pt-4 space-y-2 border-t border-[#eef1e9]">
+          <div className="text-left text-[13px] text-[#5c6f66] space-y-1">
+            <p className="font-semibold text-[#17382f]">What you can do as a citizen:</p>
+            <ul className="list-disc pl-4 space-y-1 text-[12px]">
+              <li>File a hazard report with its location attached</li>
+              <li>Open and track the reports you submitted</li>
+              <li>Confirm hazards reported near you</li>
             </ul>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 pt-2">
             <Button
-              className="flex-1 bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] text-xs h-9"
+              className="min-h-11 bg-[#0e2b24] text-[13px] text-[#f5f3ed] hover:bg-[#1c4b3e] sm:flex-1"
               render={<Link href="/dashboard/reports" />}
             >
-              <FileText className="size-3.5 mr-1" />
-              <span>Go to My Reports</span>
+              <FileText className="size-4" aria-hidden="true" />
+              <span>Your reports</span>
             </Button>
             <Button
               variant="outline"
-              className="flex-1 border-[#cbd5cb] text-[#17382f] text-xs h-9 hover:bg-[#eef1e9]"
+              className="min-h-11 border-[#cbd5cb] bg-white text-[13px] text-[#17382f] hover:bg-[#eef1e9] sm:flex-1"
               render={<Link href="/dashboard/map" />}
             >
-              <MapPin className="size-3.5 mr-1 text-emerald-800" />
-              <span>Explore Safety Map</span>
+              <MapPin className="size-4" aria-hidden="true" />
+              <span>Open the map</span>
             </Button>
           </div>
         </CardContent>

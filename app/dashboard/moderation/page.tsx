@@ -698,29 +698,38 @@ export default function ModerationPage() {
 
                 {/* Photo Evidence View */}
                 <div className="relative rounded-xl overflow-hidden border border-[#cbd5cb] bg-gray-900 aspect-video flex items-center justify-center">
-                  {/* Fallback clean SVG representation if photoId is generic */}
-                  <svg
-                    className="w-full h-full object-cover"
-                    viewBox="0 0 600 400"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <rect width="600" height="400" fill="#374151" />
-                    <rect x="0" y="0" width="600" height="400" fill="#1f2937" opacity="0.4" />
-                    <ellipse cx="300" cy="220" rx="140" ry="80" fill="#111827" />
-                    <ellipse cx="300" cy="220" rx="110" ry="60" fill="#030712" />
-                    <line
-                      x1="520"
-                      y1="0"
-                      x2="520"
-                      y2="400"
-                      stroke="#eab308"
-                      strokeWidth="12"
-                      strokeDasharray="24 16"
-                    />
-                    <circle cx="160" cy="180" r="3" fill="#6b7280" />
-                    <circle cx="440" cy="260" r="4" fill="#6b7280" />
-                  </svg>
+                  {(() => {
+                    const photoUrl =
+                      (inspectingItem.metadata?.photoUrl as string) ||
+                      (inspectingItem.metadata?.downloadUrl as string) ||
+                      (Array.isArray(inspectingItem.metadata?.photos) &&
+                        ((inspectingItem.metadata.photos[0] as Record<string, any>)?.downloadUrl ||
+                          (inspectingItem.metadata.photos[0] as Record<string, any>)?.url)) ||
+                      (inspectingItem.metadata?.fileId
+                        ? `/api/pipeline/photos/${inspectingItem.metadata.fileId}`
+                        : undefined);
+
+                    if (photoUrl) {
+                      return (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={photoUrl}
+                          alt={inspectingItem.title}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      );
+                    }
+
+                    return (
+                      <div className="flex flex-col items-center justify-center text-gray-400 gap-2 p-6 text-center">
+                        <Camera className="size-10 opacity-50 text-emerald-400" />
+                        <span className="text-xs">
+                          In-app camera captures securely archived in MongoDB GridFS cluster
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-black/70 text-white backdrop-blur-xs">

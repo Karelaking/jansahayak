@@ -4,25 +4,57 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSignUp } from "@clerk/nextjs";
-import { Brand } from "@/components/brand";
-import { GoogleIcon } from "@/components/icons";
+
+import { AuthShell, type AuthNotice } from "@/components/auth/auth-shell";
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Spinner } from "@/components/ui/spinner";
-import { UserPlus, AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
+  AuthAlert,
+  AuthDivider,
+  AuthField,
+  AuthHeader,
+  AuthOAuthButton,
+  AuthSubmit,
+  useResendCooldown,
+} from "@/components/auth/auth-ui";
 
 interface CustomSignUpProps {
   hasClerkKeys?: boolean;
 }
+
+const SIGN_UP_NOTICE: AuthNotice = {
+  title: "Add your street to the record",
+  body: "A citizen account keeps your reports and their follow-up in one place, visible to the neighbourhood.",
+  points: [
+    {
+      title: "Report what you see",
+      body: "Pin the location and describe the hazard.",
+    },
+    {
+      title: "Back up neighbours",
+      body: "Confirm reports that are already on the map.",
+    },
+    {
+      title: "Watch the case move",
+      body: "Follow each update from filing to recorded action.",
+    },
+  ],
+  meta: "Pilot area · Greater Noida, Uttar Pradesh",
+};
+
+const VERIFY_NOTICE: AuthNotice = {
+  title: "Confirm your address",
+  body: "The code proves the email belongs to you, so updates about your reports reach the right person.",
+  points: [
+    {
+      title: "Check the inbox",
+      body: "The code goes to the address you just entered.",
+    },
+    {
+      title: "Codes are personal",
+      body: "Share it with no one, including anyone who asks.",
+    },
+  ],
+  meta: "Email verification · JanSahayak SafeStreets",
+};
 
 export function CustomSignUp({ hasClerkKeys }: CustomSignUpProps) {
   const isClerk =
@@ -39,8 +71,7 @@ export function CustomSignUp({ hasClerkKeys }: CustomSignUpProps) {
 }
 
 /**
- * Clerk-Connected Custom Sign-Up Flow
- * Implements Clerk SDK v7+ useSignUp() with Google SSO, email verification, and finalize().
+ * Clerk-connected sign-up: password, Google SSO, and email-code verification.
  */
 function ClerkConnectedSignUp() {
   const router = useRouter();
@@ -69,7 +100,7 @@ function ClerkConnectedSignUp() {
           redirectCallbackUrl: "/sso-callback",
         });
         if (error) {
-          setLocalError(error.message || "Failed to initialize Google authentication.");
+          setLocalError(error.message || "We couldn't start Google sign-up. Please try again.");
           setIsGoogleLoading(false);
         }
       } else if (
@@ -84,12 +115,11 @@ function ClerkConnectedSignUp() {
           redirectUrlComplete: redirectUrl || "/dashboard",
         });
       } else {
-        setLocalError("OAuth authentication service is unavailable.");
+        setLocalError("We couldn't start Google sign-up. Please try again.");
         setIsGoogleLoading(false);
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Google registration encountered an error.";
-      setLocalError(msg);
+    } catch {
+      setLocalError("We couldn't start Google sign-up. Please try again.");
       setIsGoogleLoading(false);
     }
   };
@@ -99,7 +129,7 @@ function ClerkConnectedSignUp() {
     setLocalError(null);
 
     if (!email || !password || !fullName) {
-      setLocalError("Please fill out all required fields.");
+      setLocalError("Fill in your name, email address, and password to continue.");
       return;
     }
 
@@ -117,7 +147,7 @@ function ClerkConnectedSignUp() {
       });
 
       if (error) {
-        setLocalError(error.message || "Sign-up validation failed.");
+        setLocalError(error.message || "Those details could not be used. Check them and try again.");
         return;
       }
 
@@ -128,7 +158,7 @@ function ClerkConnectedSignUp() {
 
       if (signUp.isTransferable) {
         setLocalError(
-          "An account with this email already exists. Sign in instead to continue.",
+          "An account with this email already exists. Sign in instead to keep going.",
         );
         return;
       }
@@ -138,7 +168,7 @@ function ClerkConnectedSignUp() {
         if (sendError) {
           setLocalError(
             sendError.message ||
-              "We could not send a verification code. Please check the address and try again.",
+              "We couldn't send a verification code. Check the address and try again.",
           );
           return;
         }
@@ -148,15 +178,14 @@ function ClerkConnectedSignUp() {
 
       if (signUp.unverifiedFields?.length) {
         setLocalError(
-          `Additional verification is required (${signUp.unverifiedFields.join(", ")}). Please contact support if this persists.`,
+          "This account needs a verification step that isn't available here. Contact the municipal team for help.",
         );
         return;
       }
 
-      setLocalError("Registration could not be completed. Please try again.");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Registration failed.";
-      setLocalError(msg);
+      setLocalError("The account could not be created. Please try again.");
+    } catch {
+      setLocalError("The account could not be created. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -166,16 +195,16 @@ function ClerkConnectedSignUp() {
     e.preventDefault();
     setLocalError(null);
 
-    if (!code) {
-      setLocalError("Please enter the verification code sent to your email.");
+    if (!code.trim()) {
+      setLocalError("Enter the code from your email to continue.");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const { error } = await signUp.verifications.verifyEmailCode({ code });
+      const { error } = await signUp.verifications.verifyEmailCode({ code: code.trim() });
       if (error) {
-        setLocalError(error.message || "Invalid verification code.");
+        setLocalError(error.message || "That code was not accepted. Check it and try again.");
         return;
       }
 
@@ -186,35 +215,44 @@ function ClerkConnectedSignUp() {
 
       if (signUp.isTransferable) {
         setLocalError(
-          "An account with this email already exists. Sign in instead to continue.",
+          "An account with this email already exists. Sign in instead to keep going.",
         );
         return;
       }
 
       if (signUp.unverifiedFields?.includes("email_address")) {
-        setLocalError("That code was not accepted. Check the latest email and try again.");
+        setLocalError("That code was not accepted. Use the latest email and try again.");
         return;
       }
 
-      setLocalError("Registration could not be completed. Please try again.");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Verification failed.";
-      setLocalError(msg);
+      setLocalError("The account could not be created. Please try again.");
+    } catch {
+      setLocalError("Verification could not be completed. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleResendCode = async () => {
+  const handleResendCode = async (): Promise<boolean> => {
     setLocalError(null);
     try {
       const { error } = await signUp.verifications.sendEmailCode();
       if (error) {
-        setLocalError(error.message || "We could not resend the verification code.");
+        setLocalError(error.message || "We couldn't send another code. Try again in a moment.");
+        return false;
       }
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : "We could not resend the code.");
+      return true;
+    } catch {
+      setLocalError("We couldn't send another code. Try again in a moment.");
+      return false;
     }
+  };
+
+  const handleChangeEmail = async () => {
+    setLocalError(null);
+    setCode("");
+    await signUp.reset();
+    setVerifying(false);
   };
 
   const finalizeSignUp = async () => {
@@ -237,20 +275,22 @@ function ClerkConnectedSignUp() {
 
   if (verifying) {
     return (
-      <VerificationLayout
+      <VerificationView
         email={email}
         code={code}
         setCode={setCode}
         onSubmit={handleVerifyCode}
         onResend={handleResendCode}
+        onChangeEmail={handleChangeEmail}
         isLoading={isLoading}
         errorMessage={localError}
+        redirectUrl={redirectUrl}
       />
     );
   }
 
   return (
-    <SignUpLayout
+    <SignUpView
       onSubmit={handleInitialSignUp}
       onGoogleSignUp={handleGoogleSignUp}
       isGoogleLoading={isGoogleLoading}
@@ -265,13 +305,13 @@ function ClerkConnectedSignUp() {
         localError || errors?.global?.[0]?.message || errors?.fields?.emailAddress?.message
       }
       redirectUrl={redirectUrl}
+      isClerkActive
     />
   );
 }
 
 /**
- * Local Bridge Sign-Up Flow
- * Backed by /api/auth/register for local development and integration tests.
+ * Local bridge sign-up, backed by /api/auth/register for development and tests.
  */
 function LocalBridgeSignUp() {
   const router = useRouter();
@@ -283,20 +323,13 @@ function LocalBridgeSignUp() {
   const [password, setPassword] = React.useState("");
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
-  const [isGoogleLoading] = React.useState(false);
-
-  const handleGoogleSignUp = async () => {
-    setLocalError(
-      "Google Authentication requires active Clerk credentials. Please ensure NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is configured.",
-    );
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError(null);
 
     if (!email || !fullName) {
-      setLocalError("Please enter your name and email address.");
+      setLocalError("Enter your name and email address to continue.");
       return;
     }
 
@@ -313,22 +346,21 @@ function LocalBridgeSignUp() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Registration could not be completed.");
+        throw new Error(data.error || "The account could not be created.");
       }
 
       router.push(redirectUrl);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Sign-up failed.";
+      const msg = err instanceof Error ? err.message : "The account could not be created.";
       setLocalError(msg);
       setIsLoading(false);
     }
   };
 
   return (
-    <SignUpLayout
+    <SignUpView
       onSubmit={handleSubmit}
-      onGoogleSignUp={handleGoogleSignUp}
-      isGoogleLoading={isGoogleLoading}
+      isGoogleLoading={false}
       fullName={fullName}
       setFullName={setFullName}
       email={email}
@@ -338,14 +370,12 @@ function LocalBridgeSignUp() {
       isLoading={isLoading}
       errorMessage={localError}
       redirectUrl={redirectUrl}
+      isClerkActive={false}
     />
   );
 }
 
-/**
- * Shared Sign-Up Form Layout
- */
-function SignUpLayout({
+function SignUpView({
   onSubmit,
   onGoogleSignUp,
   isGoogleLoading,
@@ -358,306 +388,199 @@ function SignUpLayout({
   isLoading,
   errorMessage,
   redirectUrl,
+  isClerkActive,
 }: {
   onSubmit: (e: React.FormEvent) => void;
-  onGoogleSignUp: () => void;
+  onGoogleSignUp?: () => void;
   isGoogleLoading: boolean;
   fullName: string;
-  setFullName: (val: string) => void;
+  setFullName: (value: string) => void;
   email: string;
-  setEmail: (val: string) => void;
+  setEmail: (value: string) => void;
   password: string;
-  setPassword: (val: string) => void;
+  setPassword: (value: string) => void;
   isLoading: boolean;
   errorMessage?: string | null;
   redirectUrl: string;
+  isClerkActive: boolean;
 }) {
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 py-8 bg-[#f5f3ed]">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-2">
-          <Link href="/" className="inline-block transition-opacity hover:opacity-85">
-            <Brand />
-          </Link>
-          <h1 className="text-2xl font-bold tracking-tight text-[#0e2b24]">Create Civic Account</h1>
-          <p className="text-xs text-[#486057]">
-            Register as a verified citizen to submit road hazard reports, track repairs, and vote in
-            local consensus.
-          </p>
-        </div>
+    <AuthShell notice={SIGN_UP_NOTICE}>
+      <AuthHeader
+        title="Create your account"
+        description="Report hazards, support neighbours, and follow each case."
+      />
 
-        <Card className="border border-[#cbd5cb] bg-[#faf9f5] shadow-xs">
-          <CardHeader className="pb-3 border-b border-[#eef1e9]">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold text-[#17382f]">
-                Citizen Registration
-              </CardTitle>
-              <Badge
-                variant="outline"
-                className="text-[10px] uppercase font-mono tracking-wider border-[#cbd5cb] text-[#486057]"
-              >
-                Greater Noida
-              </Badge>
-            </div>
-            <CardDescription className="text-xs text-[#5c6f66]">
-              Your citizen account grants you public transparency rights under PRD §2 &amp; §14B.
-            </CardDescription>
-          </CardHeader>
+      {errorMessage ? <AuthAlert tone="error">{errorMessage}</AuthAlert> : null}
 
-          <CardContent className="pt-4">
-            {errorMessage && (
-              <div
-                role="alert"
-                className="mb-4 flex items-start gap-2.5 rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900"
-              >
-                <AlertCircle className="size-4 shrink-0 text-rose-700 mt-0.5" />
-                <span className="leading-relaxed">{errorMessage}</span>
-              </div>
-            )}
+      {onGoogleSignUp ? (
+        <>
+          <AuthOAuthButton
+            loading={isGoogleLoading}
+            disabled={isLoading}
+            onClick={onGoogleSignUp}
+          />
+          <AuthDivider>or use your email</AuthDivider>
+        </>
+      ) : null}
 
-            {/* Google Social Authentication */}
-            <div className="space-y-3 mb-4">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isLoading || isGoogleLoading}
-                onClick={onGoogleSignUp}
-                className="w-full h-9 bg-white hover:bg-[#f0eee6] border-[#cbd5cb] text-[#0e2b24] font-medium text-xs flex items-center justify-center gap-2.5 shadow-xs transition-colors"
-                aria-label="Continue with Google Authentication"
-              >
-                {isGoogleLoading ? (
-                  <Spinner className="size-3.5" />
-                ) : (
-                  <GoogleIcon className="size-4 shrink-0" />
-                )}
-                <span>Continue with Google</span>
-              </Button>
+      <form className="auth-form" onSubmit={onSubmit}>
+        <AuthField
+          id="sign-up-fullname"
+          label="Full name"
+          type="text"
+          autoComplete="name"
+          required
+          placeholder="e.g. Rahul Sharma"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          disabled={isLoading || isGoogleLoading}
+        />
 
-              <div className="relative my-3">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-[#cbd5cb]" />
-                </div>
-                <div className="relative flex justify-center text-[10px] uppercase font-mono tracking-wider">
-                  <span className="bg-[#faf9f5] px-2 text-[#5c6f66]">or register with email</span>
-                </div>
-              </div>
-            </div>
+        <AuthField
+          id="sign-up-email"
+          label="Email address"
+          type="email"
+          autoComplete="email"
+          required
+          placeholder="name@example.in"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={isLoading || isGoogleLoading}
+        />
 
-            <form onSubmit={onSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="sign-up-fullname"
-                  className="block text-xs font-semibold text-[#17382f]"
-                >
-                  Full Name
-                </label>
-                <Input
-                  id="sign-up-fullname"
-                  type="text"
-                  autoComplete="name"
-                  required
-                  placeholder="e.g. Rahul Sharma"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  disabled={isLoading || isGoogleLoading}
-                  className="bg-white border-[#cbd5cb] text-[#17382f] text-xs h-9"
-                />
-              </div>
+        {isClerkActive ? (
+          <AuthField
+            id="sign-up-password"
+            label="Password"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            placeholder="At least 8 characters"
+            hint="Use at least 8 characters."
+            revealable
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={isLoading || isGoogleLoading}
+          />
+        ) : null}
 
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="sign-up-email"
-                  className="block text-xs font-semibold text-[#17382f]"
-                >
-                  Email Address
-                </label>
-                <Input
-                  id="sign-up-email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  placeholder="rahul@example.in"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isLoading || isGoogleLoading}
-                  className="bg-white border-[#cbd5cb] text-[#17382f] text-xs h-9"
-                />
-              </div>
+        <AuthSubmit loading={isLoading} loadingLabel="Creating account…">
+          Create account
+        </AuthSubmit>
+      </form>
 
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="sign-up-password"
-                  className="block text-xs font-semibold text-[#17382f]"
-                >
-                  Create Secure Password
-                </label>
-                <Input
-                  id="sign-up-password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  placeholder="At least 8 characters"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading || isGoogleLoading}
-                  className="bg-white border-[#cbd5cb] text-[#17382f] text-xs h-9"
-                />
-              </div>
+      <p className="auth-support">
+        Public sign-ups are Civilian Reporter accounts. Moderator and administrative access is
+        assigned by the municipal team.
+      </p>
 
-              <div className="rounded-lg border border-[#cbd5cb] bg-[#f0eee6] p-3 text-xs text-[#17382f] space-y-1">
-                <div className="flex items-center gap-1.5 font-semibold text-[#0e2b24]">
-                  <CheckCircle2 className="size-3.5 text-emerald-800 shrink-0" />
-                  <span>Civilian Account Enrollment</span>
-                </div>
-                <p className="text-[11px] text-[#5c6f66] leading-relaxed">
-                  All public registrations are enrolled as Civilian Reporter accounts. Moderator or
-                  Administrative privileges are appointed by designated municipal authorities.
-                </p>
-              </div>
-
-              <Button
-                type="submit"
-                disabled={isLoading || isGoogleLoading}
-                className="w-full bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] text-xs font-medium h-9 shadow-xs"
-              >
-                {isLoading ? (
-                  <span className="flex items-center gap-2">
-                    <Spinner className="size-3.5" />
-                    <span>Registering Account...</span>
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1.5">
-                    <UserPlus className="size-3.5" />
-                    <span>Create Account &amp; Access Dashboard</span>
-                    <ArrowRight className="size-3.5 ml-1" />
-                  </span>
-                )}
-              </Button>
-            </form>
-          </CardContent>
-
-          <CardFooter className="flex items-center justify-between border-t border-[#eef1e9] py-3 text-xs text-[#5c6f66]">
-            <span>Already registered?</span>
-            <Link
-              href={`/sign-in?redirect_url=${encodeURIComponent(redirectUrl)}`}
-              className="font-semibold text-[#0e2b24] hover:underline"
-            >
-              Sign In to Account
-            </Link>
-          </CardFooter>
-        </Card>
-
-        <div className="text-center">
-          <Link href="/" className="text-xs text-[#486057] hover:text-[#0e2b24] transition-colors">
-            ← Back to Public Civic Portal
-          </Link>
-        </div>
+      <div className="auth-footer">
+        <span>Already have an account?</span>
+        <Link
+          href={`/sign-in?redirect_url=${encodeURIComponent(redirectUrl)}`}
+          className="auth-text-link"
+        >
+          Sign in
+        </Link>
       </div>
-    </div>
+    </AuthShell>
   );
 }
 
-/**
- * OTP Email Verification Layout
- */
-function VerificationLayout({
+function VerificationView({
   email,
   code,
   setCode,
   onSubmit,
   onResend,
+  onChangeEmail,
   isLoading,
   errorMessage,
+  redirectUrl,
 }: {
   email: string;
   code: string;
-  setCode: (val: string) => void;
+  setCode: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
-  onResend: () => void;
+  onResend: () => Promise<boolean>;
+  onChangeEmail: () => void;
   isLoading: boolean;
   errorMessage?: string | null;
+  redirectUrl: string;
 }) {
+  const cooldown = useResendCooldown(30);
+  const [resent, setResent] = React.useState(false);
+
+  const handleResend = async () => {
+    setResent(false);
+    const sent = await onResend();
+    if (sent) {
+      setResent(true);
+      cooldown.restart();
+    }
+  };
+
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 py-8 bg-[#f5f3ed]">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-2">
-          <Link href="/" className="inline-block transition-opacity hover:opacity-85">
-            <Brand />
-          </Link>
-          <h1 className="text-2xl font-bold tracking-tight text-[#0e2b24]">Verify Email</h1>
-          <p className="text-xs text-[#486057]">
-            We sent a verification code to <strong>{email}</strong>.
-          </p>
-        </div>
+    <AuthShell notice={VERIFY_NOTICE}>
+      <AuthHeader
+        title="Check your email"
+        description={`We sent a six-digit code to ${email}.`}
+      />
 
-        <Card className="border border-[#cbd5cb] bg-[#faf9f5] shadow-xs">
-          <CardHeader className="pb-3 border-b border-[#eef1e9]">
-            <CardTitle className="text-base font-semibold text-[#17382f]">
-              Enter One-Time Verification Code
-            </CardTitle>
-            <CardDescription className="text-xs text-[#5c6f66]">
-              Check your inbox and enter the 6-digit code.
-            </CardDescription>
-          </CardHeader>
+      {errorMessage ? <AuthAlert tone="error">{errorMessage}</AuthAlert> : null}
 
-          <CardContent className="pt-4">
-            {errorMessage && (
-              <div
-                role="alert"
-                className="mb-4 flex items-start gap-2.5 rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900"
-              >
-                <AlertCircle className="size-4 shrink-0 text-rose-700 mt-0.5" />
-                <span className="leading-relaxed">{errorMessage}</span>
-              </div>
-            )}
+      <form className="auth-form" onSubmit={onSubmit}>
+        <AuthField
+          id="sign-up-code"
+          label="Six-digit code"
+          code
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          autoFocus
+          maxLength={6}
+          required
+          placeholder="123456"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          disabled={isLoading}
+        />
 
-            <form onSubmit={onSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="verification-code"
-                  className="block text-xs font-semibold text-[#17382f]"
-                >
-                  Verification Code
-                </label>
-                <Input
-                  id="verification-code"
-                  type="text"
-                  placeholder="123456"
-                  required
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  disabled={isLoading}
-                  className="bg-white border-[#cbd5cb] text-[#17382f] text-center tracking-widest font-mono text-base h-10"
-                />
-              </div>
+        <AuthSubmit loading={isLoading} loadingLabel="Verifying…">
+          Verify and create account
+        </AuthSubmit>
+      </form>
 
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] text-xs font-medium h-9 shadow-xs"
-              >
-                {isLoading ? (
-                  <span className="flex items-center gap-2">
-                    <Spinner className="size-3.5" />
-                    <span>Verifying...</span>
-                  </span>
-                ) : (
-                  <span>Verify Code &amp; Complete Registration</span>
-                )}
-              </Button>
-            </form>
-
-            <button
-              type="button"
-              onClick={onResend}
-              disabled={isLoading}
-              className="mt-4 w-full text-center text-[11px] font-medium text-[#486057] hover:text-[#0e2b24] disabled:opacity-50"
-            >
-              Resend verification code
-            </button>
-          </CardContent>
-        </Card>
+      <div className="auth-footer">
+        <button
+          type="button"
+          className="auth-inline-action"
+          onClick={handleResend}
+          disabled={isLoading || !cooldown.ready}
+        >
+          {cooldown.ready ? "Resend code" : `Resend code in ${cooldown.remaining}s`}
+        </button>
+        {resent ? <span className="auth-hint">A new code is on its way.</span> : null}
       </div>
-    </div>
+
+      <div className="auth-footer">
+        <button
+          type="button"
+          className="auth-link-button"
+          onClick={onChangeEmail}
+          disabled={isLoading}
+        >
+          Use a different email
+        </button>
+        <span aria-hidden="true">·</span>
+        <Link
+          href={`/sign-in?redirect_url=${encodeURIComponent(redirectUrl)}`}
+          className="auth-text-link"
+        >
+          Back to sign in
+        </Link>
+      </div>
+    </AuthShell>
   );
 }

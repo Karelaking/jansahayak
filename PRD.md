@@ -741,3 +741,256 @@ Before implementation:
 11. Run the full test suite and report any incomplete work or infrastructure dependency honestly.
 
 **Final outcome:** A citizen submits a report and receives instant confirmation (<500ms). A dedicated background worker asynchronously validates evidence, performs AI analysis, verifies geolocation, and synthesizes canonical incidents. Approved incidents appear on the public map, and an official civic report is automatically compiled and emailed to the local municipality. Unverified or rejected submissions remain safely unpinned with transparent citizen auditability.
+
+---
+
+# Part II: Private Organization Civic Impact Dashboard, Civic Problem Adoption, Citizen Verification, and Public Impact Reporting
+
+## 22. Overview and Core Principle
+
+While Part I centers on citizens reporting civic problems and routing them to relevant municipal authorities, Part II introduces the **Private Organization Civic Impact Subsystem**.
+
+Verified private organizations, eligible corporate CSR entities, NGOs, charitable foundations, and approved institutions can register on JanSahayak, discover eligible verified civic problems, propose or adopt an intervention, implement the approved solution under required municipal permissions, submit evidence, and receive public recognition after the resolution claim passes the platform's multi-layered verification process.
+
+The public has full transparency into:
+- The original civic problem.
+- Whether government authorities, private organizations, or both contributed to its resolution.
+- Which private organizations materially contributed (distinguishing funding from implementation).
+- The evidence and verification status.
+- Aggregate performance reports comparing government-led, private-led, and joint resolutions.
+
+### Product Principle
+**Reward verified public benefit, not merely claims, spending, adoption, or publicity.** A simple majority vote or unverified corporate press release must never be treated as conclusive proof of resolution.
+
+---
+
+## 23. Goals and Non-Goals
+
+### 23.1 Goals
+1. Provide an organization registration, onboarding, and verification workflow.
+2. Provide a dedicated, role-protected Organization Dashboard matching the Noticeboard aesthetic.
+3. Make eligible verified civic problems discoverable to approved organizations.
+4. Allow organizations to express interest in, propose solutions for, and adopt eligible problems without monopolizing or prematurely closing them.
+5. Track municipal permissions, commitments, milestones, and deadlines.
+6. Enable organizations to submit resolution claims with structured before/after evidence.
+7. Enable authenticated citizens to review evidence and cast verification votes (`RESOLVED`, `NOT_RESOLVED`, `CANNOT_VERIFY`).
+8. Combine evidence review, citizen feedback, and risk-based official verification (high-risk public infrastructure requires competent authority sign-off).
+9. Accurately attribute roles (government authority, funder, implementer, technical partner, coordinator).
+10. Publish canonical public resolution pages and public organization impact profiles.
+11. Publish periodic, deduplicated aggregate performance reports comparing government-led, private-led, and joint resolutions.
+12. Maintain an immutable, append-only audit trail for all proposals, decisions, votes, and status transitions.
+13. Preserve all existing citizen reporting and municipal escalation workflows.
+
+### 23.2 Non-Goals
+- Payment gateway or direct custody of funds in release 1.
+- Automatic legal certification of CSR eligibility under Companies Act Section 135.
+- Unrestricted or unauthorized private repair of public municipal infrastructure.
+- Paid access to safety data or paid influence over verification outcomes.
+- AI making autonomous final verification decisions without human/citizen verification.
+
+---
+
+## 24. Extended Users and Roles
+
+In addition to `citizen`, `moderator`, `admin`, and `field_official` defined in §14B:
+
+### 24.1 Organization Owner / Administrator (`org_admin`)
+- Registers the organization and submits verification documents.
+- Manages organizational members, project managers, and evidence submitters.
+- Submits adoption proposals and manages accepted projects.
+- Submits resolution claims and views impact analytics.
+- **Restrictions**: Cannot approve its own organization verification, cannot cast organizational votes on its own claims, cannot alter audit logs or force resolution.
+
+### 24.2 Organization Member (`org_member`)
+- Sub-roles: `PROJECT_MANAGER`, `EVIDENCE_SUBMITTER`, `ORG_VIEWER`.
+- Submits progress updates, manages milestones, and attaches photographic evidence.
+
+### 24.3 Citizens (§14B)
+- Review eligible resolution claims and vote `RESOLVED`, `NOT_RESOLVED`, or `CANNOT_VERIFY`.
+- Submit factual feedback or contradictory evidence.
+- Protected by 1-vote-per-user database constraints and anti-brigading safeguards.
+
+### 24.4 Platform Verifiers & Administrators (§12)
+- Review organization identity verification submissions.
+- Review flagged or contested resolution claims and high-risk engineering works.
+- Execute binding administrative decisions with documented audit reasons.
+
+---
+
+## 25. Core User Journeys
+
+### 25.1 Organization Onboarding & Identity Verification
+1. User authenticates via Clerk / session and selects "Register as an Organization".
+2. Submits legal name, registration number (CIN/NGO Darpan/Trust ID), organization type (`corporate`, `ngo`, `foundation`, `contractor`), focus areas, and authorized officer details.
+3. Submits verification documents (secure storage references).
+4. Organization state enters `PENDING_VERIFICATION`.
+5. Platform administrator or verifier reviews and transitions status to `VERIFIED`, `REJECTED`, or `NEEDS_MORE_INFORMATION`. Only `VERIFIED` organizations can adopt problems.
+
+### 25.2 Problem Discovery & Adoption Workflow
+1. Verified organization navigates to "Discover Problems".
+2. Filters verified, published incidents by sector, category, severity, and adoption eligibility.
+3. Reviews required municipal permissions (e.g. asphalt road trenching requires PWD NOC; trash cleanup requires municipal waste cell liaison).
+4. Submits an **Adoption Proposal** detailing proposed role (Funder vs. Implementer), estimated budget, proposed milestones, and completion deadline.
+5. If multiple organizations submit proposals, municipal authorities and platform moderators evaluate them without granting automatic first-come-first-served monopolies.
+6. Approved adoption records scope, milestones, and target completion date. The underlying incident status remains open (`in_progress`); adoption does NOT resolve the incident.
+
+### 25.3 Milestone Execution & Evidence Submission
+1. Organization team tracks project milestones (`PERMISSION_OBTAINED`, `PROCUREMENT_COMPLETE`, `FIELD_WORK_IN_PROGRESS`, `FIELD_WORK_COMPLETED`).
+2. Upon field completion, organization files a **Resolution Claim**.
+3. Attaches structured evidence: before/after photos, completion date, GPS telemetry, contractor details, and municipal work completion sign-off for high-risk work.
+4. Claim transitions to `INITIAL_REVIEW`. Automated and verifier checks ensure photos meet resolution, location, and non-duplication criteria.
+
+### 25.4 Citizen Verification & Voting
+1. Validated claim opens a **Verification Case** with a defined public window (e.g. 72 hours).
+2. Nearby citizens and the original reporter are notified and can inspect the claim on the public resolution page.
+3. Eligible citizens submit one vote:
+   - `RESOLVED` (Work confirmed effective)
+   - `NOT_RESOLVED` (Defect still present or work defective)
+   - `CANNOT_VERIFY` (Excluded from decisive ratio calculation)
+4. Citizens may attach rebuttal photos or comments.
+5. System enforces 1 vote per user ID / verified session via unique database constraints.
+6. If decisive votes reach $\ge 75\%$ positive and minimum participation is satisfied, the case is eligible for final verification.
+7. For high-risk road/structural repairs, qualified municipal authority inspection is mandatory; citizen voting cannot override public engineering safety.
+8. Upon verified approval, the incident transitions to `resolved` with multi-party attribution.
+
+---
+
+## 26. Organization Dashboard Specifications
+
+A dedicated dashboard section (`/dashboard/organization`) matching the Noticeboard aesthetic:
+1. **Overview**: Metric cards for active adoptions, pending claims, verified resolutions, total community impact, and earned recognition tier.
+2. **Discover Problems**: Filterable catalog of public, verified incidents seeking intervention, displaying required permissions and municipal dockets.
+3. **My Adopted Problems**: Project tracker with milestone management, deadline alerts, and team assignments.
+4. **Evidence & Verification**: Workflow portal to assemble, submit, and track resolution claims, citizen vote tallies, and verifier notes.
+5. **Impact & Recognition**: Transparent impact statistics, resolution rate, median completion time, and earned civic partner badges.
+6. **Organization Profile**: Public profile management (logo, mission, focus areas, verified resolutions showcase).
+
+---
+
+## 27. State Machines for Adoption and Resolution
+
+Separate state machines preserve clarity and avoid overloading incident status:
+
+### 27.1 Problem Adoption Status
+`PROPOSAL_SUBMITTED` → `UNDER_REVIEW` → `APPROVED` / `REJECTED` / `NEEDS_CHANGES` → `IN_PROGRESS` → `COMPLETED` / `WITHDRAWN` / `EXPIRED`.
+
+### 27.2 Resolution Claim Status
+`DRAFT` → `SUBMITTED` → `INITIAL_REVIEW` → `UNDER_VERIFICATION` (citizen voting) → `VERIFIED_RESOLVED` / `NOT_VERIFIED` / `INCONCLUSIVE` / `DISPUTED` / `REVOKED`.
+
+### 27.3 Non-Interference Invariant
+An incident's canonical status (`incidents.status`) is updated to `resolved` **only** upon successful transition of a resolution claim to `VERIFIED_RESOLVED` following complete verification.
+
+---
+
+## 28. Multi-Party Attribution Model
+
+Resolutions are classified into four mutually exclusive categories:
+1. `GOVERNMENT_LED`: Resolved by municipal agency/PWD without private intervention.
+2. `PRIVATE_LED`: Fully funded and executed by verified private organization under municipal permission.
+3. `JOINT`: Co-funded or jointly executed by municipal authority and private partner.
+4. `COMMUNITY_OR_OTHER`: Volunteer, citizen-led, or unclassified resolution.
+
+Role-specific contributor attribution:
+- `FUNDER`: Provided financial capital or CSR sponsorship.
+- `IMPLEMENTER`: Carried out physical engineering or field repair work.
+- `TECHNICAL_PARTNER`: Provided equipment, materials, or diagnostic expertise.
+- `GOVERNMENT_AUTHORITY`: Statutory civic authority granting permissions and oversight.
+
+---
+
+## 29. Citizen Verification and Anti-Manipulation Rules
+
+1. **Authentication Requirement**: Voters must be authenticated; anonymous voting is prohibited.
+2. **Unique Active Vote**: Unique constraint on `(verification_case_id, user_id)` guarantees one vote per citizen.
+3. **Neutral Option (`CANNOT_VERIFY`)**: Recorded for auditability but strictly excluded from the decisive positive/negative consensus ratio.
+4. **Consensus Gating**: Suggested pilot threshold is $\ge 75\%$ positive of decisive votes with minimum participation (e.g. 3 local residents).
+5. **High-Risk Public Safety Override**: Road surface asphalt repairs, deep drainage, and structural works require municipal inspection records.
+6. **Conflict of Interest Protection**: Organization members cannot vote on their own organization's claims; self-votes are rejected server-side.
+7. **Dispute & Appeal Workflow**: Rejected claims can be appealed with supplementary evidence; decisions are never erased, but updated with append-only audit entries.
+
+---
+
+## 30. Public Resolution Page & Organization Profiles
+
+1. **Public Resolution Dossier (`/resolutions/:id`)**:
+   - Original citizen hazard report and verified coordinates.
+   - Comprehensive before-and-after photographic evidence slider.
+   - Verified resolution badge with classification (`GOVERNMENT_LED`, `PRIVATE_LED`, `JOINT`).
+   - Contributor attribution callouts (e.g. "Funded by TechCorp India · Implemented by SafeRoads Foundation · Coordinated with GNIDA").
+   - Summary of citizen verification votes and municipal inspection timestamp.
+2. **Public Organization Profile (`/organizations/:slug`)**:
+   - Organization name, verified badge, description, and website.
+   - Verified resolutions portfolio with before/after case studies.
+   - Aggregate verified impact metrics (total hazards resolved, citizens benefited).
+   - Earned badges (`CIVIC_CONTRIBUTOR`, `VERIFIED_IMPACT_PARTNER`, `COMMUNITY_SAFETY_CHAMPION`).
+   - Zero exposure of internal financial details, employee PII, or confidential documents.
+
+---
+
+## 31. Public Impact Reporting & Fair Comparison
+
+Monthly and quarterly public impact dashboards (`/impact`):
+- **Platform Overview**: Total hazards reported, verified, in-progress, and resolved.
+- **Deduplication Invariant**: A problem solved jointly is counted **once** in unique incident resolution totals, preventing double-counting while crediting individual contributors in breakdown tables.
+- **Government Performance**: Reports received, acknowledged, repaired, and median response time.
+- **Private Sector Contributions**: Total CSR/private investments, adopted cases, verified resolutions, and median repair time.
+- **Contextual Transparency**: Category complexity mix and statutory boundaries displayed to prevent unfair comparisons between routine cleanups and heavy civil engineering works.
+
+---
+
+## 32. Data Model Extensions (PostgreSQL + Drizzle)
+
+The following tables extend the relational schema:
+1. `organizations`: Core profile, legal name, organization type, verification status, slug.
+2. `organization_members`: Junction linking `users.id` to `organizations.id` with `role` (`org_admin`, `project_manager`, `evidence_submitter`, `org_viewer`).
+3. `organization_verifications`: Review records, submitted compliance documents, and platform administrator decisions.
+4. `problem_adoptions`: Proposals and approved interventions linking `incidents.id` to `organizations.id`.
+5. `project_milestones`: Discrete deliverables, due dates, and completion timestamps.
+6. `resolution_claims`: Formal claims submitted by organizations asserting hazard repair.
+7. `resolution_evidence`: Before/after media, document links, timestamps, and inspection records.
+8. `verification_cases`: Time-boxed citizen voting and review cases tied to a claim.
+9. `citizen_verification_votes`: Citizen votes (`RESOLVED`, `NOT_RESOLVED`, `CANNOT_VERIFY`) with unique constraint on `(verification_case_id, user_id)`.
+10. `resolution_decisions`: Immutable final verification outcome, policy version, and reason.
+11. `impact_attributions`: Specific role attribution (`FUNDER`, `IMPLEMENTER`, `JOINT`) linking contributors to resolved incidents.
+12. `audit_logs`: Append-only system audit table for all adoption, verification, and attribution mutations.
+
+---
+
+## 33. API Route Specifications
+
+- **Organizations**:
+  - `POST /api/organizations`: Register organization profile.
+  - `GET /api/organizations/me`: Fetch active user's organization.
+  - `POST /api/organizations/me/verification`: Submit verification documentation.
+  - `GET /api/organizations/:slug`: Public profile.
+  - `GET /api/organizations/:id/impact`: Organization impact metrics.
+- **Adoption & Milestones**:
+  - `GET /api/civic-problems/discover`: Discover eligible adoptable hazards.
+  - `POST /api/civic-problems/:id/adoption-proposals`: Submit adoption proposal.
+  - `GET /api/organizations/me/adoptions`: List organization's adoptions.
+  - `GET /api/adoptions/:id`: Fetch adoption details.
+  - `POST /api/adoptions/:id/withdraw`: Withdraw an active adoption.
+  - `POST /api/adoptions/:id/milestones`: Add project milestone.
+  - `PATCH /api/milestones/:id`: Update milestone status.
+- **Evidence & Resolution Claims**:
+  - `POST /api/resolution-claims`: File resolution claim for an adopted incident.
+  - `GET /api/resolution-claims/:id`: Fetch claim and evidence dossier.
+  - `POST /api/resolution-claims/:id/evidence`: Attach photographic evidence.
+- **Citizen Verification Voting**:
+  - `GET /api/verification-cases/:id`: Get active verification case and stats.
+  - `POST /api/verification-cases/:id/votes`: Cast citizen verification vote.
+  - `POST /api/verification-cases/:id/finalize`: Finalize verification outcome based on consensus & risk policy.
+- **Public Impact & Attribution**:
+  - `GET /api/public/impact/summary`: Aggregate platform-wide deduplicated analytics.
+  - `GET /api/public/resolutions/:id`: Canonical public resolution dossier.
+
+---
+
+## 34. Security, Tenant Isolation, and Legal Guardrails
+
+1. **Tenant Isolation**: Organizations can only view and edit their own private drafts, team rosters, and unsubmitted claims.
+2. **Server-Side Authorization**: Every API route verifies role and ownership on the server; client-provided roles or status flags are strictly rejected.
+3. **No Commercial Manipulation**: Impact scores and verification statuses cannot be purchased; paid advertisements are explicitly separated from platform verification metrics.
+4. **Legal Compliance Notice**: Platform verification does not constitute statutory government certification under Indian Law. CSR applicability under Section 135 of Companies Act, 2013 remains subject to independent qualified audit.
+5. **PII Redaction**: Public resolution pages and organization views redact citizen reporter contact info and raw EXIF coordinates of residential locations.
+

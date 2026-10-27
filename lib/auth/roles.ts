@@ -2,7 +2,14 @@
  * Role Definitions & Permissions for JanSahayak
  */
 
-export const USER_ROLES = ["citizen", "moderator", "admin", "field_official"] as const;
+export const USER_ROLES = [
+  "citizen",
+  "moderator",
+  "admin",
+  "field_official",
+  "org_admin",
+  "org_member",
+] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
 
@@ -51,6 +58,10 @@ export const ROLE_PERMISSIONS: Record<
     canViewCivicAnalytics: boolean;
     canManageUsers: boolean;
     canUpdateRepairStatus: boolean;
+    canRegisterOrganization: boolean;
+    canAdoptProblems: boolean;
+    canSubmitResolutionClaim: boolean;
+    canVerifyOrganization: boolean;
   }
 > = {
   citizen: {
@@ -65,6 +76,10 @@ export const ROLE_PERMISSIONS: Record<
     canViewCivicAnalytics: false,
     canManageUsers: false,
     canUpdateRepairStatus: false,
+    canRegisterOrganization: true,
+    canAdoptProblems: false,
+    canSubmitResolutionClaim: false,
+    canVerifyOrganization: false,
   },
   moderator: {
     canSubmitReport: true,
@@ -78,6 +93,10 @@ export const ROLE_PERMISSIONS: Record<
     canViewCivicAnalytics: true,
     canManageUsers: false,
     canUpdateRepairStatus: false,
+    canRegisterOrganization: true,
+    canAdoptProblems: false,
+    canSubmitResolutionClaim: false,
+    canVerifyOrganization: true,
   },
   admin: {
     canSubmitReport: true,
@@ -91,6 +110,10 @@ export const ROLE_PERMISSIONS: Record<
     canViewCivicAnalytics: true,
     canManageUsers: true,
     canUpdateRepairStatus: true,
+    canRegisterOrganization: true,
+    canAdoptProblems: true,
+    canSubmitResolutionClaim: true,
+    canVerifyOrganization: true,
   },
   field_official: {
     canSubmitReport: true,
@@ -104,6 +127,44 @@ export const ROLE_PERMISSIONS: Record<
     canViewCivicAnalytics: true,
     canManageUsers: false,
     canUpdateRepairStatus: true,
+    canRegisterOrganization: false,
+    canAdoptProblems: false,
+    canSubmitResolutionClaim: false,
+    canVerifyOrganization: false,
+  },
+  org_admin: {
+    canSubmitReport: true,
+    canViewPublicMap: true,
+    canVoteOnIncident: true,
+    canSubscribeToUpdates: true,
+    canViewModerationQueue: false,
+    canApproveRejectIncident: false,
+    canMergeIncidents: false,
+    canPublishMapPin: false,
+    canViewCivicAnalytics: true,
+    canManageUsers: false,
+    canUpdateRepairStatus: false,
+    canRegisterOrganization: true,
+    canAdoptProblems: true,
+    canSubmitResolutionClaim: true,
+    canVerifyOrganization: false,
+  },
+  org_member: {
+    canSubmitReport: true,
+    canViewPublicMap: true,
+    canVoteOnIncident: true,
+    canSubscribeToUpdates: true,
+    canViewModerationQueue: false,
+    canApproveRejectIncident: false,
+    canMergeIncidents: false,
+    canPublishMapPin: false,
+    canViewCivicAnalytics: true,
+    canManageUsers: false,
+    canUpdateRepairStatus: false,
+    canRegisterOrganization: false,
+    canAdoptProblems: true,
+    canSubmitResolutionClaim: true,
+    canVerifyOrganization: false,
   },
 };
 
@@ -140,10 +201,16 @@ export function canAppointRole(
     };
   }
 
-  if (targetRole !== "citizen" && targetRole !== "moderator" && targetRole !== "admin") {
+  if (
+    targetRole !== "citizen" &&
+    targetRole !== "moderator" &&
+    targetRole !== "admin" &&
+    targetRole !== "org_admin" &&
+    targetRole !== "org_member"
+  ) {
     return {
       allowed: false,
-      reason: `Invalid target role '${targetRole}'. Must be citizen, moderator, or admin.`,
+      reason: `Invalid target role '${targetRole}'. Must be citizen, moderator, admin, org_admin, or org_member.`,
     };
   }
 
