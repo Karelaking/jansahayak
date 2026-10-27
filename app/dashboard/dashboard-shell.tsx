@@ -112,15 +112,19 @@ export function DashboardShell({
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [prevPathname, setPrevPathname] = React.useState(pathname);
+
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
+    if (mobileOpen) {
+      setMobileOpen(false);
+    }
+  }
 
   const userRole = session.role;
   const userEmail = session.email;
   const userFullName = session.fullName;
   const userAvatar = session.avatarUrl;
-
-  React.useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
 
   const handleSignOut = async () => {
     try {
@@ -162,16 +166,16 @@ export function DashboardShell({
           >
             <Brand />
           </Link>
-          <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/60 pt-2">
-            <span>Access Tier:</span>
+          <div className="mt-2.5 flex items-center justify-between text-xs text-[#5c6f66] border-t border-[#cbd5cb]/60 pt-2">
+            <span className="font-medium">Access Tier:</span>
             <Badge
               variant="outline"
               className={`text-[10px] font-semibold uppercase tracking-wider ${
                 userRole === "admin"
-                  ? "bg-rose-100 text-rose-900 border-rose-300"
+                  ? "bg-[#f3d9cf] text-[#8c2e1b] border-[#e4876f]/50"
                   : userRole === "moderator"
-                    ? "bg-blue-100 text-blue-900 border-blue-300"
-                    : "bg-emerald-100 text-emerald-900 border-emerald-300"
+                    ? "bg-[#dce8d9] text-[#0e2b24] border-[#cbd5cb]"
+                    : "bg-[#eef1e9] text-[#17382f] border-[#d2d9d0]"
               }`}
             >
               {userRole}
@@ -180,7 +184,7 @@ export function DashboardShell({
         </div>
 
         <div className="px-2">
-          <div className="px-3 pb-2 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+          <div className="px-3 pb-2 text-[10px] font-bold tracking-[0.12em] text-[#5c6f66] uppercase">
             {isStaff ? "Municipal Workspace" : "Citizen Workspace"}
           </div>
           <nav className="flex flex-col gap-0.5" aria-label="Dashboard navigation">
@@ -197,8 +201,8 @@ export function DashboardShell({
                   size="default"
                   className={`w-full justify-start gap-3 rounded-lg px-3 h-10 md:h-9 text-sm transition-all ${
                     isActive
-                      ? "bg-secondary/80 font-medium text-foreground shadow-xs"
-                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                      ? "bg-[#eef1e9] font-semibold text-[#0e2b24] shadow-xs"
+                      : "text-[#486057] hover:bg-[#eef1e9]/60 hover:text-[#17382f]"
                   }`}
                   render={<Link href={item.href} />}
                 >
@@ -238,10 +242,10 @@ export function DashboardShell({
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold text-[11px] text-foreground">
+              <p className="truncate font-semibold text-xs text-[#17382f]">
                 {userFullName || userEmail || "Civic account"}
               </p>
-              <p className="truncate text-[10px] text-muted-foreground">
+              <p className="truncate text-[11px] text-[#5c6f66]">
                 {userEmail || (isStaff ? "Municipal staff" : "Citizen account")}
               </p>
             </div>
@@ -251,7 +255,7 @@ export function DashboardShell({
             variant="ghost"
             size="xs"
             onClick={handleSignOut}
-            className="w-full justify-start gap-1.5 text-xs text-rose-700 hover:text-rose-800 hover:bg-rose-50 h-8 md:h-7"
+            className="w-full justify-start gap-1.5 text-xs text-[#8c2e1b] hover:text-[#8c2e1b] hover:bg-[#f3d9cf]/40 h-8 md:h-7"
           >
             <LogOut className="size-3" />
             <span>Sign Out</span>
@@ -262,7 +266,7 @@ export function DashboardShell({
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start gap-2.5 text-xs text-muted-foreground hover:text-foreground h-9 md:h-8"
+            className="w-full justify-start gap-2.5 text-xs text-[#486057] hover:bg-[#eef1e9]/60 hover:text-[#17382f] h-9 md:h-8"
             render={<Link href="/" />}
           >
             <ExternalLink className="size-3.5" />
@@ -281,7 +285,7 @@ export function DashboardShell({
         </div>
 
         <div className="px-3 pt-1">
-          <p className="text-[11px] text-muted-foreground/80">Greater Noida Pilot · v0.9</p>
+          <p className="text-xs text-[#5c6f66]">Greater Noida Pilot · v0.9</p>
         </div>
       </div>
     </div>
