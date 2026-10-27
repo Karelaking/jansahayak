@@ -20,29 +20,38 @@ export default function DashboardMapPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* ── Page Header ─── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="font-heading text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground">
               Geospatial Operations Map
             </h1>
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-[11px] font-mono">
               Live Published Incidents
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
             Geotagged hazards, pedestrian accident risk hotspots, and repair cluster mapping.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-1.5" render={<Link href="/map" />}>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 flex-1 sm:flex-none h-9 sm:h-8 text-xs justify-center"
+            render={<Link href="/map" />}
+          >
             <span>Full-Screen Map</span>
             <ExternalLink className="size-3.5" />
           </Button>
 
-          <Button size="sm" render={<Link href="/reports/new" />}>
-            <Plus className="size-3.5" />
+          <Button
+            size="sm"
+            className="flex-1 sm:flex-none h-9 sm:h-8 text-xs font-medium justify-center bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed]"
+            render={<Link href="/reports/new" />}
+          >
+            <Plus className="size-3.5 mr-1" />
             <span>Pin Hazard</span>
           </Button>
         </div>
@@ -50,10 +59,10 @@ export default function DashboardMapPage() {
 
       {/* ── Map Container Card ─── */}
       <Card className="overflow-hidden shadow-xs">
-        <CardHeader className="border-b border-border pb-3">
+        <CardHeader className="border-b border-border pb-3 p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-base">Greater Noida Road Safety Radar</CardTitle>
+              <CardTitle className="text-base font-semibold">Greater Noida Road Safety Radar</CardTitle>
               <CardDescription className="text-xs">
                 Interactive tiles centered on Pari Chowk and Knowledge Park corridor.
               </CardDescription>
@@ -62,15 +71,15 @@ export default function DashboardMapPage() {
         </CardHeader>
 
         <CardContent className="p-0">
-          <div className="relative h-[640px] w-full">
+          <div className="relative h-[55vh] sm:h-[62vh] md:h-[640px] min-h-[380px] w-full">
             <LiveHazardMap showHeroOverlay={false} />
           </div>
         </CardContent>
 
-        <CardFooter className="border-t border-border px-6 py-3 bg-muted/20 text-xs text-muted-foreground">
-          <div className="flex flex-wrap items-center justify-between gap-4 w-full">
-            <span>Click any pin to inspect incident history and authority dispatch status.</span>
-            <div className="flex items-center gap-3">
+        <CardFooter className="border-t border-border px-4 py-3 sm:px-6 bg-muted/20 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+            <span className="text-[11px] sm:text-xs">Click any pin to inspect incident history and authority dispatch status.</span>
+            <div className="flex items-center gap-3 text-[11px] sm:text-xs">
               <span className="flex items-center gap-1.5">
                 <span className="size-2 rounded-full bg-[#e4876f]" />
                 <span>High Urgency</span>

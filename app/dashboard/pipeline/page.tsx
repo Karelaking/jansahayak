@@ -200,7 +200,6 @@ export default function PipelineInspectionPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: "citizen_dev",
           category,
           description,
           photos,
@@ -255,7 +254,6 @@ export default function PipelineInspectionPage() {
           success: decision === "approve",
           data: {
             decision,
-            moderatorId: "staff_moderator_session",
             notes: "Processed via JanSahayak PRD Pipeline Engine",
             evaluatedAt: new Date().toISOString(),
           },
@@ -449,31 +447,31 @@ export default function PipelineInspectionPage() {
                   retry backoff.
                 </CardDescription>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={fetchOutboxStatus}
-                  className="text-xs h-8"
+                  className="text-xs h-9 sm:h-8 flex-1 sm:flex-none justify-center"
                 >
                   <RefreshCw className="h-3.5 w-3.5 mr-1" />
-                  Refresh
+                  <span>Refresh</span>
                 </Button>
                 <Button
                   size="sm"
                   onClick={handleTriggerOutboxWorker}
                   disabled={isProcessingOutbox}
-                  className="bg-emerald-800 hover:bg-emerald-900 text-white text-xs h-8"
+                  className="bg-emerald-800 hover:bg-emerald-900 text-white text-xs h-9 sm:h-8 flex-1 sm:flex-none justify-center"
                 >
                   {isProcessingOutbox ? (
                     <>
                       <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
-                      Processing...
+                      <span>Processing...</span>
                     </>
                   ) : (
                     <>
                       <Send className="h-3.5 w-3.5 mr-1" />
-                      Process Outbox Batch
+                      <span>Process Outbox</span>
                     </>
                   )}
                 </Button>

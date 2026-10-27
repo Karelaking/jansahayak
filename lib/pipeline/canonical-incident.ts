@@ -7,6 +7,41 @@ import {
 import { RawReportDocument, getReportsCollection } from "@/lib/db/mongodb";
 import { db, users, incidents, incidentReports, outboxEvents, Incident } from "@/lib/db";
 import { eq, sql } from "drizzle-orm";
+import { ANONYMOUS_USER_ID } from "@/lib/auth/roles";
+import { isTestEnvironment } from "@/lib/auth/clerk-config";
+
+/**
+ * Resolves the reporter that should be linked into `incident_reports`.
+ *
+ * Only identities that actually exist in the user directory are linked. Outside
+ * the automated harness a missing row resolves to null (the column is nullable)
+ * instead of inventing a placeholder citizen. Tests may materialise a synthetic
+ * `@test.invalid` row so foreign-key expectations keep working.
+ */
+async function resolveReporterUserId(reportUserId: string | null | undefined): Promise<string | null> {
+  if (!reportUserId || reportUserId === ANONYMOUS_USER_ID) return null;
+
+  const [existing] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, reportUserId))
+    .limit(1);
+
+  if (existing) return existing.id;
+  if (!isTestEnvironment()) return null;
+
+  await db
+    .insert(users)
+    .values({
+      id: reportUserId,
+      email: `${reportUserId}@test.invalid`,
+      fullName: reportUserId,
+      role: "citizen",
+    })
+    .onConflictDoNothing();
+
+  return reportUserId;
+}
 
 /**
  * Stage 6: Canonical Incident Creation & Association Worker
@@ -26,18 +61,8 @@ export async function executeStage6CanonicalIncident(
     const lng = location.centroidLongitude;
     const uncertainty = location.spatialUncertaintyMeters.toString();
 
-    // Ensure reporting user exists in users table to satisfy foreign key
-    if (report.userId) {
-      await db
-        .insert(users)
-        .values({
-          id: report.userId,
-          email: `${report.userId}@jansahayak.internal`,
-          fullName: "JanSahayak Citizen / Moderator",
-          role: "citizen",
-        })
-        .onConflictDoNothing();
-    }
+    // Resolve the reporter without fabricating civic accounts for unknown IDs.
+    const reporterUserId = await resolveReporterUserId(report.userId);
 
     // Case 1: Merging with an existing Canonical Incident
     if (matching.action === "AUTO_MERGE" && matching.matchedIncidentId) {
@@ -86,7 +111,7 @@ export async function executeStage6CanonicalIncident(
       await db.insert(incidentReports).values({
         incidentId,
         reportId: report.reportId,
-        userId: report.userId,
+        userId: reporterUserId,
         matchScore: matching.matchScore ? matching.matchScore.toString() : "0.9500",
         matchReason: matching.matchReason || "Strict 9-point automatic merge",
         isPrimaryReport: false,
@@ -177,7 +202,7 @@ export async function executeStage6CanonicalIncident(
     await db.insert(incidentReports).values({
       incidentId: created.id,
       reportId: report.reportId,
-      userId: report.userId,
+      userId: reporterUserId,
       matchScore: "1.0000",
       matchReason: "Initial primary citizen report",
       isPrimaryReport: true,

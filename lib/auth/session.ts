@@ -1,191 +1,188 @@
-import { UserRole, UserSession } from "./roles";
+import { ANONYMOUS_USER_ID, normalizeUserRole, parseUserRole, UserRole, UserSession } from "./roles";
 import { db, users } from "@/lib/db";
 import { eq } from "drizzle-orm";
-import { cookies, headers } from "next/headers";
-import { findUserById } from "./user-store";
+import { cookies } from "next/headers";
 import { auth, currentUser } from "@clerk/nextjs/server";
+import {
+  isClerkBackendEnabled,
+  isLocalAuthBridgeEnabled,
+  isTestEnvironment,
+} from "./clerk-config";
 
 /**
  * Server-side helper to retrieve the current authenticated user session.
- * Integrates directly with Clerk JS while maintaining a real PostgreSQL-backed
- * session bridge for local development without mock data.
+ *
+ * Clerk is the source of truth whenever it is configured. Outside the automated
+ * test harness the only trusted inputs are Clerk's own session and (when Clerk is
+ * absent in local development) the server-issued local bridge cookie.
+ *
+ * Test-only `x-user-id` / `x-mock-role` headers remain supported so the integration
+ * suite can exercise role-based routes without network calls to Clerk.
  */
-export async function getCurrentUserSession(req?: Request): Promise<UserSession> {
-  // 1. Check if Clerk environment variables are configured
-  const clerkPubKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-  const clerkSecret = process.env.CLERK_SECRET_KEY;
-  const isClerkConfigured = Boolean(
-    clerkPubKey &&
-    clerkSecret &&
-    clerkPubKey.startsWith("pk_") &&
-    !clerkPubKey.includes("placeholder"),
-  );
 
-  if (isClerkConfigured) {
-    try {
-      const { userId } = await auth();
+const TEST_EMAIL_DOMAIN = "test.invalid";
 
-      if (userId) {
-        let clerkUser = null;
-        try {
-          clerkUser = await currentUser();
-        } catch (fetchErr) {
-          console.warn("Clerk currentUser() retrieval note:", fetchErr);
-        }
-
-        const email =
-          clerkUser?.emailAddresses?.[0]?.emailAddress ||
-          clerkUser?.primaryEmailAddress?.emailAddress ||
-          "";
-
-        const firstName = clerkUser?.firstName?.trim() || "";
-        const lastName = clerkUser?.lastName?.trim() || "";
-        const fullName =
-          [firstName, lastName].filter(Boolean).join(" ") || clerkUser?.username || undefined;
-
-        const avatarUrl = clerkUser?.imageUrl || undefined;
-        const role = (clerkUser?.publicMetadata?.role as UserRole) || "citizen";
-
-        // Upsert into PostgreSQL users table so relational constraints and dashboards match
-        try {
-          await db
-            .insert(users)
-            .values({
-              id: userId,
-              email: email || `${userId}@jansahayak.in`,
-              fullName: fullName || null,
-              role,
-              avatarUrl: avatarUrl || null,
-              updatedAt: new Date(),
-            })
-            .onConflictDoUpdate({
-              target: users.id,
-              set: {
-                email: email || `${userId}@jansahayak.in`,
-                fullName: fullName || null,
-                role,
-                avatarUrl: avatarUrl || null,
-                updatedAt: new Date(),
-              },
-            });
-        } catch {
-          // Non-blocking in case DB is warming up
-        }
-
-        return {
-          userId,
-          email: email || `${userId}@jansahayak.in`,
-          fullName,
-          role,
-          avatarUrl,
-          isAuthenticated: true,
-        };
-      }
-    } catch (err) {
-      console.warn("Clerk auth evaluation fallback:", err);
-    }
-  }
-
-  // 2. Explicit Test Suite Headers (for automated Vitest / CI tests)
-  let headerUserId: string | undefined;
-  let headerRole: string | undefined;
-
-  if (req) {
-    headerUserId = req.headers.get("x-user-id") || req.headers.get("x-mock-user-id") || undefined;
-    headerRole = req.headers.get("x-user-role") || req.headers.get("x-mock-role") || undefined;
-  }
-
-  if (!headerUserId && !headerRole) {
-    try {
-      const headerStore = await headers();
-      headerUserId = headerStore.get("x-user-id") || headerStore.get("x-mock-user-id") || undefined;
-      headerRole = headerStore.get("x-user-role") || headerStore.get("x-mock-role") || undefined;
-    } catch {
-      // Outside request scope
-    }
-  }
-
-  if (headerUserId) {
-    const role = (headerRole as UserRole) || "citizen";
-    return {
-      userId: headerUserId,
-      email: `${headerUserId}@jansahayak.internal`,
-      fullName: headerUserId.includes("admin")
-        ? "Civic Administrator"
-        : headerUserId.includes("mod")
-          ? "Civic Staff Moderator"
-          : "Verified Citizen",
-      role,
-      isAuthenticated: true,
-    };
-  }
-
-  // If Clerk is active and no test header is provided, do NOT fall back to stale mock cookies
-  if (isClerkConfigured) {
-    return {
-      userId: "",
-      email: "",
-      role: "citizen",
-      isAuthenticated: false,
-    };
-  }
-
-  // 3. Offline Local Bridge (Only used when Clerk keys are not configured)
-  let cookieUserId: string | undefined;
-  let cookieRole: string | undefined;
-  try {
-    const cookieStore = await cookies();
-    cookieUserId = cookieStore.get("jansahayak_user_id")?.value;
-    cookieRole = cookieStore.get("jansahayak_role")?.value;
-  } catch {
-    // Outside request scope
-  }
-
-  const resolvedUserId = cookieUserId;
-  const resolvedRole = cookieRole as UserRole | undefined;
-
-  if (resolvedUserId) {
-    try {
-      const [dbUser] = await db.select().from(users).where(eq(users.id, resolvedUserId)).limit(1);
-
-      if (dbUser) {
-        return {
-          userId: dbUser.id,
-          email: dbUser.email,
-          fullName: dbUser.fullName || undefined,
-          role: (dbUser.role as UserRole) || resolvedRole || "citizen",
-          avatarUrl: dbUser.avatarUrl || undefined,
-          isAuthenticated: true,
-        };
-      }
-    } catch {
-      // Non-blocking
-    }
-
-    try {
-      const storeUser = await findUserById(resolvedUserId);
-      if (storeUser) {
-        return {
-          userId: storeUser.id,
-          email: storeUser.email,
-          fullName: storeUser.fullName || undefined,
-          role: storeUser.role || resolvedRole || "citizen",
-          avatarUrl: storeUser.avatarUrl || undefined,
-          isAuthenticated: true,
-        };
-      }
-    } catch {
-      // Non-blocking
-    }
-  }
-
-  // 4. Default Unauthenticated Session
+function emptySession(): UserSession {
   return {
     userId: "",
     email: "",
     role: "citizen",
     isAuthenticated: false,
   };
+}
+
+function getTestHeaderIdentity(req?: Request): {
+  userId?: string;
+  role?: string;
+} {
+  if (!req) return {};
+  return {
+    userId: req.headers.get("x-user-id") || req.headers.get("x-mock-user-id") || undefined,
+    role: req.headers.get("x-user-role") || req.headers.get("x-mock-role") || undefined,
+  };
+}
+
+async function readClerkSession(userId: string): Promise<UserSession> {
+  let clerkUser = null;
+  try {
+    clerkUser = await currentUser();
+  } catch (error) {
+    console.warn("Clerk currentUser() retrieval note:", error);
+  }
+
+  const primaryEmail =
+    clerkUser?.primaryEmailAddress?.emailAddress ||
+    clerkUser?.emailAddresses?.[0]?.emailAddress ||
+    "";
+  const fullName =
+    [clerkUser?.firstName?.trim(), clerkUser?.lastName?.trim()].filter(Boolean).join(" ") ||
+    clerkUser?.username ||
+    undefined;
+  const avatarUrl = clerkUser?.imageUrl || undefined;
+
+  // Preserve a role that was previously granted in Postgres when Clerk metadata
+  // has not been populated yet. Never reset staff accounts back to "citizen".
+  let existingUser: typeof users.$inferSelect | undefined;
+  try {
+    const rows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    existingUser = rows[0];
+  } catch {
+    // Non-blocking: the database may still be warming up.
+  }
+
+  const role =
+    parseUserRole(clerkUser?.publicMetadata?.role) ??
+    parseUserRole(existingUser?.role) ??
+    ("citizen" satisfies UserRole);
+
+  const email = primaryEmail || existingUser?.email || "";
+  const resolvedFullName = fullName || existingUser?.fullName || undefined;
+
+  if (email) {
+    try {
+      await db
+        .insert(users)
+        .values({
+          id: userId,
+          email,
+          fullName: resolvedFullName || null,
+          role,
+          avatarUrl: avatarUrl || null,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: users.id,
+          set: {
+            email,
+            fullName: resolvedFullName || null,
+            role,
+            avatarUrl: avatarUrl || null,
+            updatedAt: new Date(),
+          },
+        });
+    } catch {
+      // Non-blocking in case the database is unavailable.
+    }
+  }
+
+  return {
+    userId,
+    email,
+    fullName: resolvedFullName,
+    role,
+    avatarUrl,
+    isAuthenticated: true,
+  };
+}
+
+export async function getCurrentUserSession(req?: Request): Promise<UserSession> {
+  // 1. Automated test harness: trust explicit mock headers, never Clerk.
+  if (isTestEnvironment()) {
+    const { userId: headerUserId, role: headerRole } = getTestHeaderIdentity(req);
+
+    if (headerUserId) {
+      return {
+        userId: headerUserId,
+        email: `${headerUserId}@${TEST_EMAIL_DOMAIN}`,
+        fullName: undefined,
+        role: normalizeUserRole(headerRole),
+        isAuthenticated: true,
+      };
+    }
+
+    // A bare role header without an identity is intentionally unauthenticated.
+    return emptySession();
+  }
+
+  // 2. Clerk is configured: the session is the only identity source.
+  if (isClerkBackendEnabled()) {
+    try {
+      const { userId } = await auth();
+      if (userId) {
+        return await readClerkSession(userId);
+      }
+    } catch (error) {
+      console.warn("Clerk auth evaluation failed:", error);
+    }
+
+    return emptySession();
+  }
+
+  // 3. Local development bridge (Clerk not configured, non-production only).
+  if (!isLocalAuthBridgeEnabled()) {
+    return emptySession();
+  }
+
+  let cookieUserId: string | undefined;
+  try {
+    const cookieStore = await cookies();
+    cookieUserId = cookieStore.get("jansahayak_user_id")?.value;
+  } catch {
+    // Outside request scope.
+  }
+
+  if (!cookieUserId || cookieUserId === ANONYMOUS_USER_ID) {
+    return emptySession();
+  }
+
+  try {
+    const [dbUser] = await db.select().from(users).where(eq(users.id, cookieUserId)).limit(1);
+
+    if (dbUser) {
+      return {
+        userId: dbUser.id,
+        email: dbUser.email,
+        fullName: dbUser.fullName || undefined,
+        role: normalizeUserRole(dbUser.role),
+        avatarUrl: dbUser.avatarUrl || undefined,
+        isAuthenticated: true,
+      };
+    }
+  } catch {
+    // Non-blocking: database unavailable.
+  }
+
+  return emptySession();
 }
 
 /**

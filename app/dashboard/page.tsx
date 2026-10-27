@@ -46,6 +46,8 @@ import {
   EmptyContent,
 } from "@/components/ui/empty";
 import type { HazardReport } from "@/lib/types/hazard";
+import { hasPermission } from "@/lib/auth/roles";
+import { useDashboardSession } from "./dashboard-shell";
 
 function getStatusBadge(status: string, publicOpinionStatus?: string) {
   if (publicOpinionStatus === "reopened_by_community") {
@@ -144,6 +146,11 @@ function getSeverityBadge(severity: string) {
 }
 
 export default function DashboardPage() {
+  const session = useDashboardSession();
+  const canViewModeration = hasPermission(session.role, "canViewModerationQueue");
+  const canViewAnalytics = hasPermission(session.role, "canViewCivicAnalytics");
+  const showStaffPanel = canViewModeration || canViewAnalytics;
+
   const [reports, setReports] = React.useState<HazardReport[]>([]);
   const [pendingReviewCount, setPendingReviewCount] = React.useState(0);
   const [activeTab, setActiveTab] = React.useState("all");
@@ -153,9 +160,10 @@ export default function DashboardPage() {
 
     async function fetchDashboardData() {
       try {
+        // The review queue is staff-only; citizens would only receive a 403.
         const [incidentsRes, reviewRes] = await Promise.all([
           fetch("/api/map/incidents"),
-          fetch("/api/admin/review-queue"),
+          canViewModeration ? fetch("/api/admin/review-queue") : Promise.resolve(null),
         ]);
 
         if (incidentsRes.ok) {
@@ -165,7 +173,7 @@ export default function DashboardPage() {
           }
         }
 
-        if (reviewRes.ok) {
+        if (reviewRes?.ok) {
           const revData = await reviewRes.json();
           if (active && revData.success && Array.isArray(revData.items)) {
             setPendingReviewCount(revData.items.length);
@@ -181,7 +189,7 @@ export default function DashboardPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [canViewModeration]);
 
   const filteredReports = React.useMemo(() => {
     if (activeTab === "all") return reports;
@@ -197,33 +205,37 @@ export default function DashboardPage() {
   }, [reports, activeTab]);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5 sm:gap-6">
       {/* ── Page Header ─── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+            <h1 className="font-heading text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground">
               Civic Operations Overview
             </h1>
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-[11px] font-mono">
               Live Database
             </Badge>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
             Greater Noida road-safety hazard command center · Monitoring, triage &amp; SLA tracking
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" className="shrink-0 h-8" render={<Link href="/reports/new" />}>
-            <Plus className="size-3.5" />
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button
+            size="sm"
+            className="w-full sm:w-auto h-9 sm:h-8 text-xs font-medium bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] justify-center"
+            render={<Link href="/reports/new" />}
+          >
+            <Plus className="size-3.5 mr-1" />
             <span>Report Hazard</span>
           </Button>
         </div>
       </div>
 
       {/* ── KPI Telemetry Grid ─── */}
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-5 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
         <Card className="shadow-xs">
           <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
             <div className="flex items-center justify-between">
@@ -252,12 +264,16 @@ export default function DashboardPage() {
               <Clock className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
             </div>
             <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
-              {pendingReviewCount}
+              {canViewModeration ? pendingReviewCount : "—"}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 sm:p-4 pt-0">
             <p className="text-[10px] sm:text-xs text-muted-foreground">
-              {pendingReviewCount > 0 ? "Awaiting moderator review" : "Review queue clean"}
+              {!canViewModeration
+                ? "Visible to municipal staff"
+                : pendingReviewCount > 0
+                  ? "Awaiting moderator review"
+                  : "Review queue clean"}
             </p>
           </CardContent>
         </Card>
@@ -331,9 +347,9 @@ export default function DashboardPage() {
       {/* ── Main Dashboard Workspace Grid ─── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Left: Recent Reports Table (8 cols) */}
-        <div className="flex flex-col gap-6 lg:col-span-8">
+        <div className={`flex flex-col gap-6 ${showStaffPanel ? "lg:col-span-8" : "lg:col-span-12"}`}>
           <Card className="shadow-xs">
-            <CardHeader className="border-b border-border pb-3">
+            <CardHeader className="border-b border-border pb-3.5 p-4 sm:p-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <CardTitle className="text-base font-semibold">
@@ -345,21 +361,23 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <TabsList className="h-8">
-                      <TabsTrigger value="all">All</TabsTrigger>
-                      <TabsTrigger value="open">Open</TabsTrigger>
-                      <TabsTrigger value="in-progress">In Progress</TabsTrigger>
-                      <TabsTrigger value="escalated">Escalated</TabsTrigger>
-                      <TabsTrigger value="disputed">Disputed</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
+                  <div className="w-full overflow-x-auto no-scrollbar -mx-1 px-1 sm:w-auto">
+                    <Tabs value={activeTab} onValueChange={setActiveTab}>
+                      <TabsList className="h-8 w-max min-w-full justify-start sm:w-auto">
+                        <TabsTrigger value="all" className="text-xs px-2.5">All</TabsTrigger>
+                        <TabsTrigger value="open" className="text-xs px-2.5">Open</TabsTrigger>
+                        <TabsTrigger value="in-progress" className="text-xs px-2.5">In Progress</TabsTrigger>
+                        <TabsTrigger value="escalated" className="text-xs px-2.5">Escalated</TabsTrigger>
+                        <TabsTrigger value="disputed" className="text-xs px-2.5">Disputed</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </div>
 
                   <CardAction>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-1.5 h-8"
+                      className="gap-1.5 h-8 text-xs ml-auto"
                       render={<Link href="/dashboard/reports" />}
                     >
                       <span>View all</span>
@@ -405,52 +423,95 @@ export default function DashboardPage() {
                   </EmptyContent>
                 </Empty>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[80px]">ID</TableHead>
-                      <TableHead>Hazard Dossier</TableHead>
-                      <TableHead>Severity</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Votes</TableHead>
-                      <TableHead className="text-right">Reported</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  {/* Mobile Touch-Friendly Card Feed (< sm) */}
+                  <div className="divide-y divide-border/60 sm:hidden">
                     {filteredReports.map((report) => (
-                      <TableRow key={report.id} className="hover:bg-muted/40">
-                        <TableCell className="font-mono text-xs font-semibold text-muted-foreground">
-                          {report.id}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="font-medium text-foreground text-sm line-clamp-1">
-                              {report.title}
-                            </span>
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                              <MapPin className="size-3" />
-                              {report.location || report.landmark}
-                            </span>
+                      <Link
+                        key={report.id}
+                        href="/dashboard/reports"
+                        className="block p-3.5 space-y-2 hover:bg-muted/30 active:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-[11px] font-bold text-muted-foreground">
+                            {report.id}
+                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            {getStatusBadge(report.status, report.publicOpinionStatus)}
+                            {getSeverityBadge(report.severity)}
                           </div>
-                        </TableCell>
-                        <TableCell>{getSeverityBadge(report.severity)}</TableCell>
-                        <TableCell>
-                          {getStatusBadge(report.status, report.publicOpinionStatus)}
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-xs">
-                          {report.votes || report.verificationsCount || 0}
-                        </TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">
-                          {report.time || report.reportedAt || "Recently"}
-                        </TableCell>
-                      </TableRow>
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-semibold text-foreground line-clamp-1">
+                            {report.title}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <MapPin className="size-3 shrink-0 text-emerald-700" />
+                            <span className="truncate">{report.location || report.landmark}</span>
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-border/40">
+                          <span>{report.time || report.reportedAt || "Recently"}</span>
+                          <span className="font-medium">
+                            {report.votes || report.verificationsCount || 0} verifications
+                          </span>
+                        </div>
+                      </Link>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+
+                  {/* Desktop Table (>= sm) */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[80px]">ID</TableHead>
+                          <TableHead>Hazard Dossier</TableHead>
+                          <TableHead>Severity</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Votes</TableHead>
+                          <TableHead className="text-right">Reported</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredReports.map((report) => (
+                          <TableRow key={report.id} className="hover:bg-muted/40">
+                            <TableCell className="font-mono text-xs font-semibold text-muted-foreground">
+                              {report.id}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-medium text-foreground text-sm line-clamp-1">
+                                  {report.title}
+                                </span>
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <MapPin className="size-3" />
+                                  {report.location || report.landmark}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>{getSeverityBadge(report.severity)}</TableCell>
+                            <TableCell>
+                              {getStatusBadge(report.status, report.publicOpinionStatus)}
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-xs">
+                              {report.votes || report.verificationsCount || 0}
+                            </TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground">
+                              {report.time || report.reportedAt || "Recently"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
 
-            <CardFooter className="border-t border-border px-6 py-3 bg-muted/10">
+            <CardFooter className="border-t border-border px-4 py-3 sm:px-6 bg-muted/10">
               <div className="flex items-center justify-between w-full text-xs text-muted-foreground">
                 <span>
                   Showing {filteredReports.length} of {reports.length} reports
@@ -466,79 +527,87 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Right: Moderation Queue Alert Card & Quick Links (4 cols) */}
-        <div className="flex flex-col gap-6 lg:col-span-4">
-          <Card className="border-border shadow-xs">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ShieldAlert className="size-4 text-emerald-800" />
-                  <CardTitle className="text-base text-[#0e2b24]">Moderation Queue</CardTitle>
-                </div>
-                <Badge
-                  variant={pendingReviewCount > 0 ? "destructive" : "outline"}
-                  className="font-bold text-xs"
-                >
-                  {pendingReviewCount > 0 ? `${pendingReviewCount} Needs Review` : "0 Pending"}
-                </Badge>
-              </div>
-              <CardDescription className="text-xs">
-                {pendingReviewCount > 0
-                  ? "Citizen reports awaiting moderator verification and official approval."
-                  : "All citizen submissions have been audited. Review queue is clean."}
-              </CardDescription>
-            </CardHeader>
-            <CardFooter className="pt-0">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-between text-xs"
-                render={<Link href="/dashboard/moderation" />}
-              >
-                <span>Open Moderation Console</span>
-                <ChevronRight className="size-3.5" />
-              </Button>
-            </CardFooter>
-          </Card>
-
-          <Card className="shadow-xs">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base">System Telemetry</CardTitle>
+        {/* Right: Staff-only operational cards (4 cols) */}
+        {showStaffPanel && (
+          <div className="flex flex-col gap-6 lg:col-span-4">
+            {canViewModeration && (
+              <Card className="border-border shadow-xs">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="size-4 text-emerald-800" />
+                      <CardTitle className="text-base text-[#0e2b24]">Moderation Queue</CardTitle>
+                    </div>
+                    <Badge
+                      variant={pendingReviewCount > 0 ? "destructive" : "outline"}
+                      className="font-bold text-xs"
+                    >
+                      {pendingReviewCount > 0 ? `${pendingReviewCount} Needs Review` : "0 Pending"}
+                    </Badge>
+                  </div>
                   <CardDescription className="text-xs">
-                    Pipeline health and outbox event queue status
+                    {pendingReviewCount > 0
+                      ? "Citizen reports awaiting moderator verification and official approval."
+                      : "All citizen submissions have been audited. Review queue is clean."}
                   </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <Empty className="my-2 border-0 bg-transparent py-4">
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <PieChart className="size-5 text-muted-foreground" />
-                  </EmptyMedia>
-                  <EmptyTitle className="text-sm font-medium">Live System Observability</EmptyTitle>
-                  <EmptyDescription className="text-[11px]">
-                    Detailed metrics for pipeline stages, AI latency, and outbox delivery are
-                    available in the analytics dashboard.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            </CardContent>
-            <CardFooter className="border-t border-border pt-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-between text-xs h-8"
-                render={<Link href="/dashboard/analytics" />}
-              >
-                <span>View Live Analytics</span>
-                <ArrowUpRight className="size-3.5" />
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
+                </CardHeader>
+                <CardFooter className="pt-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-between text-xs"
+                    render={<Link href="/dashboard/moderation" />}
+                  >
+                    <span>Open Moderation Console</span>
+                    <ChevronRight className="size-3.5" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+
+            {canViewAnalytics && (
+              <Card className="shadow-xs">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">System Telemetry</CardTitle>
+                      <CardDescription className="text-xs">
+                        Pipeline health and outbox event queue status
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <Empty className="my-2 border-0 bg-transparent py-4">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <PieChart className="size-5 text-muted-foreground" />
+                      </EmptyMedia>
+                      <EmptyTitle className="text-sm font-medium">
+                        Live System Observability
+                      </EmptyTitle>
+                      <EmptyDescription className="text-[11px]">
+                        Detailed metrics for pipeline stages, AI latency, and outbox delivery are
+                        available in the analytics dashboard.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                </CardContent>
+                <CardFooter className="border-t border-border pt-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-between text-xs h-8"
+                    render={<Link href="/dashboard/analytics" />}
+                  >
+                    <span>View Live Analytics</span>
+                    <ArrowUpRight className="size-3.5" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

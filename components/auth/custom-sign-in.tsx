@@ -54,6 +54,70 @@ function ClerkConnectedSignIn() {
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
+  const [mfaStrategy, setMfaStrategy] = React.useState<
+    "email_code" | "phone_code" | "totp" | "backup_code" | null
+  >(null);
+  const [mfaCode, setMfaCode] = React.useState("");
+
+  const finalizeSignIn = React.useCallback(async () => {
+    await signIn.finalize({
+      navigate: async ({ session, decorateUrl }) => {
+        const destination = session.currentTask
+          ? `/sign-in/tasks/${session.currentTask.key}`
+          : redirectUrl;
+        const url = decorateUrl(destination);
+        if (url.startsWith("http")) {
+          window.location.href = url;
+        } else {
+          router.push(url);
+        }
+      },
+    });
+  }, [signIn, redirectUrl, router]);
+
+  /**
+   * Prepares the strongest second factor the account supports. Email codes are
+   * preferred because they need no extra setup; authenticators and phone codes
+   * fall back to a plain code field.
+   */
+  const beginSecondFactor = React.useCallback(async () => {
+    const factors = signIn.supportedSecondFactors ?? [];
+    const has = (strategy: string) => factors.some((factor) => factor.strategy === strategy);
+
+    if (has("email_code")) {
+      const { error } = await signIn.mfa.sendEmailCode();
+      if (error) {
+        setLocalError(error.message || "Could not send a verification code to your email.");
+        return;
+      }
+      setMfaStrategy("email_code");
+      return;
+    }
+
+    if (has("totp")) {
+      setMfaStrategy("totp");
+      return;
+    }
+
+    if (has("phone_code")) {
+      const { error } = await signIn.mfa.sendPhoneCode();
+      if (error) {
+        setLocalError(error.message || "Could not send a verification code to your phone.");
+        return;
+      }
+      setMfaStrategy("phone_code");
+      return;
+    }
+
+    if (has("backup_code")) {
+      setMfaStrategy("backup_code");
+      return;
+    }
+
+    setLocalError(
+      "This account requires a second verification factor that this form cannot complete. Please contact your municipal administrator.",
+    );
+  }, [signIn]);
 
   const handleGoogleSignIn = async () => {
     setLocalError(null);
@@ -111,31 +175,107 @@ function ClerkConnectedSignIn() {
         setLocalError(
           error.message || "Invalid credentials. Please verify your email and password.",
         );
-        setIsSubmitting(false);
         return;
       }
 
-      await signIn.finalize({
-        navigate: async ({ session, decorateUrl }) => {
-          const destination = session.currentTask
-            ? `/sign-in/tasks/${session.currentTask.key}`
-            : redirectUrl;
-          const url = decorateUrl(destination);
-          if (url.startsWith("http")) {
-            window.location.href = url;
-          } else {
-            router.push(url);
-          }
-        },
-      });
+      if (signIn.status === "complete") {
+        await finalizeSignIn();
+        return;
+      }
+
+      if (signIn.status === "needs_second_factor" || signIn.status === "needs_client_trust") {
+        await beginSecondFactor();
+        return;
+      }
+
+      if (signIn.status === "needs_new_password") {
+        setLocalError(
+          "This account needs a new password before it can sign in. Use the password reset option and try again.",
+        );
+        return;
+      }
+
+      if (signIn.isTransferable) {
+        setLocalError(
+          "No JanSahayak account matches these credentials. Create a citizen account to continue.",
+        );
+        return;
+      }
+
+      setLocalError("Additional verification is required before you can sign in.");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Authentication encountered an error.";
       setLocalError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerifySecondFactor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+
+    if (!mfaCode.trim()) {
+      setLocalError("Please enter the verification code.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { error } =
+        mfaStrategy === "email_code"
+          ? await signIn.mfa.verifyEmailCode({ code: mfaCode })
+          : mfaStrategy === "phone_code"
+            ? await signIn.mfa.verifyPhoneCode({ code: mfaCode })
+            : mfaStrategy === "totp"
+              ? await signIn.mfa.verifyTOTP({ code: mfaCode })
+              : await signIn.mfa.verifyBackupCode({ code: mfaCode });
+
+      if (error) {
+        setLocalError(error.message || "That verification code could not be accepted.");
+        return;
+      }
+
+      if (signIn.status === "complete") {
+        await finalizeSignIn();
+        return;
+      }
+
+      if (signIn.status === "needs_new_password") {
+        setLocalError(
+          "This account needs a new password before it can sign in. Use the password reset option and try again.",
+        );
+        return;
+      }
+
+      setLocalError("Additional verification is still required to complete sign-in.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Verification failed.";
+      setLocalError(msg);
+    } finally {
       setIsSubmitting(false);
     }
   };
 
   const isLoading = isSubmitting || fetchStatus === "fetching";
+
+  if (mfaStrategy) {
+    return (
+      <SecondFactorLayout
+        strategy={mfaStrategy}
+        code={mfaCode}
+        setCode={setMfaCode}
+        onSubmit={handleVerifySecondFactor}
+        onBack={() => {
+          setMfaStrategy(null);
+          setMfaCode("");
+          setLocalError(null);
+        }}
+        isLoading={isLoading}
+        errorMessage={localError || errors?.global?.[0]?.message}
+      />
+    );
+  }
 
   return (
     <SignInLayout
@@ -413,6 +553,144 @@ function SignInLayout({
             ← Back to Public Civic Portal
           </Link>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Second Factor (MFA / device trust) Layout
+ *
+ * Shown when Clerk reports `needs_second_factor` or `needs_client_trust` after a
+ * password attempt. The form submits the code to whichever factor was prepared.
+ */
+function SecondFactorLayout({
+  strategy,
+  code,
+  setCode,
+  onSubmit,
+  onBack,
+  isLoading,
+  errorMessage,
+}: {
+  strategy: "email_code" | "phone_code" | "totp" | "backup_code";
+  code: string;
+  setCode: (val: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  onBack: () => void;
+  isLoading: boolean;
+  errorMessage?: string | null;
+}) {
+  const label =
+    strategy === "email_code"
+      ? "Email verification code"
+      : strategy === "phone_code"
+        ? "SMS verification code"
+        : strategy === "totp"
+          ? "Authenticator code"
+          : "Backup code";
+
+  const helper =
+    strategy === "email_code"
+      ? "We emailed a one-time code to the address on your account."
+      : strategy === "phone_code"
+        ? "We sent a one-time code to the phone number on your account."
+        : strategy === "totp"
+          ? "Enter the current code from your authenticator app."
+          : "Enter one of the backup codes you saved when enabling two-step verification.";
+
+  return (
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 py-8 bg-[#f5f3ed]">
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center space-y-2">
+          <Link href="/" className="inline-block transition-opacity hover:opacity-85">
+            <Brand />
+          </Link>
+          <h1 className="text-2xl font-bold tracking-tight text-[#0e2b24]">Confirm It&apos;s You</h1>
+          <p className="text-xs text-[#486057]">{helper}</p>
+        </div>
+
+        <Card className="border border-[#cbd5cb] bg-[#faf9f5] shadow-xs">
+          <CardHeader className="pb-3 border-b border-[#eef1e9]">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-semibold text-[#17382f]">
+                Second-Step Verification
+              </CardTitle>
+              <Badge
+                variant="outline"
+                className="text-[10px] uppercase font-mono tracking-wider border-[#cbd5cb] text-[#486057]"
+              >
+                Clerk Auth
+              </Badge>
+            </div>
+            <CardDescription className="text-xs text-[#5c6f66]">
+              Your password was accepted. Complete this step to open your civic workspace.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="pt-4">
+            {errorMessage && (
+              <div
+                role="alert"
+                className="mb-4 flex items-start gap-2.5 rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900"
+              >
+                <AlertCircle className="size-4 shrink-0 text-rose-700 mt-0.5" />
+                <span className="leading-relaxed">{errorMessage}</span>
+              </div>
+            )}
+
+            <form onSubmit={onSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="sign-in-mfa-code"
+                  className="block text-xs font-semibold text-[#17382f]"
+                >
+                  {label}
+                </label>
+                <Input
+                  id="sign-in-mfa-code"
+                  type="text"
+                  inputMode={strategy === "backup_code" ? "text" : "numeric"}
+                  autoComplete="one-time-code"
+                  required
+                  placeholder={strategy === "backup_code" ? "backup code" : "123456"}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  disabled={isLoading}
+                  className="bg-white border-[#cbd5cb] text-[#17382f] text-center tracking-widest font-mono text-base h-10"
+                />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] text-xs font-medium h-9 shadow-xs"
+              >
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <Spinner className="size-3.5" />
+                    <span>Verifying...</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-1.5">
+                    <Lock className="size-3.5" />
+                    <span>Verify &amp; Sign In</span>
+                    <ArrowRight className="size-3.5 ml-1" />
+                  </span>
+                )}
+              </Button>
+            </form>
+
+            <button
+              type="button"
+              onClick={onBack}
+              disabled={isLoading}
+              className="mt-4 w-full text-center text-[11px] font-medium text-[#486057] hover:text-[#0e2b24] disabled:opacity-50"
+            >
+              Use a different account
+            </button>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

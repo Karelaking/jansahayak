@@ -252,13 +252,13 @@ export function StaffRoleDelegation() {
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 rounded-md border border-[#cbd5cb] bg-white p-0.5 text-xs">
+              <div className="flex items-center gap-1 rounded-md border border-[#cbd5cb] bg-white p-0.5 text-xs overflow-x-auto no-scrollbar w-full sm:w-auto">
                 {(["all", "citizen", "moderator", "admin"] as const).map((r) => (
                   <button
                     key={r}
                     type="button"
                     onClick={() => setRoleFilter(r)}
-                    className={`rounded px-2.5 py-1 text-[11px] font-medium transition ${
+                    className={`flex-1 sm:flex-initial text-center rounded px-2.5 py-1.5 sm:py-1 text-[11px] font-medium transition ${
                       roleFilter === r
                         ? "bg-[#0e2b24] text-white shadow-xs"
                         : "text-[#5c6f66] hover:text-[#0e2b24]"
@@ -274,10 +274,10 @@ export function StaffRoleDelegation() {
                 size="sm"
                 onClick={() => loadData()}
                 disabled={isLoading}
-                className="border-[#cbd5cb] text-xs h-9 gap-1"
+                className="border-[#cbd5cb] text-xs h-9 gap-1 shrink-0"
               >
                 <RotateCcw className={`size-3 ${isLoading ? "animate-spin" : ""}`} />
-                <span>Refresh</span>
+                <span className="hidden sm:inline">Refresh</span>
               </Button>
             </div>
           </div>
@@ -299,71 +299,63 @@ export function StaffRoleDelegation() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-[#cbd5cb] bg-white">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-[#eef1e9] bg-[#faf9f5] text-[#5c6f66]">
-                    <th className="py-2.5 px-3 font-semibold">User</th>
-                    <th className="py-2.5 px-3 font-semibold">Contact &amp; ID</th>
-                    <th className="py-2.5 px-3 font-semibold">Current Role</th>
-                    <th className="py-2.5 px-3 font-semibold">Enrolled</th>
-                    <th className="py-2.5 px-3 font-semibold text-right">Role Delegation</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#eef1e9]">
-                  {filteredUsers.map((u) => {
-                    const isSelf = u.id === currentUserId;
-                    return (
-                      <tr key={u.id} className="hover:bg-[#fbfbf9] transition-colors">
-                        <td className="py-3 px-3">
-                          <div className="flex items-center gap-2">
-                            <div className="flex size-7 items-center justify-center rounded-full bg-[#eef1e9] text-[#0e2b24] font-semibold text-xs border border-[#cbd5cb]">
-                              {u.fullName?.charAt(0)?.toUpperCase() || "U"}
-                            </div>
-                            <div>
-                              <p className="font-medium text-[#17382f] flex items-center gap-1.5">
-                                {u.fullName}
-                                {isSelf && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[9px] border-[#cbd5cb] px-1 py-0 text-[#0e2b24]"
-                                  >
-                                    You
-                                  </Badge>
-                                )}
-                              </p>
-                            </div>
+            <>
+              {/* Mobile Card Feed (md:hidden) */}
+              <div className="space-y-3 md:hidden">
+                {filteredUsers.map((u) => {
+                  const isSelf = u.id === currentUserId;
+                  return (
+                    <div
+                      key={u.id}
+                      className="rounded-lg border border-[#cbd5cb] bg-white p-3.5 space-y-3 shadow-xs"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#eef1e9] text-[#0e2b24] font-semibold text-xs border border-[#cbd5cb]">
+                            {u.fullName?.charAt(0)?.toUpperCase() || "U"}
                           </div>
-                        </td>
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-semibold text-xs text-[#17382f]">
+                                {u.fullName}
+                              </span>
+                              {isSelf && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[9px] border-[#cbd5cb] px-1 py-0 text-[#0e2b24]"
+                                >
+                                  You
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-[#5c6f66] font-mono text-[11px] break-all">{u.email}</p>
+                          </div>
+                        </div>
 
-                        <td className="py-3 px-3">
-                          <p className="text-[#17382f] font-mono text-[11px]">{u.email}</p>
-                          <p className="text-[#5c6f66] font-mono text-[10px]">{u.id}</p>
-                        </td>
+                        {u.role === "admin" ? (
+                          <Badge className="bg-indigo-900 text-indigo-50 text-[10px] gap-1 font-medium shrink-0">
+                            <ShieldAlert className="size-2.5" />
+                            Admin
+                          </Badge>
+                        ) : u.role === "moderator" ? (
+                          <Badge className="bg-[#0e2b24] text-[#f5f3ed] text-[10px] gap-1 font-medium shrink-0">
+                            <ShieldCheck className="size-2.5" />
+                            Mod
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="border-[#cbd5cb] text-[#486057] text-[10px] gap-1 shrink-0"
+                          >
+                            <User className="size-2.5" />
+                            Citizen
+                          </Badge>
+                        )}
+                      </div>
 
-                        <td className="py-3 px-3">
-                          {u.role === "admin" ? (
-                            <Badge className="bg-indigo-900 text-indigo-50 text-[10px] gap-1 font-medium">
-                              <ShieldAlert className="size-2.5" />
-                              Administrator
-                            </Badge>
-                          ) : u.role === "moderator" ? (
-                            <Badge className="bg-[#0e2b24] text-[#f5f3ed] text-[10px] gap-1 font-medium">
-                              <ShieldCheck className="size-2.5" />
-                              Moderator
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="border-[#cbd5cb] text-[#486057] text-[10px] gap-1"
-                            >
-                              <User className="size-2.5" />
-                              Civilian
-                            </Badge>
-                          )}
-                        </td>
-
-                        <td className="py-3 px-3 text-[#5c6f66] text-[11px]">
+                      <div className="flex items-center justify-between text-[11px] text-[#5c6f66] pt-1 border-t border-[#f0eee6]">
+                        <span>
+                          Enrolled:{" "}
                           {u.createdAt
                             ? new Date(u.createdAt).toLocaleDateString("en-IN", {
                                 day: "numeric",
@@ -371,111 +363,271 @@ export function StaffRoleDelegation() {
                                 year: "numeric",
                               })
                             : "—"}
-                        </td>
+                        </span>
+                        <span className="font-mono text-[10px] text-[#8fa399]">{u.id.slice(0, 12)}...</span>
+                      </div>
 
-                        <td className="py-3 px-3 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger
-                              render={
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  aria-label={`Designate role for ${u.fullName}`}
-                                  className="h-7 text-xs border-[#cbd5cb] gap-1"
-                                />
-                              }
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              aria-label={`Designate role for ${u.fullName}`}
+                              className="w-full h-8.5 text-xs border-[#cbd5cb] gap-1.5 justify-center font-medium"
+                            />
+                          }
+                        >
+                          <span>Designate Civic Authority</span>
+                          <Sparkles className="size-3 text-[#0e2b24]" />
+                        </DropdownMenuTrigger>
+
+                        <DropdownMenuContent align="end" className="w-56 text-xs">
+                          <DropdownMenuLabel className="text-[11px] text-[#5c6f66]">
+                            Change Role for {u.fullName}
+                          </DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+
+                          <DropdownMenuItem
+                            disabled={u.role === "citizen"}
+                            onClick={() => {
+                              setTargetUser(u);
+                              setPendingRole("citizen");
+                            }}
+                            className="gap-2 cursor-pointer"
+                          >
+                            <User className="size-3.5 text-[#5c6f66]" />
+                            <div>
+                              <p className="font-medium">Demote to Civilian</p>
+                              <p className="text-[10px] text-[#5c6f66]">Standard citizen access</p>
+                            </div>
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            disabled={u.role === "moderator"}
+                            onClick={() => {
+                              setTargetUser(u);
+                              setPendingRole("moderator");
+                            }}
+                            className="gap-2 cursor-pointer"
+                          >
+                            <ShieldCheck className="size-3.5 text-emerald-700" />
+                            <div>
+                              <p className="font-medium">Appoint Moderator</p>
+                              <p className="text-[10px] text-[#5c6f66]">Review queue &amp; escalations</p>
+                            </div>
+                          </DropdownMenuItem>
+
+                          {isAdmin ? (
+                            <DropdownMenuItem
+                              disabled={u.role === "admin"}
+                              onClick={() => {
+                                setTargetUser(u);
+                                setPendingRole("admin");
+                              }}
+                              className="gap-2 cursor-pointer"
                             >
-                              <span>Designate</span>
-                              <Sparkles className="size-3 text-[#0e2b24]" />
-                            </DropdownMenuTrigger>
+                              <ShieldAlert className="size-3.5 text-indigo-700" />
+                              <div>
+                                <p className="font-medium text-indigo-900">Appoint Administrator</p>
+                                <p className="text-[10px] text-[#5c6f66]">Full municipal governance</p>
+                              </div>
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem disabled className="gap-2 opacity-50 cursor-not-allowed">
+                              <Lock className="size-3.5 text-neutral-400" />
+                              <div>
+                                <p className="font-medium text-neutral-500">Appoint Administrator</p>
+                                <p className="text-[10px] text-neutral-400">Requires Admin Role</p>
+                              </div>
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  );
+                })}
+              </div>
 
-                            <DropdownMenuContent align="end" className="w-56 text-xs">
-                              <DropdownMenuLabel className="text-[11px] text-[#5c6f66]">
-                                Change Role for {u.fullName}
-                              </DropdownMenuLabel>
-                              <DropdownMenuSeparator />
+              {/* Desktop Table (hidden md:block) */}
+              <div className="hidden md:block overflow-x-auto rounded-lg border border-[#cbd5cb] bg-white">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-[#eef1e9] bg-[#faf9f5] text-[#5c6f66]">
+                      <th className="py-2.5 px-3 font-semibold">User</th>
+                      <th className="py-2.5 px-3 font-semibold">Contact &amp; ID</th>
+                      <th className="py-2.5 px-3 font-semibold">Current Role</th>
+                      <th className="py-2.5 px-3 font-semibold">Enrolled</th>
+                      <th className="py-2.5 px-3 font-semibold text-right">Role Delegation</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#eef1e9]">
+                    {filteredUsers.map((u) => {
+                      const isSelf = u.id === currentUserId;
+                      return (
+                        <tr key={u.id} className="hover:bg-[#fbfbf9] transition-colors">
+                          <td className="py-3 px-3">
+                            <div className="flex items-center gap-2">
+                              <div className="flex size-7 items-center justify-center rounded-full bg-[#eef1e9] text-[#0e2b24] font-semibold text-xs border border-[#cbd5cb]">
+                                {u.fullName?.charAt(0)?.toUpperCase() || "U"}
+                              </div>
+                              <div>
+                                <p className="font-medium text-[#17382f] flex items-center gap-1.5">
+                                  {u.fullName}
+                                  {isSelf && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[9px] border-[#cbd5cb] px-1 py-0 text-[#0e2b24]"
+                                    >
+                                      You
+                                    </Badge>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
 
-                              {/* Demote to Citizen */}
-                              <DropdownMenuItem
-                                disabled={u.role === "citizen"}
-                                onClick={() => {
-                                  setTargetUser(u);
-                                  setPendingRole("citizen");
-                                }}
-                                className="gap-2 cursor-pointer"
+                          <td className="py-3 px-3">
+                            <p className="text-[#17382f] font-mono text-[11px]">{u.email}</p>
+                            <p className="text-[#5c6f66] font-mono text-[10px]">{u.id}</p>
+                          </td>
+
+                          <td className="py-3 px-3">
+                            {u.role === "admin" ? (
+                              <Badge className="bg-indigo-900 text-indigo-50 text-[10px] gap-1 font-medium">
+                                <ShieldAlert className="size-2.5" />
+                                Administrator
+                              </Badge>
+                            ) : u.role === "moderator" ? (
+                              <Badge className="bg-[#0e2b24] text-[#f5f3ed] text-[10px] gap-1 font-medium">
+                                <ShieldCheck className="size-2.5" />
+                                Moderator
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className="border-[#cbd5cb] text-[#486057] text-[10px] gap-1"
                               >
-                                <User className="size-3.5 text-[#5c6f66]" />
-                                <div>
-                                  <p className="font-medium">Demote to Civilian</p>
-                                  <p className="text-[10px] text-[#5c6f66]">
-                                    Standard citizen access
-                                  </p>
-                                </div>
-                              </DropdownMenuItem>
+                                <User className="size-2.5" />
+                                Civilian
+                              </Badge>
+                            )}
+                          </td>
 
-                              {/* Appoint as Moderator */}
-                              <DropdownMenuItem
-                                disabled={u.role === "moderator"}
-                                onClick={() => {
-                                  setTargetUser(u);
-                                  setPendingRole("moderator");
-                                }}
-                                className="gap-2 cursor-pointer"
+                          <td className="py-3 px-3 text-[#5c6f66] text-[11px]">
+                            {u.createdAt
+                              ? new Date(u.createdAt).toLocaleDateString("en-IN", {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                })
+                              : "—"}
+                          </td>
+
+                          <td className="py-3 px-3 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger
+                                render={
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    aria-label={`Designate role for ${u.fullName}`}
+                                    className="h-7 text-xs border-[#cbd5cb] gap-1"
+                                  />
+                                }
                               >
-                                <ShieldCheck className="size-3.5 text-emerald-700" />
-                                <div>
-                                  <p className="font-medium">Appoint Moderator</p>
-                                  <p className="text-[10px] text-[#5c6f66]">
-                                    Review queue &amp; escalations
-                                  </p>
-                                </div>
-                              </DropdownMenuItem>
+                                <span>Designate</span>
+                                <Sparkles className="size-3 text-[#0e2b24]" />
+                              </DropdownMenuTrigger>
 
-                              {/* Appoint as Admin (Gated to Administrators) */}
-                              {isAdmin ? (
+                              <DropdownMenuContent align="end" className="w-56 text-xs">
+                                <DropdownMenuLabel className="text-[11px] text-[#5c6f66]">
+                                  Change Role for {u.fullName}
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+
+                                {/* Demote to Citizen */}
                                 <DropdownMenuItem
-                                  disabled={u.role === "admin"}
+                                  disabled={u.role === "citizen"}
                                   onClick={() => {
                                     setTargetUser(u);
-                                    setPendingRole("admin");
+                                    setPendingRole("citizen");
                                   }}
                                   className="gap-2 cursor-pointer"
                                 >
-                                  <ShieldAlert className="size-3.5 text-indigo-700" />
+                                  <User className="size-3.5 text-[#5c6f66]" />
                                   <div>
-                                    <p className="font-medium text-indigo-900">
-                                      Appoint Administrator
-                                    </p>
+                                    <p className="font-medium">Demote to Civilian</p>
                                     <p className="text-[10px] text-[#5c6f66]">
-                                      Full municipal governance
+                                      Standard citizen access
                                     </p>
                                   </div>
                                 </DropdownMenuItem>
-                              ) : (
+
+                                {/* Appoint as Moderator */}
                                 <DropdownMenuItem
-                                  disabled
-                                  className="gap-2 opacity-50 cursor-not-allowed"
+                                  disabled={u.role === "moderator"}
+                                  onClick={() => {
+                                    setTargetUser(u);
+                                    setPendingRole("moderator");
+                                  }}
+                                  className="gap-2 cursor-pointer"
                                 >
-                                  <Lock className="size-3.5 text-neutral-400" />
+                                  <ShieldCheck className="size-3.5 text-emerald-700" />
                                   <div>
-                                    <p className="font-medium text-neutral-500">
-                                      Appoint Administrator
-                                    </p>
-                                    <p className="text-[10px] text-neutral-400">
-                                      Requires Admin Role
+                                    <p className="font-medium">Appoint Moderator</p>
+                                    <p className="text-[10px] text-[#5c6f66]">
+                                      Review queue &amp; escalations
                                     </p>
                                   </div>
                                 </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+
+                                {/* Appoint as Admin (Gated to Administrators) */}
+                                {isAdmin ? (
+                                  <DropdownMenuItem
+                                    disabled={u.role === "admin"}
+                                    onClick={() => {
+                                      setTargetUser(u);
+                                      setPendingRole("admin");
+                                    }}
+                                    className="gap-2 cursor-pointer"
+                                  >
+                                    <ShieldAlert className="size-3.5 text-indigo-700" />
+                                    <div>
+                                      <p className="font-medium text-indigo-900">
+                                        Appoint Administrator
+                                      </p>
+                                      <p className="text-[10px] text-[#5c6f66]">
+                                        Full municipal governance
+                                      </p>
+                                    </div>
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem
+                                    disabled
+                                    className="gap-2 opacity-50 cursor-not-allowed"
+                                  >
+                                    <Lock className="size-3.5 text-neutral-400" />
+                                    <div>
+                                      <p className="font-medium text-neutral-500">
+                                        Appoint Administrator
+                                      </p>
+                                      <p className="text-[10px] text-neutral-400">
+                                        Requires Admin Role
+                                      </p>
+                                    </div>
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -490,7 +642,7 @@ export function StaffRoleDelegation() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-md bg-[#faf9f5] border border-[#cbd5cb]">
+        <DialogContent className="max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto w-[calc(100vw-1.5rem)] sm:w-full bg-[#faf9f5] border border-[#cbd5cb] p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold text-[#0e2b24]">
               Confirm Role Delegation

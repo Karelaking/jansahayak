@@ -123,7 +123,7 @@ export default function ModerationPage() {
             detail: String(
               row.summary || "Citizen submitted hazard awaiting municipal verification.",
             ),
-            reporter: String(meta.reporter || "Verified Citizen"),
+            reporter: String(meta.reporter || "Anonymous reporter"),
             time: row.createdAt
               ? new Date(String(row.createdAt)).toLocaleTimeString([], {
                   hour: "2-digit",
@@ -383,11 +383,11 @@ export default function ModerationPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-1 rounded-md border border-[#cbd5cb] bg-white p-0.5">
+          <div className="grid grid-cols-2 gap-1 rounded-md border border-[#cbd5cb] bg-white p-0.5 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => setViewMode("queue")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition ${
+              className={`flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded text-xs font-medium transition ${
                 viewMode === "queue"
                   ? "bg-[#0e2b24] text-white shadow-xs"
                   : "text-[#5c6f66] hover:text-[#0e2b24]"
@@ -408,7 +408,7 @@ export default function ModerationPage() {
             <button
               type="button"
               onClick={() => setViewMode("staff")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition ${
+              className={`flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded text-xs font-medium transition ${
                 viewMode === "staff"
                   ? "bg-[#0e2b24] text-white shadow-xs"
                   : "text-[#5c6f66] hover:text-[#0e2b24]"
@@ -675,7 +675,7 @@ export default function ModerationPage() {
 
         {/* ── PRD §12 Evidence & AI Vision Inspection Modal ─── */}
         <Dialog open={!!inspectingItem} onOpenChange={(open) => !open && setInspectingItem(null)}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-5 sm:p-6">
+          <DialogContent className="max-w-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto w-[calc(100vw-1.5rem)] sm:w-full bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-4 sm:p-6">
             {inspectingItem && (
               <div className="flex flex-col gap-5">
                 <DialogHeader>
@@ -845,11 +845,11 @@ export default function ModerationPage() {
                     <span>Reject Out-of-Scope</span>
                   </Button>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs h-9"
+                      className="text-xs h-9 justify-center"
                       onClick={() => {
                         setRequestEvidenceItem(inspectingItem);
                         setEvidenceNotes("");
@@ -862,7 +862,7 @@ export default function ModerationPage() {
 
                     <Button
                       size="sm"
-                      className="text-xs h-9 bg-emerald-800 hover:bg-emerald-900 text-white"
+                      className="text-xs h-9 bg-emerald-800 hover:bg-emerald-900 text-white justify-center"
                       onClick={() => {
                         handleApprove(inspectingItem.id);
                         setInspectingItem(null);
@@ -880,7 +880,7 @@ export default function ModerationPage() {
 
         {/* ── PRD §12 Reject with Documented Reason Dialog ── */}
         <Dialog open={!!rejectItem} onOpenChange={(open) => !open && setRejectItem(null)}>
-          <DialogContent className="max-w-md bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-5">
+          <DialogContent className="max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto w-[calc(100vw-1.5rem)] sm:w-full bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-4 sm:p-5">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-[#0e2b24]">
                 Reject Hazard Incident
@@ -934,7 +934,7 @@ export default function ModerationPage() {
           open={!!requestEvidenceItem}
           onOpenChange={(open) => !open && setRequestEvidenceItem(null)}
         >
-          <DialogContent className="max-w-md bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-5">
+          <DialogContent className="max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto w-[calc(100vw-1.5rem)] sm:w-full bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-4 sm:p-5">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-[#0e2b24]">
                 Request Supplementary Evidence
@@ -988,7 +988,7 @@ export default function ModerationPage() {
           open={!!correctLocationItem}
           onOpenChange={(open) => !open && setCorrectLocationItem(null)}
         >
-          <DialogContent className="max-w-md bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-5">
+          <DialogContent className="max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto w-[calc(100vw-1.5rem)] sm:w-full bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-4 sm:p-5">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-[#0e2b24]">
                 Correct Canonical Coordinates
@@ -1076,7 +1076,7 @@ export default function ModerationPage() {
 
         {/* ── PRD §10 & §16 Merge Duplicate Incidents Dialog ── */}
         <Dialog open={!!mergeItem} onOpenChange={(open) => !open && setMergeItem(null)}>
-          <DialogContent className="max-w-md bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-5">
+          <DialogContent className="max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto w-[calc(100vw-1.5rem)] sm:w-full bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-4 sm:p-5">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-[#0e2b24]">
                 Merge Duplicate Incidents
@@ -1147,7 +1147,7 @@ export default function ModerationPage() {
 
         {/* ── PRD §12 & §16 Split Incident Dialog ── */}
         <Dialog open={!!splitItem} onOpenChange={(open) => !open && setSplitItem(null)}>
-          <DialogContent className="max-w-md bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-5">
+          <DialogContent className="max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto w-[calc(100vw-1.5rem)] sm:w-full bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-4 sm:p-5">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-[#0e2b24]">
                 Split Incident Reports
@@ -1217,7 +1217,7 @@ export default function ModerationPage() {
 
         {/* ── PRD §13 & §14 Unpublish Incident Dialog ── */}
         <Dialog open={!!unpublishItem} onOpenChange={(open) => !open && setUnpublishItem(null)}>
-          <DialogContent className="max-w-md bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-5">
+          <DialogContent className="max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto w-[calc(100vw-1.5rem)] sm:w-full bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24] p-4 sm:p-5">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-[#0e2b24]">
                 Revoke Public Map Visibility

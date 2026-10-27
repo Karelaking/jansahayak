@@ -553,15 +553,15 @@ export default function ReportsPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {isStaff && (
-            <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border text-xs mr-1">
+            <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border text-xs w-full sm:w-auto">
               <Button
                 type="button"
                 variant={scopeFilter === "all" ? "secondary" : "ghost"}
                 size="xs"
                 onClick={() => setScopeFilter("all")}
-                className="h-7 text-xs font-medium"
+                className="h-8 sm:h-7 text-xs font-medium flex-1 sm:flex-none"
               >
                 All Dockets
               </Button>
@@ -570,7 +570,7 @@ export default function ReportsPage() {
                 variant={scopeFilter === "mine" ? "secondary" : "ghost"}
                 size="xs"
                 onClick={() => setScopeFilter("mine")}
-                className="h-7 text-xs font-medium"
+                className="h-8 sm:h-7 text-xs font-medium flex-1 sm:flex-none"
               >
                 My Submissions
               </Button>
@@ -579,7 +579,7 @@ export default function ReportsPage() {
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5 h-9 sm:h-8"
+            className="gap-1.5 h-9 sm:h-8 flex-1 sm:flex-none text-xs"
             onClick={() => loadReports()}
           >
             <RotateCcw className="size-3.5" />
@@ -589,7 +589,7 @@ export default function ReportsPage() {
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5 h-9 sm:h-8"
+            className="gap-1.5 h-9 sm:h-8 flex-1 sm:flex-none text-xs"
             onClick={handleExportCsv}
             disabled={filteredReports.length === 0}
           >
@@ -600,7 +600,7 @@ export default function ReportsPage() {
 
           <Button
             size="sm"
-            className="h-9 sm:h-8 bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed]"
+            className="h-9 sm:h-8 bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] w-full sm:w-auto text-xs font-medium justify-center"
             render={<Link href="/reports/new" />}
           >
             <Plus className="size-3.5 mr-1" />
@@ -736,32 +736,32 @@ export default function ReportsPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-1 text-[11px] text-muted-foreground border-t border-border/40">
+                    <div className="flex items-center justify-between pt-1.5 text-[11px] text-muted-foreground border-t border-border/40">
                       <span>{report.time || report.reportedAt || "Recently"}</span>
                       <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
-                          size="xs"
+                          size="sm"
                           onClick={() => setSelectedReport(report)}
-                          className="h-7 text-xs"
+                          className="h-8.5 min-h-[36px] px-2.5 text-xs rounded-md"
                         >
                           <Eye className="size-3 mr-1" />
                           <span>Inspect</span>
                         </Button>
                         <Button
                           variant="ghost"
-                          size="xs"
+                          size="sm"
                           onClick={() => handleOpenEdit(report)}
-                          className="h-7 text-xs text-[#0e2b24]"
+                          className="h-8.5 min-h-[36px] px-2.5 text-xs text-[#0e2b24] rounded-md"
                         >
                           <Pencil className="size-3 mr-1" />
                           <span>Edit</span>
                         </Button>
                         <Button
                           variant="ghost"
-                          size="xs"
+                          size="sm"
                           onClick={() => setDeletingReport(report)}
-                          className="h-7 text-xs text-rose-700 hover:text-rose-800 hover:bg-rose-50"
+                          className="h-8.5 min-h-[36px] px-2.5 text-xs text-rose-700 hover:text-rose-800 hover:bg-rose-50 rounded-md"
                         >
                           <Trash2 className="size-3 mr-1" />
                           <span>Delete</span>
@@ -886,7 +886,7 @@ export default function ReportsPage() {
       {/* ── Edit Report Modal Dialog ─── */}
       <Dialog open={!!editingReport} onOpenChange={(open) => !open && setEditingReport(null)}>
         {editingReport && (
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg max-h-[85vh] sm:max-h-[90vh] overflow-y-auto w-[calc(100vw-1.5rem)] sm:w-full p-4 sm:p-6">
             <DialogHeader>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="font-mono text-[10px]">
@@ -999,7 +999,7 @@ export default function ReportsPage() {
       {/* ── Delete Report Confirmation Dialog ─── */}
       <Dialog open={!!deletingReport} onOpenChange={(open) => !open && setDeletingReport(null)}>
         {deletingReport && (
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto w-[calc(100vw-1.5rem)] sm:w-full p-4 sm:p-6">
             <DialogHeader>
               <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-rose-100 text-rose-800">
                 <Trash2 className="size-5" />
@@ -1057,7 +1057,7 @@ export default function ReportsPage() {
       {/* ── Report Detail Dialog using shadcn Dialog ─── */}
       <Dialog open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>
         {selectedReport && (
-          <DialogContent className="max-w-xl">
+          <DialogContent className="max-w-xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto w-[calc(100vw-1.5rem)] sm:w-full p-4 sm:p-6">
             <DialogHeader>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-mono text-xs font-bold text-muted-foreground">

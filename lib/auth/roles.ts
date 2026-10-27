@@ -2,7 +2,31 @@
  * Role Definitions & Permissions for JanSahayak
  */
 
-export type UserRole = "citizen" | "moderator" | "admin" | "field_official";
+export const USER_ROLES = ["citizen", "moderator", "admin", "field_official"] as const;
+
+export type UserRole = (typeof USER_ROLES)[number];
+
+/**
+ * The identifier recorded for reports filed without a Clerk session. It is a
+ * non-personal sentinel, never a fabricated citizen account.
+ */
+export const ANONYMOUS_USER_ID = "anonymous";
+
+export function isUserRole(value: unknown): value is UserRole {
+  return typeof value === "string" && (USER_ROLES as readonly string[]).includes(value);
+}
+
+/**
+ * Returns a validated role, or undefined when the value is absent/invalid.
+ * Useful when a role comes from external metadata that may be malformed.
+ */
+export function parseUserRole(value: unknown): UserRole | undefined {
+  return isUserRole(value) ? value : undefined;
+}
+
+export function normalizeUserRole(value: unknown, fallback: UserRole = "citizen"): UserRole {
+  return parseUserRole(value) ?? fallback;
+}
 
 export interface UserSession {
   userId: string;

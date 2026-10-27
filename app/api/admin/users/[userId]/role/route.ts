@@ -17,6 +17,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ us
   try {
     const session = await getCurrentUserSession(req);
 
+    if (!session.isAuthenticated) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Authentication required: please sign in to manage user roles.",
+        },
+        { status: 401 },
+      );
+    }
+
     if (session.role !== "moderator" && session.role !== "admin") {
       return NextResponse.json(
         {

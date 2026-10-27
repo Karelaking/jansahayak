@@ -360,43 +360,45 @@ export default function EscalationsPage() {
         {/* ── Log Officer Reply Dialog ─── */}
         <Dialog open={!!activeModalId} onOpenChange={(open) => !open && setActiveModalId(null)}>
           {activeEscalation && (
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto w-[calc(100vw-1.5rem)] sm:w-full p-4 sm:p-6 bg-[#faf9f5] border-[#cbd5cb] text-[#0e2b24]">
               <DialogHeader>
-                <DialogTitle className="text-base font-bold">
+                <DialogTitle className="text-base font-bold text-[#0e2b24]">
                   Log Official Authority Reply
                 </DialogTitle>
-                <DialogDescription className="text-xs">
+                <DialogDescription className="text-xs text-[#5c6f66]">
                   Record correspondence, reference dispatch number, or field inspection notes for
                   docket {activeEscalation.id}.
                 </DialogDescription>
               </DialogHeader>
 
               <div className="py-2 space-y-3">
-                <label htmlFor="official-response" className="text-xs font-medium block">
+                <label htmlFor="official-response" className="text-xs font-semibold text-[#17382f] block">
                   Official Response / Minutes:
                 </label>
                 <Textarea
                   id="official-response"
                   placeholder="e.g. Work order #GN-WO-401 issued to contractor. Inspection scheduled for Oct 28..."
-                  className="text-xs"
+                  className="text-xs bg-white border-[#cbd5cb]"
                   rows={4}
                   value={officialNote}
                   onChange={(e) => setOfficialNote(e.target.value)}
                 />
 
-                <div className="flex items-center gap-2 pt-1">
-                  <span className="text-xs text-muted-foreground">Quick Status:</span>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className="text-xs text-[#5c6f66]">Quick Status:</span>
                   <Button
-                    size="xs"
+                    size="sm"
                     variant="outline"
+                    className="h-8 text-xs border-[#cbd5cb]"
                     disabled={isUpdatingId === activeEscalation.id}
                     onClick={() => handleUpdateStatus(activeEscalation.id, "acknowledged")}
                   >
                     Mark Acknowledged
                   </Button>
                   <Button
-                    size="xs"
+                    size="sm"
                     variant="outline"
+                    className="h-8 text-xs border-[#cbd5cb]"
                     disabled={isUpdatingId === activeEscalation.id}
                     onClick={() => handleUpdateStatus(activeEscalation.id, "in-progress")}
                   >
@@ -405,10 +407,11 @@ export default function EscalationsPage() {
                 </div>
               </div>
 
-              <DialogFooter>
+              <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0 justify-end pt-2 border-t border-[#eef1e9]">
                 <Button
                   variant="outline"
                   size="sm"
+                  className="h-9 sm:h-8 text-xs border-[#cbd5cb]"
                   disabled={isSavingNote}
                   onClick={() => setActiveModalId(null)}
                 >
@@ -416,7 +419,7 @@ export default function EscalationsPage() {
                 </Button>
                 <Button
                   size="sm"
-                  className="gap-1.5"
+                  className="h-9 sm:h-8 text-xs gap-1.5 bg-[#0e2b24] hover:bg-[#1c4b3e] text-white"
                   disabled={isSavingNote || !officialNote.trim()}
                   onClick={handleSaveNote}
                 >

@@ -127,7 +127,7 @@ export default function AnalyticsPage() {
   };
 
   return (
-    <RoleGuard allowedRoles={["moderator", "admin"]}>
+    <RoleGuard requiredPermission="canViewCivicAnalytics">
       <div className="flex flex-col gap-6">
         {/* ── Page Header ─── */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -146,11 +146,11 @@ export default function AnalyticsPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5 h-9 sm:h-8"
+              className="gap-1.5 h-9 sm:h-8 flex-1 sm:flex-none justify-center"
               onClick={fetchAnalytics}
               disabled={isLoading}
             >
@@ -161,13 +161,12 @@ export default function AnalyticsPage() {
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5 h-9 sm:h-8"
+              className="gap-1.5 h-9 sm:h-8 flex-1 sm:flex-none justify-center"
               onClick={handleExportAuditReport}
               disabled={!metrics || isLoading}
             >
               <Download className="size-3.5" />
-              <span className="hidden sm:inline">Export Audit Report</span>
-              <span className="sm:hidden">Report</span>
+              <span>Export Audit</span>
             </Button>
           </div>
         </div>
@@ -262,14 +261,14 @@ export default function AnalyticsPage() {
           {/* Left: Severity Distribution (7 cols) */}
           <div className="flex flex-col gap-6 lg:col-span-7">
             <Card className="shadow-xs">
-              <CardHeader className="border-b border-border pb-4">
-                <CardTitle className="text-lg">Incident Severity Breakdown</CardTitle>
-                <CardDescription>
+              <CardHeader className="border-b border-border p-4 sm:p-6 pb-3 sm:pb-4">
+                <CardTitle className="text-base sm:text-lg">Incident Severity Breakdown</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
                   Urgency levels assigned across verified physical defects.
                 </CardDescription>
               </CardHeader>
 
-              <CardContent className="pt-6">
+              <CardContent className="p-4 sm:p-6 pt-4 sm:pt-6">
                 {!metrics || metrics.totalIncidents === 0 ? (
                   <Empty className="my-6 border-0 bg-transparent">
                     <EmptyHeader>
@@ -361,14 +360,14 @@ export default function AnalyticsPage() {
           {/* Right: Category Breakdown (5 cols) */}
           <div className="flex flex-col gap-6 lg:col-span-5">
             <Card className="shadow-xs">
-              <CardHeader className="border-b border-border pb-4">
-                <CardTitle className="text-lg">Distribution by Category</CardTitle>
-                <CardDescription>
+              <CardHeader className="border-b border-border p-4 sm:p-6 pb-3 sm:pb-4">
+                <CardTitle className="text-base sm:text-lg">Distribution by Category</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
                   Breakdown by hazard typology across Greater Noida pilot.
                 </CardDescription>
               </CardHeader>
 
-              <CardContent className="flex flex-col gap-4 pt-4">
+              <CardContent className="flex flex-col gap-4 p-4 sm:p-6 pt-4 sm:pt-4">
                 {!metrics || categories.length === 0 ? (
                   <Empty className="my-6 border-0 bg-transparent">
                     <EmptyHeader>

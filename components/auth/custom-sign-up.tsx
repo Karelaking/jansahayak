@@ -107,28 +107,53 @@ function ClerkConnectedSignUp() {
     try {
       const parts = fullName.trim().split(" ");
       const firstName = parts[0] || fullName;
-      const lastName = parts.slice(1).join(" ") || undefined;
+      const lastName = parts.slice(1).join(" ").trim() || undefined;
 
       const { error } = await signUp.password({
         emailAddress: email,
         password,
         firstName,
-        lastName,
+        ...(lastName ? { lastName } : {}),
       });
 
       if (error) {
         setLocalError(error.message || "Sign-up validation failed.");
-        setIsSubmitting(false);
         return;
       }
 
-      // Check if email code verification is required
-      if (signUp.verifications?.emailAddress?.status === "unverified") {
-        await signUp.verifications.sendEmailCode();
-        setVerifying(true);
-      } else {
+      if (signUp.status === "complete") {
         await finalizeSignUp();
+        return;
       }
+
+      if (signUp.isTransferable) {
+        setLocalError(
+          "An account with this email already exists. Sign in instead to continue.",
+        );
+        return;
+      }
+
+      if (signUp.unverifiedFields?.includes("email_address")) {
+        const { error: sendError } = await signUp.verifications.sendEmailCode();
+        if (sendError) {
+          setLocalError(
+            sendError.message ||
+              "We could not send a verification code. Please check the address and try again.",
+          );
+          return;
+        }
+        setVerifying(true);
+        return;
+      }
+
+      if (signUp.unverifiedFields?.length) {
+        setLocalError(
+          `Additional verification is required (${signUp.unverifiedFields.join(", ")}). Please contact support if this persists.`,
+        );
+        return;
+      }
+
+      setLocalError("Registration could not be completed. Please try again.");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Registration failed.";
       setLocalError(msg);
@@ -151,15 +176,44 @@ function ClerkConnectedSignUp() {
       const { error } = await signUp.verifications.verifyEmailCode({ code });
       if (error) {
         setLocalError(error.message || "Invalid verification code.");
-        setIsSubmitting(false);
         return;
       }
 
-      await finalizeSignUp();
+      if (signUp.status === "complete") {
+        await finalizeSignUp();
+        return;
+      }
+
+      if (signUp.isTransferable) {
+        setLocalError(
+          "An account with this email already exists. Sign in instead to continue.",
+        );
+        return;
+      }
+
+      if (signUp.unverifiedFields?.includes("email_address")) {
+        setLocalError("That code was not accepted. Check the latest email and try again.");
+        return;
+      }
+
+      setLocalError("Registration could not be completed. Please try again.");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Verification failed.";
       setLocalError(msg);
+    } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setLocalError(null);
+    try {
+      const { error } = await signUp.verifications.sendEmailCode();
+      if (error) {
+        setLocalError(error.message || "We could not resend the verification code.");
+      }
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : "We could not resend the code.");
     }
   };
 
@@ -188,6 +242,7 @@ function ClerkConnectedSignUp() {
         code={code}
         setCode={setCode}
         onSubmit={handleVerifyCode}
+        onResend={handleResendCode}
         isLoading={isLoading}
         errorMessage={localError}
       />
@@ -510,6 +565,7 @@ function VerificationLayout({
   code,
   setCode,
   onSubmit,
+  onResend,
   isLoading,
   errorMessage,
 }: {
@@ -517,6 +573,7 @@ function VerificationLayout({
   code: string;
   setCode: (val: string) => void;
   onSubmit: (e: React.FormEvent) => void;
+  onResend: () => void;
   isLoading: boolean;
   errorMessage?: string | null;
 }) {
@@ -589,6 +646,15 @@ function VerificationLayout({
                 )}
               </Button>
             </form>
+
+            <button
+              type="button"
+              onClick={onResend}
+              disabled={isLoading}
+              className="mt-4 w-full text-center text-[11px] font-medium text-[#486057] hover:text-[#0e2b24] disabled:opacity-50"
+            >
+              Resend verification code
+            </button>
           </CardContent>
         </Card>
       </div>

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserSession } from "@/lib/auth/session";
+import { ANONYMOUS_USER_ID } from "@/lib/auth/roles";
+import { isClerkConfigured, isTestEnvironment } from "@/lib/auth/clerk-config";
 import { runReportPipeline } from "@/lib/pipeline/orchestrator";
 import { executeStage1Intake } from "@/lib/pipeline/intake";
 import { processReportBackground } from "@/lib/pipeline/background-processor";
@@ -33,6 +35,23 @@ export async function POST(req: NextRequest) {
     }
 
     const session = await getCurrentUserSession(req);
+
+    // With Clerk configured, reports are filed under a verified identity. The
+    // automated harness (and Clerk-less local development) may file anonymously;
+    // those submissions are stored under a non-personal sentinel instead of a
+    // client-supplied user ID.
+    if (isClerkConfigured() && !isTestEnvironment() && !session.isAuthenticated) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Authentication required: please sign in before filing a hazard report.",
+        },
+        { status: 401 },
+      );
+    }
+
+    const reporterId = session.isAuthenticated && session.userId ? session.userId : ANONYMOUS_USER_ID;
+
     const contentType = req.headers.get("content-type") || "";
     const isSync = req.nextUrl.searchParams.get("sync") === "true";
 
@@ -77,7 +96,7 @@ export async function POST(req: NextRequest) {
       }
 
       payload = {
-        userId: session.userId || (formData.get("userId") as string) || "citizen_dev",
+        userId: reporterId,
         category,
         description,
         idempotencyKey,
@@ -115,7 +134,7 @@ export async function POST(req: NextRequest) {
       );
 
       payload = {
-        userId: session.userId || json.userId || "citizen_dev",
+        userId: reporterId,
         category: json.category,
         description: json.description,
         idempotencyKey: json.idempotencyKey,

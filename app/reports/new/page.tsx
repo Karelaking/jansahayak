@@ -474,7 +474,6 @@ export default function NewReportPage() {
       const idempotencyKey = idempotencyKeyRef.current;
 
       const payload = {
-        userId: session?.isAuthenticated && session.userId ? session.userId : "citizen_dev",
         category,
         description: description.trim(),
         idempotencyKey,

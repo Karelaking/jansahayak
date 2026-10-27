@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserSession } from "@/lib/auth/session";
-import { ROLE_PERMISSIONS } from "@/lib/auth/roles";
+import { ANONYMOUS_USER_ID, ROLE_PERMISSIONS } from "@/lib/auth/roles";
 
 /**
  * PRD §2 & §14B User Session & Role Introspection Endpoint
@@ -28,8 +28,8 @@ export async function GET(req: NextRequest) {
         success: false,
         error: msg,
         session: {
-          userId: "anonymous",
-          email: "guest@jansahayak.in",
+          userId: ANONYMOUS_USER_ID,
+          email: "",
           role: "citizen",
           isAuthenticated: false,
           permissions: ROLE_PERMISSIONS.citizen,
