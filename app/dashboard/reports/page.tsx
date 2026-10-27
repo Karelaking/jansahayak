@@ -272,10 +272,10 @@ export default function ReportsPage() {
                   return "under-review";
                 return "open";
               })(),
-              latitude: r.submissionLocation?.latitude || 28.4744,
-              longitude: r.submissionLocation?.longitude || 77.504,
-              landmark: r.submissionLocation?.landmark || "Greater Noida",
-              location: r.submissionLocation?.landmark || "Greater Noida",
+              latitude: r.submissionLocation?.latitude || r.location?.latitude || 28.4744,
+              longitude: r.submissionLocation?.longitude || r.location?.longitude || 77.504,
+              landmark: r.submissionLocation?.landmark || r.location?.landmark || r.submissionLocation?.address || r.location?.address || "Greater Noida",
+              location: r.submissionLocation?.landmark || r.location?.landmark || r.submissionLocation?.address || r.location?.address || "Greater Noida",
               time: r.createdAt
                 ? new Date(r.createdAt).toLocaleTimeString([], {
                     hour: "2-digit",

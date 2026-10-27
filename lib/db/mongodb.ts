@@ -510,6 +510,8 @@ export interface RawReportDocument {
     longitude: number;
     accuracyMeters: number;
     capturedAt: string;
+    landmark?: string;
+    address?: string;
   };
   deviceMetadata?: {
     platform?: string;

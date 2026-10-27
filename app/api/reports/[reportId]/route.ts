@@ -3,6 +3,7 @@ import { getReportsCollection, getPipelineLogsCollection } from "@/lib/db/mongod
 import { db, incidents, incidentReports } from "@/lib/db";
 import { getCurrentUserSession } from "@/lib/auth/session";
 import { eq, sql } from "drizzle-orm";
+import { reverseGeocode } from "@/lib/geo/reverse-geocode";
 
 /**
  * PRD §16 Public-Safe Report Progress Endpoint
@@ -25,6 +26,7 @@ export async function GET(
       submissionLocation: 1,
       evidencePhotos: 1,
       associatedIncidentId: 1,
+      deviceMetadata: 1,
     };
 
     // 1. Try finding by raw reportId
@@ -171,6 +173,23 @@ export async function GET(
       stageError ||
       null;
 
+    const rawLoc = report.submissionLocation || {};
+    let resolvedLandmark =
+      rawLoc.landmark ||
+      rawLoc.address ||
+      ((report.deviceMetadata as Record<string, unknown> | undefined)?.landmark as string) ||
+      undefined;
+
+    if (!resolvedLandmark && Number.isFinite(rawLoc.latitude) && Number.isFinite(rawLoc.longitude)) {
+      resolvedLandmark = await reverseGeocode(rawLoc.latitude, rawLoc.longitude);
+    }
+
+    const locationWithAddress = {
+      ...rawLoc,
+      landmark: resolvedLandmark,
+      address: resolvedLandmark,
+    };
+
     return NextResponse.json({
       success: true,
       reportId: report.reportId,
@@ -179,7 +198,7 @@ export async function GET(
       status: report.status,
       rejectionReason: finalRejectionReason,
       createdAt: report.createdAt,
-      location: report.submissionLocation,
+      location: locationWithAddress,
       photoCount: formattedPhotos.length,
       photos: formattedPhotos,
       associatedIncidentId: report.associatedIncidentId,

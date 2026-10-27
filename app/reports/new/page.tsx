@@ -219,42 +219,60 @@ export default function NewReportPage() {
   const targetAuthority =
     OFFICIAL_AUTHORITIES.find((a) => a.id === selectedCatObj.authorityId) ?? defaultAuthority;
 
-  // Real-time GPS Acquisition
-  const handleAcquireGps = () => {
+  // Real-time GPS Acquisition & Reverse Geocoding
+  const handleAcquireGps = React.useCallback(() => {
     setIsLocating(true);
     setErrorMsg(null);
     setLocationNotice(null);
 
     if (typeof window !== "undefined" && "geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
+        async (pos) => {
           const lat = Number(pos.coords.latitude.toFixed(6));
           const lng = Number(pos.coords.longitude.toFixed(6));
           const acc = Number(pos.coords.accuracy.toFixed(1));
           setLatitude(lat);
           setLongitude(lng);
           setAccuracy(acc);
+
+          // Reverse geocode live coordinates to detect the actual address/locality
+          try {
+            const geoRes = await fetch(`/api/geocode/reverse?lat=${lat}&lng=${lng}`);
+            if (geoRes.ok) {
+              const geoData = await geoRes.json();
+              if (geoData.address) {
+                setLocationName(geoData.address);
+                setLocationNotice(`GPS detected: ${geoData.address} (±${acc}m)`);
+                setTimeout(() => setLocationNotice(null), 5000);
+                setIsLocating(false);
+                return;
+              }
+            }
+          } catch {
+            // Non-blocking reverse geocode fallback
+          }
+
           setIsLocating(false);
           setLocationNotice(`Location updated (GPS accurate to ±${acc}m)`);
           setTimeout(() => setLocationNotice(null), 4000);
         },
         () => {
-          setLatitude(28.4744);
-          setLongitude(77.504);
-          setAccuracy(7.5);
           setIsLocating(false);
-          setLocationNotice("Using approximate Greater Noida coordinates");
+          setLocationNotice("Could not access GPS. Please check browser permissions or select your sector.");
           setTimeout(() => setLocationNotice(null), 4000);
         },
         { enableHighAccuracy: true, timeout: 8000 },
       );
     } else {
-      setLatitude(28.4744);
-      setLongitude(77.504);
-      setAccuracy(8.0);
       setIsLocating(false);
+      setLocationNotice("Geolocation is not supported by your browser device.");
     }
-  };
+  }, []);
+
+  // Automatically attempt real device GPS acquisition on mount
+  React.useEffect(() => {
+    handleAcquireGps();
+  }, [handleAcquireGps]);
 
   // Camera & Viewfinder Modal State
   const [isCameraOpen, setIsCameraOpen] = React.useState(false);
@@ -626,6 +644,8 @@ export default function NewReportPage() {
           longitude,
           accuracyMeters: accuracy,
           capturedAt: new Date().toISOString(),
+          landmark: locationName,
+          address: locationName,
         },
         deviceMetadata: {
           platform: "Mobile Web Client",

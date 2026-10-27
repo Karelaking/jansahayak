@@ -65,6 +65,8 @@ interface ReportDetail {
     longitude: number;
     accuracyMeters?: number;
     capturedAt?: string;
+    landmark?: string;
+    address?: string;
   };
   photoCount: number;
   photos: EvidencePhoto[];
@@ -465,21 +467,36 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
 
                 <div className="space-y-1">
                   <span className="font-semibold text-[#486057] uppercase tracking-wider text-[11px]">
-                    Verified Field Coordinates
+                    Verified Field Location &amp; GPS
                   </span>
-                  <div className="bg-[#f5f3ed] p-3 rounded-lg border border-[#eef1e9] space-y-1.5 font-mono text-[11px]">
-                    <div className="flex items-center gap-1.5 text-[#0e2b24]">
-                      <MapPin className="size-3.5 text-emerald-700 shrink-0" />
-                      <span>
-                        {report.location
-                          ? `${report.location.latitude.toFixed(4)}° N, ${report.location.longitude.toFixed(4)}° E`
-                          : "28.4744° N, 77.5040° E"}
-                      </span>
+                  <div className="bg-[#f5f3ed] p-3 rounded-lg border border-[#eef1e9] space-y-2 text-[11px]">
+                    <div className="flex items-start gap-1.5 text-[#0e2b24]">
+                      <MapPin className="size-3.5 text-emerald-700 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <p className="font-sans font-semibold text-xs text-[#0e2b24] leading-tight">
+                          {report.location?.landmark || report.location?.address || "Field Geotag Location"}
+                        </p>
+                        <p className="text-[#5c6f66] font-mono text-[10px]">
+                          {report.location
+                            ? `${report.location.latitude.toFixed(5)}° N, ${report.location.longitude.toFixed(5)}° E`
+                            : "28.4744° N, 77.5040° E"}
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-[#5c6f66] font-sans text-[11px]">
-                      GPS accuracy: ±{report.location?.accuracyMeters || 8}m (Pari Chowk, Greater
-                      Noida)
-                    </p>
+                    <div className="flex items-center justify-between text-[#5c6f66] font-sans text-[10px] pt-1.5 border-t border-[#e2e8de]">
+                      <span>GPS Accuracy: ±{report.location?.accuracyMeters || 8}m</span>
+                      {report.location && (
+                        <a
+                          href={`https://www.google.com/maps?q=${report.location.latitude},${report.location.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-emerald-800 hover:underline font-medium"
+                        >
+                          <span>Open in Maps</span>
+                          <ExternalLink className="size-2.5" />
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1063,7 +1080,8 @@ export default function ReportDetailClient({ reportId }: { reportId: string }) {
                 <div>
                   <p className="font-bold">This hazard is now live on the Public Safety Map</p>
                   <p className="text-[11px] opacity-80">
-                    Citizens and local authorities can inspect this verified pin at Greater Noida.
+                    Citizens and local authorities can inspect this verified pin at{" "}
+                    {report.location?.landmark || "the verified field coordinates"}.
                   </p>
                 </div>
                 <Link href="/map">

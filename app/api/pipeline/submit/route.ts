@@ -110,6 +110,14 @@ export async function POST(req: NextRequest) {
           longitude: subLng,
           accuracyMeters: 10,
           capturedAt: new Date().toISOString(),
+          landmark:
+            (formData.get("landmark") as string) ||
+            (formData.get("locationName") as string) ||
+            undefined,
+          address:
+            (formData.get("address") as string) ||
+            (formData.get("locationName") as string) ||
+            undefined,
         },
         deviceMetadata: {
           userAgent: req.headers.get("user-agent") || undefined,
