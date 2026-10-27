@@ -57,31 +57,31 @@ import { useDashboardSession } from "../dashboard-shell";
 function getStatusBadge(status: string, publicOpinionStatus?: string) {
   if (publicOpinionStatus === "reopened_by_community") {
     return (
-      <span className="status-escalated bg-[#f3d9cf] text-[#8c2e1b] border-[#fecaca]">
-        <i aria-hidden="true" className="bg-[#e4876f]" />
+      <span className="status-escalated bg-[#f3d9cf] text-[#8c2e1b] border-[#e4876f]/50">
+        <i aria-hidden="true" className="bg-[#8c2e1b]" />
         Citizen Disputed
       </span>
     );
   }
   if (publicOpinionStatus === "verified_by_community") {
     return (
-      <span className="status-progress bg-[#f4e8be] text-[#7a540b] border-[#fed7aa]">
-        <i aria-hidden="true" className="bg-[#e7b64f]" />
+      <span className="status-progress bg-[#d6e5d2] text-[#234a29] border-[#78a37d]/40">
+        <i aria-hidden="true" className="bg-[#78a37d]" />
         Community Verified
       </span>
     );
   }
   if (publicOpinionStatus === "under_repair") {
     return (
-      <span className="status-progress bg-[#d6e5d2] text-[#234a29] border-[#cbd5cb]">
-        <i aria-hidden="true" className="bg-[#78a37d]" />
+      <span className="status-progress bg-[#e9efe8] text-[#17382f] border-[#cbd5cb]">
+        <i aria-hidden="true" className="bg-[#e7b64f]" />
         Under Repair
       </span>
     );
   }
   if (publicOpinionStatus === "under_review") {
     return (
-      <span className="status-open bg-[#f4e8be] text-[#7a540b] border-[#fed7aa]">
+      <span className="status-open bg-[#f4e8be] text-[#7a540b] border-[#e7b64f]/40">
         <i aria-hidden="true" className="bg-[#e7b64f]" />
         Quorum Pending
       </span>
@@ -91,62 +91,67 @@ function getStatusBadge(status: string, publicOpinionStatus?: string) {
   switch (status) {
     case "open":
       return (
-        <span className="status-open">
-          <i aria-hidden="true" />
+        <span className="status-open bg-[#f4e8be] text-[#7a540b] border-[#e7b64f]/40">
+          <i aria-hidden="true" className="bg-[#e7b64f]" />
           Open
+        </span>
+      );
+    case "under-review":
+      return (
+        <span className="status-progress bg-[#f4e8be] text-[#7a540b] border-[#e7b64f]/40">
+          <i aria-hidden="true" className="bg-[#e7b64f]" />
+          Under Review
         </span>
       );
     case "in-progress":
       return (
-        <span className="status-progress">
-          <i aria-hidden="true" />
+        <span className="status-progress bg-[#e9efe8] text-[#17382f] border-[#cbd5cb]">
+          <i aria-hidden="true" className="bg-[#e7b64f]" />
           In Progress
         </span>
       );
     case "escalated":
       return (
-        <span className="status-escalated">
-          <i aria-hidden="true" />
+        <span className="status-escalated bg-[#f3d9cf] text-[#8c2e1b] border-[#e4876f]/50">
+          <i aria-hidden="true" className="bg-[#8c2e1b]" />
           Escalated
         </span>
       );
     case "resolved":
       return (
-        <span className="status-resolved">
-          <i aria-hidden="true" />
+        <span className="status-resolved bg-[#d6e5d2] text-[#234a29] border-[#78a37d]/40">
+          <i aria-hidden="true" className="bg-[#78a37d]" />
           Resolved
-        </span>
-      );
-    case "under-review":
-      return (
-        <span className="status-progress">
-          <i aria-hidden="true" />
-          Under Review
         </span>
       );
     case "rejected":
       return (
-        <span className="status-rejected inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#f3d9cf] text-[#8c2e1b] border border-[#fecaca]">
+        <span className="status-rejected inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#f3d9cf] text-[#8c2e1b] border border-[#e4876f]/50">
           <i aria-hidden="true" className="size-1.5 rounded-full bg-[#8c2e1b]" />
           Rejected
         </span>
       );
     case "suspended":
       return (
-        <span className="status-suspended inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#f4e8be] text-[#7a540b] border border-[#fed7aa]">
+        <span className="status-suspended inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#f4e8be] text-[#7a540b] border border-[#e7b64f]/40">
           <i aria-hidden="true" className="size-1.5 rounded-full bg-[#7a540b]" />
           Suspended
         </span>
       );
     case "processing-failed":
       return (
-        <span className="status-failed inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#f3d9cf] text-[#8c2e1b] border border-[#fecaca]">
+        <span className="status-failed inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#f3d9cf] text-[#8c2e1b] border border-[#e4876f]/50">
           <i aria-hidden="true" className="size-1.5 rounded-full bg-[#e4876f]" />
           Processing Interrupted
         </span>
       );
     default:
-      return <Badge variant="outline">{status}</Badge>;
+      return (
+        <span className="status-open bg-[#faf9f5] text-[#17382f] border-[#cbd5cb]">
+          <i aria-hidden="true" className="bg-[#cbd5cb]" />
+          {status}
+        </span>
+      );
   }
 }
 
@@ -155,23 +160,23 @@ function getSeverityBadge(severity: string) {
     case "high":
     case "critical":
       return (
-        <span className="sev-high">
-          <i aria-hidden="true" />
+        <span className="sev-high bg-[#f3d9cf] text-[#8c2e1b] border border-[#e4876f]/40 font-semibold">
+          <i aria-hidden="true" className="bg-[#e4876f]" />
           High
         </span>
       );
     case "medium":
     case "moderate":
       return (
-        <span className="sev-medium">
-          <i aria-hidden="true" />
+        <span className="sev-medium bg-[#f4e8be] text-[#7a540b] border border-[#e7b64f]/40 font-semibold">
+          <i aria-hidden="true" className="bg-[#e7b64f]" />
           Medium
         </span>
       );
     default:
       return (
-        <span className="sev-low">
-          <i aria-hidden="true" />
+        <span className="sev-low bg-[#d6e5d2] text-[#234a29] border border-[#78a37d]/40 font-semibold">
+          <i aria-hidden="true" className="bg-[#78a37d]" />
           Low
         </span>
       );
@@ -208,8 +213,6 @@ export default function ReportsPage() {
     type: "success" | "error";
     text: string;
   } | null>(null);
-
-
 
   // Fetch database reports
   const loadReports = React.useCallback(async () => {
@@ -352,8 +355,7 @@ export default function ReportsPage() {
       // Regular citizens can strictly ONLY view their own submissions
       if (!isStaff || scopeFilter === "mine") {
         const isMine =
-          (sessionUserId && r.userId === sessionUserId) ||
-          localReportIds.includes(r.id);
+          (sessionUserId && r.userId === sessionUserId) || localReportIds.includes(r.id);
         if (!isMine) return false;
       }
 
@@ -572,24 +574,27 @@ export default function ReportsPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* ── Page Header ─── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[#cbd5cb]/60 pb-5">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-heading text-xl font-bold tracking-tight text-foreground sm:text-2xl md:text-3xl">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="font-heading text-xl font-bold tracking-tight text-[#17382f] sm:text-2xl md:text-3xl">
               {isStaff
                 ? scopeFilter === "mine"
                   ? "My Submissions"
                   : "Hazard Reports Registry"
                 : "My Submitted Reports"}
             </h1>
-            <Badge variant="secondary" className="text-xs">
+            <Badge
+              variant="outline"
+              className="text-xs bg-[#eef1e9] text-[#17382f] border-[#d2d9d0]"
+            >
               {filteredReports.length} of {reports.length}
             </Badge>
             <Badge
               variant="outline"
-              className={`text-[10px] uppercase font-mono border ${
+              className={`text-[10px] uppercase font-mono font-semibold border ${
                 userRole === "admin"
-                  ? "bg-[#f3d9cf] text-[#8c2e1b] border-[#fecaca]"
+                  ? "bg-[#f3d9cf] text-[#8c2e1b] border-[#e4876f]/50"
                   : userRole === "moderator"
                     ? "bg-[#d6e5d2] text-[#234a29] border-[#cbd5cb]"
                     : "bg-[#eef1e9] text-[#17382f] border-[#d2d9d0]"
@@ -598,7 +603,7 @@ export default function ReportsPage() {
               {isStaff ? `${userRole} Access` : "Citizen"}
             </Badge>
           </div>
-          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
+          <p className="mt-1 text-xs sm:text-sm text-[#5c6f66]">
             {isStaff
               ? "Browse, inspect, update lifecycle status, and manage all Greater Noida hazard dockets."
               : "Review your submitted civic reports, update descriptions, or retract submissions."}
@@ -607,13 +612,15 @@ export default function ReportsPage() {
 
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {isStaff && (
-            <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border text-xs w-full sm:w-auto">
+            <div className="flex items-center gap-1 bg-[#eef1e9] p-0.5 rounded-lg border border-[#d2d9d0] text-xs w-full sm:w-auto">
               <Button
                 type="button"
                 variant={scopeFilter === "mine" ? "secondary" : "ghost"}
                 size="xs"
                 onClick={() => setScopeFilter("mine")}
-                className="h-8 sm:h-7 text-xs font-medium flex-1 sm:flex-none"
+                className={`h-8 sm:h-7 text-xs font-medium flex-1 sm:flex-none ${
+                  scopeFilter === "mine" ? "bg-white text-[#0e2b24] shadow-xs" : "text-[#486057]"
+                }`}
               >
                 My Submissions
               </Button>
@@ -622,7 +629,9 @@ export default function ReportsPage() {
                 variant={scopeFilter === "all" ? "secondary" : "ghost"}
                 size="xs"
                 onClick={() => setScopeFilter("all")}
-                className="h-8 sm:h-7 text-xs font-medium flex-1 sm:flex-none"
+                className={`h-8 sm:h-7 text-xs font-medium flex-1 sm:flex-none ${
+                  scopeFilter === "all" ? "bg-white text-[#0e2b24] shadow-xs" : "text-[#486057]"
+                }`}
               >
                 All Community Reports
               </Button>
@@ -631,7 +640,7 @@ export default function ReportsPage() {
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5 h-9 sm:h-8 flex-1 sm:flex-none text-xs"
+            className="gap-1.5 h-9 sm:h-8 flex-1 sm:flex-none text-xs border-[#cbd5cb] text-[#17382f] hover:bg-[#eef1e9]"
             onClick={() => loadReports()}
           >
             <RotateCcw className="size-3.5" />
@@ -641,7 +650,7 @@ export default function ReportsPage() {
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5 h-9 sm:h-8 flex-1 sm:flex-none text-xs"
+            className="gap-1.5 h-9 sm:h-8 flex-1 sm:flex-none text-xs border-[#cbd5cb] text-[#17382f] hover:bg-[#eef1e9]"
             onClick={handleExportCsv}
             disabled={filteredReports.length === 0}
           >
@@ -652,7 +661,7 @@ export default function ReportsPage() {
 
           <Button
             size="sm"
-            className="h-9 sm:h-8 bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] w-full sm:w-auto text-xs font-medium justify-center"
+            className="h-9 sm:h-8 bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] w-full sm:w-auto text-xs font-medium justify-center shadow-xs"
             render={<Link href="/reports/new" />}
           >
             <Plus className="size-3.5 mr-1" />
@@ -667,24 +676,24 @@ export default function ReportsPage() {
           role="alert"
           className={`flex items-center justify-between rounded-lg p-3 text-xs border ${
             feedback.type === "success"
-              ? "bg-emerald-50 text-emerald-900 border-emerald-300"
-              : "bg-rose-50 text-rose-900 border-rose-300"
+              ? "bg-[#d6e5d2] text-[#234a29] border-[#78a37d]/50"
+              : "bg-[#f3d9cf] text-[#8c2e1b] border-[#e4876f]/50"
           }`}
         >
           <div className="flex items-center gap-2">
             {feedback.type === "success" ? (
-              <CheckCircle2 className="size-4 shrink-0 text-emerald-700" />
+              <CheckCircle2 className="size-4 shrink-0 text-[#234a29]" />
             ) : (
-              <AlertCircle className="size-4 shrink-0 text-rose-700" />
+              <AlertCircle className="size-4 shrink-0 text-[#8c2e1b]" />
             )}
-            <span>{feedback.text}</span>
+            <span className="font-medium">{feedback.text}</span>
           </div>
           <Button
             type="button"
             variant="ghost"
             size="xs"
             onClick={() => setFeedback(null)}
-            className="h-6 px-2 text-inherit"
+            className="h-6 px-2 text-inherit hover:bg-black/5"
           >
             Dismiss
           </Button>
@@ -692,36 +701,51 @@ export default function ReportsPage() {
       )}
 
       {/* ── Table & Mobile Card View ─── */}
-      <Card className="shadow-xs overflow-hidden">
-        <CardHeader className="border-b border-border pb-4 p-4 sm:p-6">
+      <Card className="bg-[#faf9f5] border-[#cbd5cb] shadow-xs overflow-hidden">
+        <CardHeader className="border-b border-[#cbd5cb] pb-4 p-4 sm:p-6 bg-[#faf9f5]">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             {/* Search Input */}
             <div className="relative w-full md:max-w-xs">
               <Input
                 placeholder="Search title, location, category..."
-                className="pl-8 text-xs h-9"
+                className="pl-8 text-xs h-9 bg-white border-[#cbd5cb] text-[#17382f] placeholder:text-[#5c6f66] focus-visible:ring-1 focus-visible:ring-[#0e2b24]"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
-              <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
+              <Search className="absolute left-2.5 top-3 size-3.5 text-[#5c6f66] pointer-events-none" />
             </div>
 
             {/* Status Filter Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full md:w-auto">
-              <TabsList className="grid w-full grid-cols-5 md:w-auto">
-                <TabsTrigger value="all" className="text-xs">
+              <TabsList className="grid w-full grid-cols-5 md:w-auto h-9 bg-[#eef1e9] border border-[#d2d9d0] p-0.5">
+                <TabsTrigger
+                  value="all"
+                  className="text-xs data-[state=active]:bg-white data-[state=active]:text-[#0e2b24] data-[state=active]:font-semibold"
+                >
                   All
                 </TabsTrigger>
-                <TabsTrigger value="under-review" className="text-xs">
+                <TabsTrigger
+                  value="under-review"
+                  className="text-xs data-[state=active]:bg-white data-[state=active]:text-[#0e2b24] data-[state=active]:font-semibold"
+                >
                   Under Review
                 </TabsTrigger>
-                <TabsTrigger value="open" className="text-xs">
+                <TabsTrigger
+                  value="open"
+                  className="text-xs data-[state=active]:bg-white data-[state=active]:text-[#0e2b24] data-[state=active]:font-semibold"
+                >
                   Open
                 </TabsTrigger>
-                <TabsTrigger value="in-progress" className="text-xs">
+                <TabsTrigger
+                  value="in-progress"
+                  className="text-xs data-[state=active]:bg-white data-[state=active]:text-[#0e2b24] data-[state=active]:font-semibold"
+                >
                   In Progress
                 </TabsTrigger>
-                <TabsTrigger value="resolved" className="text-xs">
+                <TabsTrigger
+                  value="resolved"
+                  className="text-xs data-[state=active]:bg-white data-[state=active]:text-[#0e2b24] data-[state=active]:font-semibold"
+                >
                   Resolved
                 </TabsTrigger>
               </TabsList>
@@ -738,7 +762,9 @@ export default function ReportsPage() {
                     <FileText className="size-6 text-muted-foreground" />
                   </EmptyMedia>
                   <EmptyTitle className="text-sm font-semibold">
-                    {isStaff ? "No reports in civic registry" : "You haven't submitted any hazard reports yet"}
+                    {isStaff
+                      ? "No reports in civic registry"
+                      : "You haven't submitted any hazard reports yet"}
                   </EmptyTitle>
                   <EmptyDescription className="text-xs max-w-sm mx-auto">
                     {isStaff
@@ -769,7 +795,8 @@ export default function ReportsPage() {
                     No reports match your filters
                   </EmptyTitle>
                   <EmptyDescription className="text-xs">
-                    No records found under &quot;{activeTab}&quot;{searchQuery ? ` matching "${searchQuery}"` : ""}. Try adjusting your criteria.
+                    No records found under &quot;{activeTab}&quot;
+                    {searchQuery ? ` matching "${searchQuery}"` : ""}. Try adjusting your criteria.
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
@@ -790,63 +817,65 @@ export default function ReportsPage() {
           ) : (
             <>
               {/* Mobile Card View (< md) */}
-              <div className="divide-y divide-border/60 md:hidden">
+              <div className="divide-y divide-[#cbd5cb]/60 md:hidden">
                 {filteredReports.map((report) => (
-                  <div key={report.id} className="p-4 space-y-3 hover:bg-muted/30">
+                  <div
+                    key={report.id}
+                    className="p-4 space-y-3 hover:bg-[#f5f3ed]/40 transition-colors"
+                  >
                     <div className="flex items-start justify-between gap-2">
-                      <span className="font-mono text-xs font-bold text-muted-foreground">
+                      <span className="font-mono text-xs font-bold text-[#486057]">
                         {report.id}
                       </span>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
                         {getStatusBadge(report.status, report.publicOpinionStatus)}
                         {getSeverityBadge(report.severity)}
                       </div>
                     </div>
 
                     <div>
-                      <h4 className="text-sm font-semibold text-foreground leading-snug">
+                      <div className="inline-flex items-center gap-1 rounded bg-[#eef1e9] text-[#17382f] border border-[#d2d9d0] px-1.5 py-0.5 text-[10px] font-medium mb-1">
+                        {report.categoryLabel || report.category}
+                      </div>
+                      <h4 className="text-sm font-semibold text-[#17382f] leading-snug">
                         {report.title}
                       </h4>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <MapPin className="size-3 shrink-0 text-emerald-700" />
-                          <span className="truncate max-w-[190px]">
-                            {report.location || report.landmark}
-                          </span>
+                      <p className="mt-1 flex items-center gap-1 text-xs text-[#5c6f66]">
+                        <MapPin className="size-3 shrink-0 text-[#234a29]" />
+                        <span className="truncate max-w-[240px]">
+                          {report.location || report.landmark}
                         </span>
-                        <span>·</span>
-                        <span>{report.categoryLabel || report.category}</span>
-                      </div>
+                      </p>
                     </div>
 
-                    <div className="flex items-center justify-between pt-1.5 text-[11px] text-muted-foreground border-t border-border/40">
+                    <div className="flex items-center justify-between pt-2 text-xs text-[#5c6f66] border-t border-[#cbd5cb]/40">
                       <span>{report.time || report.reportedAt || "Recently"}</span>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <Button
-                          variant="ghost"
-                          size="sm"
+                          variant="outline"
+                          size="xs"
                           onClick={() => setSelectedReport(report)}
-                          className="h-8.5 min-h-[36px] px-2.5 text-xs rounded-md"
+                          className="h-7 px-2 text-xs border-[#cbd5cb] text-[#0e2b24] hover:bg-[#0e2b24]/5"
                         >
-                          <Eye className="size-3 mr-1" />
+                          <Eye className="size-3 mr-1 text-[#486057]" />
                           <span>Inspect</span>
                         </Button>
                         <Button
-                          variant="ghost"
-                          size="sm"
+                          variant="outline"
+                          size="xs"
                           onClick={() => handleOpenEdit(report)}
-                          className="h-8.5 min-h-[36px] px-2.5 text-xs text-[#0e2b24] rounded-md"
+                          className="h-7 px-2 text-xs border-[#cbd5cb] text-[#0e2b24] hover:bg-[#0e2b24]/5"
                         >
-                          <Pencil className="size-3 mr-1" />
+                          <Pencil className="size-3 mr-1 text-[#486057]" />
                           <span>Edit</span>
                         </Button>
                         <Button
-                          variant="ghost"
-                          size="sm"
+                          variant="outline"
+                          size="xs"
                           onClick={() => setDeletingReport(report)}
-                          className="h-8.5 min-h-[36px] px-2.5 text-xs text-[#8c2e1b] hover:text-[#8c2e1b] hover:bg-[#f3d9cf] rounded-md"
+                          className="h-7 px-2 text-xs border-[#e4876f]/50 text-[#8c2e1b] hover:text-[#8c2e1b] hover:bg-[#f3d9cf]/50"
                         >
-                          <Trash2 className="size-3 mr-1" />
+                          <Trash2 className="size-3" />
                           <span>Delete</span>
                         </Button>
                       </div>
@@ -856,17 +885,31 @@ export default function ReportsPage() {
               </div>
 
               {/* Desktop Table View (>= md) */}
-              <div className="hidden md:block">
+              <div className="hidden md:block overflow-x-auto">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[110px]">Docket ID</TableHead>
-                      <TableHead>Hazard Details</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Location</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Severity</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                  <TableHeader className="bg-[#f5f3ed]/60">
+                    <TableRow className="border-[#cbd5cb]">
+                      <TableHead className="w-[120px] text-xs font-semibold text-[#486057] uppercase tracking-wider">
+                        Case ID
+                      </TableHead>
+                      <TableHead className="text-xs font-semibold text-[#486057] uppercase tracking-wider">
+                        Hazard Details
+                      </TableHead>
+                      <TableHead className="w-32 text-xs font-semibold text-[#486057] uppercase tracking-wider">
+                        Category
+                      </TableHead>
+                      <TableHead className="w-40 text-xs font-semibold text-[#486057] uppercase tracking-wider">
+                        Location
+                      </TableHead>
+                      <TableHead className="w-36 text-xs font-semibold text-[#486057] uppercase tracking-wider">
+                        Status
+                      </TableHead>
+                      <TableHead className="w-24 text-xs font-semibold text-[#486057] uppercase tracking-wider">
+                        Severity
+                      </TableHead>
+                      <TableHead className="w-48 text-right text-xs font-semibold text-[#486057] uppercase tracking-wider">
+                        Actions
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
 
@@ -874,31 +917,33 @@ export default function ReportsPage() {
                     {filteredReports.map((report) => (
                       <TableRow
                         key={report.id}
-                        className="cursor-pointer hover:bg-muted/40"
+                        className="cursor-pointer border-[#cbd5cb]/60 hover:bg-[#f5f3ed]/60 transition-colors"
                         onClick={() => setSelectedReport(report)}
                       >
-                        <TableCell className="font-mono text-xs font-semibold text-muted-foreground">
+                        <TableCell className="font-mono text-xs font-bold text-[#17382f]">
                           {report.id}
                         </TableCell>
 
                         <TableCell>
-                          <div className="font-medium text-xs text-foreground">{report.title}</div>
-                          <div className="text-[11px] text-muted-foreground">
+                          <div className="font-semibold text-xs sm:text-sm text-[#17382f] line-clamp-1">
+                            {report.title}
+                          </div>
+                          <div className="text-xs text-[#5c6f66] mt-0.5">
                             Reported {report.time || report.reportedAt || "Recently"} ·{" "}
                             {report.votes || report.verificationsCount || 0} verifications
                           </div>
                         </TableCell>
 
                         <TableCell>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="inline-flex items-center gap-1 rounded bg-[#eef1e9] text-[#17382f] border border-[#d2d9d0] px-1.5 py-0.5 text-[10px] font-medium">
                             {report.categoryLabel || report.category}
                           </span>
                         </TableCell>
 
                         <TableCell>
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <MapPin className="size-3 shrink-0" />
-                            <span className="truncate max-w-[160px]">
+                          <span className="flex items-center gap-1 text-xs text-[#5c6f66]">
+                            <MapPin className="size-3 shrink-0 text-[#234a29]" />
+                            <span className="truncate max-w-[150px]">
                               {report.location || report.landmark}
                             </span>
                           </span>
@@ -913,27 +958,27 @@ export default function ReportsPage() {
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="xs"
-                              className="gap-1 text-xs"
+                              className="gap-1 text-xs h-7 px-2 border-[#cbd5cb] text-[#0e2b24] hover:bg-[#0e2b24]/5"
                               onClick={() => setSelectedReport(report)}
                             >
-                              <Eye className="size-3" />
+                              <Eye className="size-3 text-[#486057]" />
                               <span>Inspect</span>
                             </Button>
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="xs"
-                              className="gap-1 text-xs text-[#0e2b24] hover:bg-[#eef1e9]"
+                              className="gap-1 text-xs h-7 px-2 border-[#cbd5cb] text-[#0e2b24] hover:bg-[#0e2b24]/5"
                               onClick={() => handleOpenEdit(report)}
                             >
-                              <Pencil className="size-3" />
+                              <Pencil className="size-3 text-[#486057]" />
                               <span>Edit</span>
                             </Button>
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="xs"
-                              className="gap-1 text-xs text-[#8c2e1b] hover:text-[#8c2e1b] hover:bg-[#f3d9cf]"
+                              className="gap-1 text-xs h-7 px-2 border-[#e4876f]/50 text-[#8c2e1b] hover:text-[#8c2e1b] hover:bg-[#f3d9cf]/50"
                               onClick={() => setDeletingReport(report)}
                             >
                               <Trash2 className="size-3" />
@@ -1208,7 +1253,9 @@ export default function ReportsPage() {
               {selectedReport.photos && selectedReport.photos.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-foreground">Attached Evidence Photographs</span>
+                    <span className="font-medium text-foreground">
+                      Attached Evidence Photographs
+                    </span>
                     <span className="text-[10px] font-mono text-muted-foreground">
                       {selectedReport.photos.length} captures recorded
                     </span>

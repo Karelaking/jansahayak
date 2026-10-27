@@ -171,14 +171,17 @@ export default function EscalationsPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-heading text-xl font-bold tracking-tight text-foreground sm:text-2xl md:text-3xl">
+              <h1 className="font-serif text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-[#0e2b24]">
                 Authority Escalation Tracker
               </h1>
-              <Badge variant="outline" className="text-xs">
+              <Badge
+                variant="outline"
+                className="bg-[#f4e8be] text-[#7a540b] border-[#cbd5cb] text-xs font-medium"
+              >
                 {escalations.length} Active Dockets
               </Badge>
             </div>
-            <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
+            <p className="mt-1 text-xs sm:text-sm text-[#5c6f66]">
               Auditable trail of hazard files escalated to responsible municipal authorities and
               elected ward reps.
             </p>
@@ -188,22 +191,24 @@ export default function EscalationsPage() {
         {/* ── Escalation Dockets List ─── */}
         <div className="grid grid-cols-1 gap-5">
           {loading ? (
-            <Card className="shadow-xs p-8 flex items-center justify-center">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
+            <Card className="shadow-xs p-8 flex items-center justify-center border-[#cbd5cb] bg-[#faf9f5]">
+              <div className="flex items-center gap-2 text-xs text-[#5c6f66]">
+                <Loader2 className="size-4 animate-spin text-[#0e2b24]" />
                 <span>Loading municipal escalation dockets...</span>
               </div>
             </Card>
           ) : escalations.length === 0 ? (
             /* Zatian / shadcn Empty State when no dockets exist */
-            <Card className="shadow-xs p-2">
+            <Card className="shadow-xs p-2 border-[#cbd5cb] bg-[#faf9f5]">
               <Empty className="my-8 border-0 bg-transparent">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
-                    <Building2 className="size-6 text-muted-foreground" />
+                    <Building2 className="size-6 text-[#486057]" />
                   </EmptyMedia>
-                  <EmptyTitle>No active authority escalations</EmptyTitle>
-                  <EmptyDescription>
+                  <EmptyTitle className="text-base font-semibold text-[#0e2b24]">
+                    No active authority escalations
+                  </EmptyTitle>
+                  <EmptyDescription className="text-xs text-[#5c6f66]">
                     There are currently no formal grievance dockets open with GNIDA, PWD, or
                     Municipal Drainage cells. Unresolved community hazards will trigger automated
                     docket creation after SLA expiry.
@@ -213,28 +218,33 @@ export default function EscalationsPage() {
             </Card>
           ) : (
             escalations.map((item) => (
-              <Card key={item.id} className="shadow-xs">
-                <CardHeader className="border-b border-border pb-4">
+              <Card key={item.id} className="shadow-xs border-[#cbd5cb] bg-[#faf9f5]">
+                <CardHeader className="border-b border-[#cbd5cb] pb-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-muted-foreground">
+                        <span className="font-mono text-xs font-bold text-[#17382f]">
                           {item.id}
                         </span>
-                        <Badge variant={item.statusVariant} className="text-xs">
+                        <Badge variant={item.statusVariant} className="text-xs font-medium">
                           {item.statusLabel}
                         </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          Linked: <strong>{item.originReportId}</strong> (+{item.linkedReports}{" "}
-                          reports)
+                        <span className="text-xs text-[#5c6f66]">
+                          Linked:{" "}
+                          <strong className="text-[#17382f] font-semibold">
+                            {item.originReportId}
+                          </strong>{" "}
+                          (+{item.linkedReports} reports)
                         </span>
                       </div>
 
-                      <CardTitle className="text-base font-semibold">{item.title}</CardTitle>
+                      <CardTitle className="text-base font-semibold text-[#0e2b24]">
+                        {item.title}
+                      </CardTitle>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Clock className="size-3.5" />
+                    <div className="flex items-center gap-1.5 text-xs text-[#5c6f66]">
+                      <Clock className="size-3.5 text-[#5c6f66]" />
                       <span>Open for {item.daysOpen} days</span>
                     </div>
                   </div>
@@ -246,13 +256,13 @@ export default function EscalationsPage() {
                     item.statusVariant === "destructive") &&
                     item.unresolvedVotesCount !== undefined &&
                     item.unresolvedVotesCount > 0 && (
-                      <div className="rounded-md border border-rose-300 bg-rose-50/90 p-3 text-xs text-rose-900 flex items-start gap-2.5 shadow-2xs">
-                        <AlertTriangle className="size-4 text-rose-600 shrink-0 mt-0.5" />
+                      <div className="rounded-md border border-[#e4876f] bg-[#f3d9cf]/40 p-3 text-xs text-[#8c2e1b] flex items-start gap-2.5 shadow-2xs">
+                        <AlertTriangle className="size-4 text-[#8c2e1b] shrink-0 mt-0.5" />
                         <div className="space-y-0.5">
-                          <strong className="font-semibold block text-rose-950">
+                          <strong className="font-semibold block text-[#8c2e1b]">
                             Active Citizen Dispute: Contractor Repair Rejected
                           </strong>
-                          <span>
+                          <span className="text-[#8c2e1b]">
                             {item.unresolvedVotesCount} local residents verified that this defect
                             persists. Remediation has been automatically reopened in municipal
                             queues per PRD §14B.
@@ -261,39 +271,35 @@ export default function EscalationsPage() {
                       </div>
                     )}
 
-                  <p className="text-xs text-foreground leading-relaxed">{item.summary}</p>
+                  <p className="text-xs text-[#17382f] leading-relaxed">{item.summary}</p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div className="flex items-center gap-2 rounded-md bg-muted/40 p-2.5">
-                      <Building2 className="size-4 text-muted-foreground shrink-0" />
+                    <div className="flex items-center gap-2 rounded-md bg-[#f5f3ed] border border-[#cbd5cb] p-2.5">
+                      <Building2 className="size-4 text-[#486057] shrink-0" />
                       <div>
-                        <span className="text-muted-foreground block text-[11px]">
-                          Forwarded To
-                        </span>
-                        <strong className="text-foreground">{item.authority}</strong>
+                        <span className="text-[#5c6f66] block text-[11px]">Forwarded To</span>
+                        <strong className="text-[#0e2b24] font-semibold">{item.authority}</strong>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 rounded-md bg-muted/40 p-2.5">
-                      <MessageSquare className="size-4 text-muted-foreground shrink-0" />
+                    <div className="flex items-center gap-2 rounded-md bg-[#f5f3ed] border border-[#cbd5cb] p-2.5">
+                      <MessageSquare className="size-4 text-[#486057] shrink-0" />
                       <div>
-                        <span className="text-muted-foreground block text-[11px]">
-                          Assigned Officer
-                        </span>
-                        <strong className="text-foreground">{item.officer}</strong>
+                        <span className="text-[#5c6f66] block text-[11px]">Assigned Officer</span>
+                        <strong className="text-[#0e2b24] font-semibold">{item.officer}</strong>
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-md border border-border p-3 text-xs bg-muted/20">
-                    <span className="font-medium text-foreground block mb-0.5">
+                  <div className="rounded-md border border-[#cbd5cb] p-3 text-xs bg-[#f5f3ed]/60">
+                    <span className="font-medium text-[#0e2b24] block mb-0.5">
                       Latest Timeline Milestone
                     </span>
-                    <span className="text-muted-foreground">{item.lastUpdate}</span>
+                    <span className="text-[#486057]">{item.lastUpdate}</span>
                   </div>
                 </CardContent>
 
-                <CardFooter className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardFooter className="flex flex-col gap-3 border-t border-[#cbd5cb] pt-3 sm:flex-row sm:items-center sm:justify-between">
                   <a
                     href={`/api/admin/incidents/${encodeURIComponent(item.id)}/dossier`}
                     target="_blank"
@@ -309,10 +315,10 @@ export default function EscalationsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-10 sm:h-7 text-xs justify-center"
+                      className="h-10 sm:h-7 text-xs justify-center border-[#cbd5cb] bg-white text-[#17382f] hover:bg-[#e9efe8]"
                       onClick={() => setActiveModalId(item.id)}
                     >
-                      <MessageSquare className="size-3.5 mr-1" />
+                      <MessageSquare className="size-3.5 mr-1 text-[#5c6f66]" />
                       <span>Log Officer Reply</span>
                     </Button>
 
@@ -320,7 +326,7 @@ export default function EscalationsPage() {
                       <Button
                         size="sm"
                         disabled={isUpdatingId === item.id}
-                        className="h-10 sm:h-7 text-xs justify-center bg-emerald-800 hover:bg-emerald-900 text-white"
+                        className="h-10 sm:h-7 text-xs justify-center bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] font-medium"
                         onClick={() => handleUpdateStatus(item.id, "resolved")}
                       >
                         {isUpdatingId === item.id ? (
@@ -341,7 +347,7 @@ export default function EscalationsPage() {
                         variant="outline"
                         size="sm"
                         disabled={isUpdatingId === item.id}
-                        className="h-10 sm:h-7 text-xs justify-center"
+                        className="h-10 sm:h-7 text-xs justify-center border-[#cbd5cb] bg-white text-[#17382f] hover:bg-[#e9efe8]"
                         onClick={() => handleUpdateStatus(item.id, "in-progress")}
                       >
                         {isUpdatingId === item.id ? (
@@ -372,7 +378,10 @@ export default function EscalationsPage() {
               </DialogHeader>
 
               <div className="py-2 space-y-3">
-                <label htmlFor="official-response" className="text-xs font-semibold text-[#17382f] block">
+                <label
+                  htmlFor="official-response"
+                  className="text-xs font-semibold text-[#17382f] block"
+                >
                   Official Response / Minutes:
                 </label>
                 <Textarea
