@@ -57,32 +57,32 @@ import { useDashboardSession } from "../dashboard-shell";
 function getStatusBadge(status: string, publicOpinionStatus?: string) {
   if (publicOpinionStatus === "reopened_by_community") {
     return (
-      <span className="status-escalated bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30">
-        <i aria-hidden="true" className="bg-rose-600" />
+      <span className="status-escalated bg-[#f3d9cf] text-[#8c2e1b] border-[#fecaca]">
+        <i aria-hidden="true" className="bg-[#e4876f]" />
         Citizen Disputed
       </span>
     );
   }
   if (publicOpinionStatus === "verified_by_community") {
     return (
-      <span className="status-progress bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
-        <i aria-hidden="true" className="bg-amber-600" />
+      <span className="status-progress bg-[#f4e8be] text-[#7a540b] border-[#fed7aa]">
+        <i aria-hidden="true" className="bg-[#e7b64f]" />
         Community Verified
       </span>
     );
   }
   if (publicOpinionStatus === "under_repair") {
     return (
-      <span className="status-progress bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30">
-        <i aria-hidden="true" className="bg-blue-600" />
+      <span className="status-progress bg-[#d6e5d2] text-[#234a29] border-[#cbd5cb]">
+        <i aria-hidden="true" className="bg-[#78a37d]" />
         Under Repair
       </span>
     );
   }
   if (publicOpinionStatus === "under_review") {
     return (
-      <span className="status-open bg-sky-500/15 text-sky-700 dark:text-sky-400 border-sky-500/30">
-        <i aria-hidden="true" className="bg-sky-600" />
+      <span className="status-open bg-[#f4e8be] text-[#7a540b] border-[#fed7aa]">
+        <i aria-hidden="true" className="bg-[#e7b64f]" />
         Quorum Pending
       </span>
     );
@@ -140,8 +140,8 @@ function getStatusBadge(status: string, publicOpinionStatus?: string) {
       );
     case "processing-failed":
       return (
-        <span className="status-failed inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-900 border border-rose-200">
-          <i aria-hidden="true" className="size-1.5 rounded-full bg-rose-600" />
+        <span className="status-failed inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#f3d9cf] text-[#8c2e1b] border border-[#fecaca]">
+          <i aria-hidden="true" className="size-1.5 rounded-full bg-[#e4876f]" />
           Processing Interrupted
         </span>
       );
@@ -236,13 +236,7 @@ export default function ReportsPage() {
       const combined: HazardReport[] = [];
       const seenIds = new Set<string>();
 
-      if (isStaff && mapData && Array.isArray(mapData.incidents)) {
-        for (const inc of mapData.incidents) {
-          combined.push(inc);
-          seenIds.add(inc.id);
-        }
-      }
-
+      // 1. Prioritize raw citizen submissions from MongoDB
       if (reportsData && Array.isArray(reportsData.reports)) {
         for (const r of reportsData.reports) {
           const rid = r.reportId || r._id;
@@ -253,6 +247,9 @@ export default function ReportsPage() {
               title: r.description ? r.description.slice(0, 60) : `${r.category} Report`,
               description: r.description || "Citizen road safety report",
               category: r.category || "road-surface",
+              categoryLabel: (r.category || "Road Hazard")
+                .replace(/_/g, " ")
+                .replace(/\b\w/g, (c: string) => c.toUpperCase()),
               severity: "medium",
               status: (() => {
                 const norm = (r.status || "").toUpperCase();
@@ -267,15 +264,28 @@ export default function ReportsPage() {
                   norm === "SUBMITTED" ||
                   norm === "PROCESSING" ||
                   norm === "MODERATION_PENDING" ||
-                  norm === "UNDER_REVIEW"
+                  norm === "UNDER_REVIEW" ||
+                  norm === "LOCATION_VERIFICATION_FAILED" ||
+                  norm === "AI_ANALYSIS_FAILED" ||
+                  norm === "EVIDENCE_VALIDATION_FAILED"
                 )
                   return "under-review";
                 return "open";
               })(),
               latitude: r.submissionLocation?.latitude || r.location?.latitude || 28.4744,
               longitude: r.submissionLocation?.longitude || r.location?.longitude || 77.504,
-              landmark: r.submissionLocation?.landmark || r.location?.landmark || r.submissionLocation?.address || r.location?.address || "Greater Noida",
-              location: r.submissionLocation?.landmark || r.location?.landmark || r.submissionLocation?.address || r.location?.address || "Greater Noida",
+              landmark:
+                r.submissionLocation?.landmark ||
+                r.location?.landmark ||
+                r.submissionLocation?.address ||
+                r.location?.address ||
+                "Greater Noida",
+              location:
+                r.submissionLocation?.landmark ||
+                r.location?.landmark ||
+                r.submissionLocation?.address ||
+                r.location?.address ||
+                "Greater Noida",
               time: r.createdAt
                 ? new Date(r.createdAt).toLocaleTimeString([], {
                     hour: "2-digit",
@@ -285,12 +295,37 @@ export default function ReportsPage() {
               reportedAt: r.createdAt
                 ? new Date(r.createdAt).toLocaleDateString("en-IN")
                 : "Recently",
+              createdAt: r.createdAt,
               photos: r.photos || [],
-            });
+            } as HazardReport & { createdAt?: string });
             seenIds.add(rid);
+            if (r.associatedIncidentId) {
+              seenIds.add(r.associatedIncidentId);
+            }
           }
         }
       }
+
+      // 2. Canonical incidents from PostgreSQL (staff overview)
+      if (isStaff && mapData && Array.isArray(mapData.incidents)) {
+        for (const inc of mapData.incidents) {
+          if (!seenIds.has(inc.id)) {
+            combined.push(inc);
+            seenIds.add(inc.id);
+          }
+        }
+      }
+
+      // Sort combined by creation date descending so newly submitted reports appear first
+      combined.sort((a, b) => {
+        const timeA = (a as unknown as { createdAt?: string }).createdAt
+          ? new Date((a as unknown as { createdAt?: string }).createdAt!).getTime()
+          : 0;
+        const timeB = (b as unknown as { createdAt?: string }).createdAt
+          ? new Date((b as unknown as { createdAt?: string }).createdAt!).getTime()
+          : 0;
+        return timeB - timeA;
+      });
 
       setReports(combined);
     } catch (e) {
@@ -314,7 +349,7 @@ export default function ReportsPage() {
         const isMine =
           (sessionUserId && r.userId === sessionUserId) ||
           localReportIds.includes(r.id);
-        if (!isMine && !isStaff) return false;
+        if (!isMine) return false;
       }
 
       const matchesTab =
@@ -549,10 +584,10 @@ export default function ReportsPage() {
               variant="outline"
               className={`text-[10px] uppercase font-mono border ${
                 userRole === "admin"
-                  ? "bg-rose-50 text-rose-800 border-rose-300"
+                  ? "bg-[#f3d9cf] text-[#8c2e1b] border-[#fecaca]"
                   : userRole === "moderator"
-                    ? "bg-blue-50 text-blue-800 border-blue-300"
-                    : "bg-emerald-50 text-emerald-800 border-emerald-300"
+                    ? "bg-[#d6e5d2] text-[#234a29] border-[#cbd5cb]"
+                    : "bg-[#d6e5d2] text-[#234a29] border-[#cbd5cb]"
               }`}
             >
               {userRole}
@@ -774,7 +809,7 @@ export default function ReportsPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => setDeletingReport(report)}
-                          className="h-8.5 min-h-[36px] px-2.5 text-xs text-rose-700 hover:text-rose-800 hover:bg-rose-50 rounded-md"
+                          className="h-8.5 min-h-[36px] px-2.5 text-xs text-[#8c2e1b] hover:text-[#8c2e1b] hover:bg-[#f3d9cf] rounded-md"
                         >
                           <Trash2 className="size-3 mr-1" />
                           <span>Delete</span>
@@ -863,7 +898,7 @@ export default function ReportsPage() {
                             <Button
                               variant="ghost"
                               size="xs"
-                              className="gap-1 text-xs text-rose-700 hover:text-rose-800 hover:bg-rose-50"
+                              className="gap-1 text-xs text-[#8c2e1b] hover:text-[#8c2e1b] hover:bg-[#f3d9cf]"
                               onClick={() => setDeletingReport(report)}
                             >
                               <Trash2 className="size-3" />

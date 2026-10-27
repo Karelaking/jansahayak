@@ -52,32 +52,32 @@ import { useDashboardSession } from "./dashboard-shell";
 function getStatusBadge(status: string, publicOpinionStatus?: string) {
   if (publicOpinionStatus === "reopened_by_community") {
     return (
-      <span className="status-escalated bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30">
-        <i aria-hidden="true" className="bg-rose-600" />
+      <span className="status-escalated bg-[#f3d9cf] text-[#8c2e1b] border-[#fecaca]">
+        <i aria-hidden="true" className="bg-[#e4876f]" />
         Citizen Disputed
       </span>
     );
   }
   if (publicOpinionStatus === "verified_by_community") {
     return (
-      <span className="status-progress bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
-        <i aria-hidden="true" className="bg-amber-600" />
+      <span className="status-progress bg-[#f4e8be] text-[#7a540b] border-[#fed7aa]">
+        <i aria-hidden="true" className="bg-[#e7b64f]" />
         Community Verified
       </span>
     );
   }
   if (publicOpinionStatus === "under_repair") {
     return (
-      <span className="status-progress bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30">
-        <i aria-hidden="true" className="bg-blue-600" />
+      <span className="status-progress bg-[#d6e5d2] text-[#234a29] border-[#cbd5cb]">
+        <i aria-hidden="true" className="bg-[#78a37d]" />
         Under Repair
       </span>
     );
   }
   if (publicOpinionStatus === "under_review") {
     return (
-      <span className="status-open bg-sky-500/15 text-sky-700 dark:text-sky-400 border-sky-500/30">
-        <i aria-hidden="true" className="bg-sky-600" />
+      <span className="status-open bg-[#f4e8be] text-[#7a540b] border-[#fed7aa]">
+        <i aria-hidden="true" className="bg-[#e7b64f]" />
         Quorum Pending
       </span>
     );
@@ -160,7 +160,10 @@ function mapRawReportToHazardReport(r: any): HazardReport {
       statusNorm === "SUBMITTED" ||
       statusNorm === "PROCESSING" ||
       statusNorm === "MODERATION_PENDING" ||
-      statusNorm === "UNDER_REVIEW"
+      statusNorm === "UNDER_REVIEW" ||
+      statusNorm === "LOCATION_VERIFICATION_FAILED" ||
+      statusNorm === "AI_ANALYSIS_FAILED" ||
+      statusNorm === "EVIDENCE_VALIDATION_FAILED"
     )
       return "under-review";
     return "open";
@@ -192,10 +195,11 @@ function mapRawReportToHazardReport(r: any): HazardReport {
     reportedAt: r.createdAt
       ? new Date(r.createdAt).toLocaleDateString("en-IN")
       : "Recently",
+    createdAt: r.createdAt,
     publicOpinionStatus: mappedStatus === "under-review" ? "under_review" : "verified_hazard",
     verificationsCount: 1,
     votes: 1,
-  };
+  } as HazardReport & { createdAt?: string };
 }
 
 export default function DashboardPage() {
@@ -260,6 +264,17 @@ export default function DashboardPage() {
             }
           }
         }
+
+        // Sort combined so newest submissions appear at the top
+        combined.sort((a, b) => {
+          const timeA = (a as unknown as { createdAt?: string }).createdAt
+            ? new Date((a as unknown as { createdAt?: string }).createdAt!).getTime()
+            : 0;
+          const timeB = (b as unknown as { createdAt?: string }).createdAt
+            ? new Date((b as unknown as { createdAt?: string }).createdAt!).getTime()
+            : 0;
+          return timeB - timeA;
+        });
 
         if (active) {
           setReports(combined);
@@ -330,40 +345,40 @@ export default function DashboardPage() {
       </div>
 
       {/* ── KPI Telemetry Grid ─── */}
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-5 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
+      <div className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-5 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
         <Card className="shadow-xs">
-          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
+          <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
+              <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
                 Active Hazards
               </CardDescription>
-              <Flame className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
+              <Flame className="size-4 text-muted-foreground/70 shrink-0" />
             </div>
             <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
               {reports.length}
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-3 sm:p-4 pt-0">
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
+          <CardContent className="p-4 sm:p-6 pt-0">
+            <p className="text-xs sm:text-sm text-muted-foreground">
               {reports.length > 0 ? "Published on public map" : "No active hazards"}
             </p>
           </CardContent>
         </Card>
 
         <Card className="shadow-xs">
-          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
+          <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
+              <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
                 Pending Verification
               </CardDescription>
-              <Clock className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
+              <Clock className="size-4 text-muted-foreground/70 shrink-0" />
             </div>
             <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
               {canViewModeration ? pendingReviewCount : "—"}
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-3 sm:p-4 pt-0">
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
+          <CardContent className="p-4 sm:p-6 pt-0">
+            <p className="text-xs sm:text-sm text-muted-foreground">
               {!canViewModeration
                 ? "Visible to municipal staff"
                 : pendingReviewCount > 0
@@ -374,12 +389,12 @@ export default function DashboardPage() {
         </Card>
 
         <Card className="shadow-xs">
-          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
+          <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
+              <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
                 Community Quorum
               </CardDescription>
-              <Users className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
+              <Users className="size-4 text-muted-foreground/70 shrink-0" />
             </div>
             <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
               {
@@ -391,8 +406,8 @@ export default function DashboardPage() {
               }
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-3 sm:p-4 pt-0">
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
+          <CardContent className="p-4 sm:p-6 pt-0">
+            <p className="text-xs sm:text-sm text-muted-foreground">
               {reports.filter((r) => r.publicOpinionStatus === "reopened_by_community").length > 0
                 ? `${reports.filter((r) => r.publicOpinionStatus === "reopened_by_community").length} disputed by citizens`
                 : "Active citizen consensus"}
@@ -401,36 +416,36 @@ export default function DashboardPage() {
         </Card>
 
         <Card className="shadow-xs">
-          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
+          <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
+              <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
                 Target Resolution SLA
               </CardDescription>
-              <TrendingDown className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
+              <TrendingDown className="size-4 text-muted-foreground/70 shrink-0" />
             </div>
             <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
               7.0d
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-3 sm:p-4 pt-0">
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Standard GNIDA civil SLA</p>
+          <CardContent className="p-4 sm:p-6 pt-0">
+            <p className="text-xs sm:text-sm text-muted-foreground">Standard GNIDA civil SLA</p>
           </CardContent>
         </Card>
 
         <Card className="shadow-xs">
-          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2">
+          <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">
+              <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
                 Resolved Incidents
               </CardDescription>
-              <CheckCircle2 className="size-3.5 sm:size-4 text-muted-foreground/70 shrink-0" />
+              <CheckCircle2 className="size-4 text-muted-foreground/70 shrink-0" />
             </div>
             <CardTitle className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight">
               {reports.filter((r) => r.status === "resolved").length}
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-3 sm:p-4 pt-0">
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
+          <CardContent className="p-4 sm:p-6 pt-0">
+            <p className="text-xs sm:text-sm text-muted-foreground">
               {reports.filter((r) => r.status === "resolved").length > 0
                 ? "Verified remediations"
                 : "Awaiting closure"}
@@ -563,7 +578,7 @@ export default function DashboardPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[80px]">ID</TableHead>
+                          <TableHead className="w-20">ID</TableHead>
                           <TableHead>Hazard Dossier</TableHead>
                           <TableHead>Severity</TableHead>
                           <TableHead>Status</TableHead>

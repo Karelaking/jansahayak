@@ -6,6 +6,7 @@ import {
   moderationActions,
   outboxEvents,
   Incident,
+  isDatabaseReachable,
 } from "@/lib/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { getReportsCollection } from "@/lib/db/mongodb";
@@ -64,18 +65,86 @@ export async function executeStage7Moderation(
       };
     }
 
-    const [incident] = await db
-      .select()
-      .from(incidents)
-      .where(eq(incidents.id, incidentId))
-      .limit(1);
+    let incident: Incident | null = null;
+    let actualIncidentId = incidentId;
+
+    if (await isDatabaseReachable()) {
+      const [found] = await db
+        .select()
+        .from(incidents)
+        .where(eq(incidents.id, incidentId))
+        .limit(1);
+      incident = (found as Incident) || null;
+    }
+
+    if (!incident && incidentId.startsWith("REP-")) {
+      const reportsColl = await getReportsCollection();
+      const rawReport = await reportsColl.findOne({ reportId: incidentId });
+      if (rawReport) {
+        if (rawReport.associatedIncidentId && (await isDatabaseReachable())) {
+          const [assoc] = await db
+            .select()
+            .from(incidents)
+            .where(eq(incidents.id, rawReport.associatedIncidentId))
+            .limit(1);
+          incident = (assoc as Incident) || null;
+          actualIncidentId = rawReport.associatedIncidentId;
+        }
+
+        // Direct moderation update on the raw report in MongoDB
+        const updatedStatus =
+          decision === "approve"
+            ? "MODERATION_PENDING"
+            : decision === "reject"
+              ? "REJECTED"
+              : rawReport.status;
+
+        await reportsColl.updateOne(
+          { reportId: incidentId },
+          {
+            $set: {
+              status: updatedStatus,
+              rejectionReason: decision === "reject" ? reason : rawReport.rejectionReason,
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        );
+
+        if (!incident) {
+          // If no incident was synthesized yet, return success for direct report moderation
+          return {
+            stage: 7,
+            stageName,
+            success: true,
+            data: {
+              incident: {
+                id: incidentId,
+                incidentNumber: incidentId,
+                status: decision === "approve" ? "approved" : "rejected",
+                moderationStatus: decision === "approve" ? "approved" : "rejected",
+                category: rawReport.category,
+                title: rawReport.description || "Citizen Hazard Report",
+                summary: rawReport.description || "",
+                latitude: rawReport.submissionLocation?.latitude || 28.4744,
+                longitude: rawReport.submissionLocation?.longitude || 77.504,
+                isPublished: false,
+                reportCount: 1,
+                createdAt: new Date(rawReport.createdAt || Date.now()),
+                updatedAt: new Date(),
+              } as unknown as Incident,
+              decision,
+            },
+          };
+        }
+      }
+    }
 
     if (!incident) {
       return {
         stage: 7,
         stageName,
         success: false,
-        error: `Incident with ID ${incidentId} not found in PostgreSQL.`,
+        error: `Incident with ID ${incidentId} not found in database.`,
         isRetryable: false,
       };
     }
@@ -118,16 +187,16 @@ export async function executeStage7Moderation(
     const [updated] = await db
       .update(incidents)
       .set(updatePayload)
-      .where(eq(incidents.id, incidentId))
+      .where(eq(incidents.id, actualIncidentId))
       .returning();
 
     if (!updated) {
-      throw new Error(`Incident ${incidentId} could not be updated.`);
+      throw new Error(`Incident ${actualIncidentId} could not be updated.`);
     }
 
     // Immutable audit record in moderation_actions
     await db.insert(moderationActions).values({
-      incidentId,
+      incidentId: actualIncidentId,
       moderatorId,
       action: decision,
       reason,
