@@ -428,7 +428,7 @@ export default function ModerationPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1 h-9 sm:h-8"
+                className="gap-1 h-9 sm:h-8 border-[#cbd5cb] bg-white text-[#17382f] hover:bg-[#e9efe8]"
                 onClick={() => loadReviewQueue()}
               >
                 <RotateCcw className="size-3" />
@@ -437,17 +437,29 @@ export default function ModerationPage() {
 
               <div className="w-full overflow-x-auto no-scrollbar -mx-1 px-1 sm:w-auto">
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
-                  <TabsList className="h-9 sm:h-8 w-max min-w-full justify-start sm:w-auto">
-                    <TabsTrigger value="all" className="text-xs px-2.5">
+                  <TabsList className="h-9 sm:h-8 w-max min-w-full justify-start sm:w-auto border border-[#cbd5cb] bg-[#f5f3ed]">
+                    <TabsTrigger
+                      value="all"
+                      className="text-xs px-2.5 data-[state=active]:bg-white data-[state=active]:text-[#0e2b24] text-[#5c6f66]"
+                    >
                       All ({pendingItems.length})
                     </TabsTrigger>
-                    <TabsTrigger value="duplicate" className="text-xs px-2.5">
+                    <TabsTrigger
+                      value="duplicate"
+                      className="text-xs px-2.5 data-[state=active]:bg-white data-[state=active]:text-[#0e2b24] text-[#5c6f66]"
+                    >
                       Duplicates ({pendingItems.filter((i) => i.type === "duplicate").length})
                     </TabsTrigger>
-                    <TabsTrigger value="location" className="text-xs px-2.5">
+                    <TabsTrigger
+                      value="location"
+                      className="text-xs px-2.5 data-[state=active]:bg-white data-[state=active]:text-[#0e2b24] text-[#5c6f66]"
+                    >
                       Location ({pendingItems.filter((i) => i.type === "location").length})
                     </TabsTrigger>
-                    <TabsTrigger value="scope" className="text-xs px-2.5">
+                    <TabsTrigger
+                      value="scope"
+                      className="text-xs px-2.5 data-[state=active]:bg-white data-[state=active]:text-[#0e2b24] text-[#5c6f66]"
+                    >
                       Scope ({pendingItems.filter((i) => i.type === "scope").length})
                     </TabsTrigger>
                   </TabsList>
@@ -459,20 +471,27 @@ export default function ModerationPage() {
             <div className="grid grid-cols-1 gap-4">
               {items.length === 0 ? (
                 /* Zatian / shadcn Empty State when queue is pristine and no data exists */
-                <Card className="shadow-xs p-2">
+                <Card className="shadow-xs p-2 border-[#cbd5cb] bg-[#faf9f5]">
                   <Empty className="my-8 border-0 bg-transparent">
                     <EmptyHeader>
                       <EmptyMedia variant="icon">
-                        <CheckCircle2 className="size-6 text-emerald-600" />
+                        <CheckCircle2 className="size-6 text-[#234a29]" />
                       </EmptyMedia>
-                      <EmptyTitle>Moderation queue is clean</EmptyTitle>
-                      <EmptyDescription>
+                      <EmptyTitle className="text-base font-semibold text-[#0e2b24]">
+                        Moderation queue is clean
+                      </EmptyTitle>
+                      <EmptyDescription className="text-xs text-[#5c6f66]">
                         There are currently no citizen hazard reports requiring duplicate
                         consolidation, geotag verification, or scope classification.
                       </EmptyDescription>
                     </EmptyHeader>
                     <EmptyContent>
-                      <Button variant="outline" size="sm" onClick={() => loadReviewQueue()}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-[#cbd5cb] bg-white text-[#17382f] hover:bg-[#e9efe8]"
+                        onClick={() => loadReviewQueue()}
+                      >
                         <RotateCcw className="size-3.5 mr-1.5" />
                         Refresh Queue
                       </Button>
@@ -481,20 +500,27 @@ export default function ModerationPage() {
                 </Card>
               ) : filteredItems.length === 0 ? (
                 /* Empty state when active filter has all items triaged */
-                <Card className="shadow-xs p-2">
+                <Card className="shadow-xs p-2 border-[#cbd5cb] bg-[#faf9f5]">
                   <Empty className="my-8 border-0 bg-transparent">
                     <EmptyHeader>
                       <EmptyMedia variant="icon">
-                        <CheckCircle2 className="size-6 text-emerald-600" />
+                        <CheckCircle2 className="size-6 text-[#234a29]" />
                       </EmptyMedia>
-                      <EmptyTitle>All items in this category resolved</EmptyTitle>
-                      <EmptyDescription>
+                      <EmptyTitle className="text-base font-semibold text-[#0e2b24]">
+                        All items in this category resolved
+                      </EmptyTitle>
+                      <EmptyDescription className="text-xs text-[#5c6f66]">
                         No pending reports remain in the &quot;{activeTab}&quot; queue. Switch
                         filters or reset the queue to inspect other entries.
                       </EmptyDescription>
                     </EmptyHeader>
                     <EmptyContent>
-                      <Button variant="outline" size="sm" onClick={() => setActiveTab("all")}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-[#cbd5cb] bg-white text-[#17382f] hover:bg-[#e9efe8]"
+                        onClick={() => setActiveTab("all")}
+                      >
                         View All Categories
                       </Button>
                     </EmptyContent>
@@ -504,12 +530,12 @@ export default function ModerationPage() {
                 filteredItems.map((item) => (
                   <Card
                     key={item.id}
-                    className="shadow-xs transition-colors hover:border-foreground/20"
+                    className="shadow-xs transition-colors hover:border-[#0e2b24]/40 border-[#cbd5cb] bg-[#faf9f5]"
                   >
                     <CardHeader className="pb-3">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-semibold text-muted-foreground">
+                          <span className="font-mono text-xs font-semibold text-[#17382f]">
                             {item.id}
                           </span>
                           <Badge variant={item.badgeVariant} className="gap-1 text-xs">
@@ -519,30 +545,34 @@ export default function ModerationPage() {
                           {item.metadata?.municipalDocketNumber ? (
                             <Badge
                               variant="outline"
-                              className="gap-1 text-[11px] font-mono border-blue-600/30 text-blue-700 bg-blue-50/50"
+                              className="gap-1 text-[11px] font-mono border-blue-600/30 text-blue-800 bg-blue-50 font-medium"
                             >
-                              <Mail className="size-3 text-blue-600" />
+                              <Mail className="size-3 text-blue-700" />
                               <span>{String(item.metadata.municipalDocketNumber)}</span>
                             </Badge>
                           ) : null}
                         </div>
 
-                        <span className="text-xs text-muted-foreground">{item.time}</span>
+                        <span className="text-xs text-[#5c6f66]">{item.time}</span>
                       </div>
 
-                      <CardTitle className="mt-2 text-base font-semibold">{item.title}</CardTitle>
-                      <CardDescription className="text-xs">{item.detail}</CardDescription>
+                      <CardTitle className="mt-2 text-base font-semibold text-[#0e2b24]">
+                        {item.title}
+                      </CardTitle>
+                      <CardDescription className="text-xs text-[#5c6f66]">
+                        {item.detail}
+                      </CardDescription>
                     </CardHeader>
 
-                    <CardFooter className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <CardFooter className="flex flex-col gap-3 border-t border-[#cbd5cb] pt-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-[#5c6f66]">
                         <span>Filed by:</span>
-                        <strong className="text-foreground">{item.reporter}</strong>
+                        <strong className="text-[#17382f] font-medium">{item.reporter}</strong>
                         <span>·</span>
                         <button
                           type="button"
                           onClick={() => setInspectingItem(item)}
-                          className="inline-flex items-center gap-1 text-foreground underline underline-offset-2 hover:opacity-80 py-1 cursor-pointer"
+                          className="inline-flex items-center gap-1 text-[#17382f] underline underline-offset-2 hover:text-[#0e2b24] py-1 cursor-pointer font-medium"
                         >
                           <span>View photo evidence</span>
                           <ExternalLink className="size-2.5" />
@@ -555,7 +585,7 @@ export default function ModerationPage() {
                           variant="outline"
                           size="sm"
                           disabled={isSubmitting === item.id}
-                          className="h-10 sm:h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive justify-center"
+                          className="h-10 sm:h-7 text-xs border-[#e4876f]/50 text-[#8c2e1b] hover:bg-[#f3d9cf]/40 hover:text-[#8c2e1b] justify-center font-medium"
                           onClick={() => {
                             setRejectItem(item);
                             setRejectionReason("");
@@ -568,9 +598,9 @@ export default function ModerationPage() {
                         <DropdownMenu>
                           <DropdownMenuTrigger
                             disabled={isSubmitting === item.id}
-                            className="h-10 sm:h-7 text-xs justify-center gap-1 inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1 font-medium shadow-xs hover:bg-accent hover:text-accent-foreground cursor-pointer disabled:pointer-events-none disabled:opacity-50"
+                            className="h-10 sm:h-7 text-xs justify-center gap-1 inline-flex items-center rounded-md border border-[#cbd5cb] bg-white px-2.5 py-1 font-medium text-[#17382f] shadow-xs hover:bg-[#e9efe8] hover:text-[#0e2b24] cursor-pointer disabled:pointer-events-none disabled:opacity-50"
                           >
-                            <Sliders className="size-3 text-muted-foreground" />
+                            <Sliders className="size-3 text-[#5c6f66]" />
                             <span>Actions</span>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="text-xs">
@@ -639,7 +669,7 @@ export default function ModerationPage() {
                         <Button
                           size="sm"
                           disabled={isSubmitting === item.id}
-                          className="col-span-2 sm:col-span-1 h-10 sm:h-7 text-xs justify-center bg-emerald-800 hover:bg-emerald-900 text-white"
+                          className="col-span-2 sm:col-span-1 h-10 sm:h-7 text-xs justify-center bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] font-medium"
                           onClick={() => handleApprove(item.id)}
                         >
                           <Check className="size-3.5 mr-1" />
@@ -655,13 +685,13 @@ export default function ModerationPage() {
             </div>
 
             {/* ── Guidance Card ─── */}
-            <Card className="border-dashed bg-muted/20 shadow-none">
+            <Card className="border-dashed border-[#cbd5cb] bg-[#f5f3ed]/60 shadow-none">
               <CardHeader className="py-4">
                 <div className="flex items-start gap-3">
-                  <ShieldAlert className="size-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <ShieldAlert className="size-4 text-[#234a29] mt-0.5 shrink-0" />
                   <div className="text-xs">
-                    <span className="font-semibold text-foreground">Civic Moderation Policy:</span>
-                    <p className="mt-0.5 text-muted-foreground leading-relaxed">
+                    <span className="font-semibold text-[#0e2b24]">Civic Moderation Policy:</span>
+                    <p className="mt-0.5 text-[#5c6f66] leading-relaxed">
                       JanSahayak does not censor citizen observations. Flagged items only resolve
                       duplicate pings to avoid overburdening municipal engineering divisions with
                       identical coordinates.
@@ -703,8 +733,10 @@ export default function ModerationPage() {
                       (inspectingItem.metadata?.photoUrl as string) ||
                       (inspectingItem.metadata?.downloadUrl as string) ||
                       (Array.isArray(inspectingItem.metadata?.photos) &&
-                        ((inspectingItem.metadata.photos[0] as Record<string, any>)?.downloadUrl ||
-                          (inspectingItem.metadata.photos[0] as Record<string, any>)?.url)) ||
+                        (((inspectingItem.metadata.photos[0] as Record<string, unknown>)
+                          ?.downloadUrl as string) ||
+                          ((inspectingItem.metadata.photos[0] as Record<string, unknown>)
+                            ?.url as string))) ||
                       (inspectingItem.metadata?.fileId
                         ? `/api/pipeline/photos/${inspectingItem.metadata.fileId}`
                         : undefined);

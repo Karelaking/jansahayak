@@ -321,20 +321,20 @@ export default function PipelineInspectionPage() {
     <RoleGuard allowedRoles={["moderator", "admin"]}>
       <div className="space-y-6 max-w-6xl mx-auto pb-16">
         {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#cbd5cb] pb-5">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-serif font-bold text-foreground tracking-tight">
+              <h1 className="text-xl sm:text-2xl font-serif font-bold text-[#0e2b24] tracking-tight">
                 PRD Processing Pipeline & Architecture
               </h1>
               <Badge
                 variant="outline"
-                className="bg-emerald-500/10 text-emerald-700 border-emerald-300 dark:border-emerald-800 text-xs"
+                className="bg-[#d6e5d2] text-[#234a29] border-[#cbd5cb] text-xs font-medium"
               >
                 Stages 1–10 Active
               </Badge>
             </div>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+            <p className="text-xs sm:text-sm text-[#5c6f66] mt-1">
               Automated citizen report intake, MongoDB GridFS evidence storage, OpenRouter AI vision
               analysis, PostGIS spatial clustering, strict deduplication, and transactional map
               publication.
@@ -344,7 +344,7 @@ export default function PipelineInspectionPage() {
           <Button
             onClick={runPipelineSimulation}
             disabled={isRunning}
-            className="gap-2 bg-emerald-800 hover:bg-emerald-900 text-white shadow-sm w-full sm:w-auto h-10 sm:h-9 justify-center shrink-0"
+            className="gap-2 bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] font-medium shadow-xs w-full sm:w-auto h-10 sm:h-9 justify-center shrink-0"
           >
             {isRunning ? (
               <>
@@ -362,87 +362,109 @@ export default function PipelineInspectionPage() {
 
         {/* Architecture Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="bg-card shadow-xs border-border">
+          <Card className="bg-[#faf9f5] shadow-xs border-[#cbd5cb]">
             <CardHeader className="p-4 pb-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <span className="text-xs font-medium text-[#5c6f66] uppercase tracking-wider">
                   PostgreSQL + PostGIS
                 </span>
-                <Database className="h-4 w-4 text-emerald-600" />
+                <Database className="h-4 w-4 text-[#234a29]" />
               </div>
-              <CardTitle className="text-sm font-semibold">Structured & Geospatial</CardTitle>
+              <CardTitle className="text-sm font-semibold text-[#0e2b24]">
+                Structured & Geospatial
+              </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 pt-1 text-xs text-muted-foreground">
+            <CardContent className="p-4 pt-1 text-xs text-[#5c6f66]">
               Drizzle ORM schema managing{" "}
-              <code className="text-foreground font-mono">incidents</code>, PostGIS{" "}
-              <code className="text-foreground font-mono">canonical_geom</code>, outbox events, and
-              moderation audits.
+              <code className="text-[#0e2b24] font-mono bg-[#f5f3ed] px-1 py-0.5 rounded border border-[#cbd5cb]">
+                incidents
+              </code>
+              , PostGIS{" "}
+              <code className="text-[#0e2b24] font-mono bg-[#f5f3ed] px-1 py-0.5 rounded border border-[#cbd5cb]">
+                canonical_geom
+              </code>
+              , outbox events, and moderation audits.
             </CardContent>
           </Card>
 
-          <Card className="bg-card shadow-xs border-border">
+          <Card className="bg-[#faf9f5] shadow-xs border-[#cbd5cb]">
             <CardHeader className="p-4 pb-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <span className="text-xs font-medium text-[#5c6f66] uppercase tracking-wider">
                   MongoDB & GridFS
                 </span>
-                <Layers className="h-4 w-4 text-emerald-600" />
+                <Layers className="h-4 w-4 text-[#234a29]" />
               </div>
-              <CardTitle className="text-sm font-semibold">Unstructured & Media</CardTitle>
+              <CardTitle className="text-sm font-semibold text-[#0e2b24]">
+                Unstructured & Media
+              </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 pt-1 text-xs text-muted-foreground">
+            <CardContent className="p-4 pt-1 text-xs text-[#5c6f66]">
               Native GridFS bucket streaming 4+ camera evidence photos, SHA-256 deduplication, raw
               citizen submissions, and AI execution traces.
             </CardContent>
           </Card>
 
-          <Card className="bg-card shadow-xs border-border">
+          <Card className="bg-[#faf9f5] shadow-xs border-[#cbd5cb]">
             <CardHeader className="p-4 pb-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <span className="text-xs font-medium text-[#5c6f66] uppercase tracking-wider">
                   OpenRouter AI
                 </span>
-                <Cpu className="h-4 w-4 text-emerald-600" />
+                <Cpu className="h-4 w-4 text-[#234a29]" />
               </div>
-              <CardTitle className="text-sm font-semibold">Vision & Analysis</CardTitle>
+              <CardTitle className="text-sm font-semibold text-[#0e2b24]">
+                Vision & Analysis
+              </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 pt-1 text-xs text-muted-foreground">
+            <CardContent className="p-4 pt-1 text-xs text-[#5c6f66]">
               Multi-image structured extraction, hazard classification, defect severity, usability
               checking, and visual similarity embeddings.
             </CardContent>
           </Card>
 
-          <Card className="bg-card shadow-xs border-border">
+          <Card className="bg-[#faf9f5] shadow-xs border-[#cbd5cb]">
             <CardHeader className="p-4 pb-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <span className="text-xs font-medium text-[#5c6f66] uppercase tracking-wider">
                   Clerk JS Auth
                 </span>
-                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                <ShieldCheck className="h-4 w-4 text-[#234a29]" />
               </div>
-              <CardTitle className="text-sm font-semibold">RBAC & Webhooks</CardTitle>
+              <CardTitle className="text-sm font-semibold text-[#0e2b24]">
+                RBAC & Webhooks
+              </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 pt-1 text-xs text-muted-foreground">
-              Role gating (<code className="text-foreground font-mono">citizen</code>,{" "}
-              <code className="text-foreground font-mono">moderator</code>,{" "}
-              <code className="text-foreground font-mono">admin</code>) and automated user sync via
-              Webhooks into PostgreSQL.
+            <CardContent className="p-4 pt-1 text-xs text-[#5c6f66]">
+              Role gating (
+              <code className="text-[#0e2b24] font-mono bg-[#f5f3ed] px-1 py-0.5 rounded border border-[#cbd5cb]">
+                citizen
+              </code>
+              ,{" "}
+              <code className="text-[#0e2b24] font-mono bg-[#f5f3ed] px-1 py-0.5 rounded border border-[#cbd5cb]">
+                moderator
+              </code>
+              ,{" "}
+              <code className="text-[#0e2b24] font-mono bg-[#f5f3ed] px-1 py-0.5 rounded border border-[#cbd5cb]">
+                admin
+              </code>
+              ) and automated user sync via Webhooks into PostgreSQL.
             </CardContent>
           </Card>
         </div>
 
         {/* PRD §18 Transactional Outbox Telemetry & Worker Controls */}
-        <Card className="border-border bg-card">
+        <Card className="border-[#cbd5cb] bg-[#faf9f5] shadow-xs">
           <CardHeader className="pb-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <CardTitle className="text-base font-semibold text-[#0e2b24] flex items-center gap-2">
                   <RefreshCw
-                    className={`h-4 w-4 text-emerald-600 ${isProcessingOutbox ? "animate-spin" : ""}`}
+                    className={`h-4 w-4 text-[#234a29] ${isProcessingOutbox ? "animate-spin" : ""}`}
                   />
                   Transactional Outbox Queue &amp; Worker Telemetry
                 </CardTitle>
-                <CardDescription className="text-xs">
+                <CardDescription className="text-xs text-[#5c6f66]">
                   PRD §4 &amp; §18 asynchronous post-commit event queue with guaranteed delivery and
                   retry backoff.
                 </CardDescription>
@@ -452,16 +474,16 @@ export default function PipelineInspectionPage() {
                   variant="outline"
                   size="sm"
                   onClick={fetchOutboxStatus}
-                  className="text-xs h-9 sm:h-8 flex-1 sm:flex-none justify-center"
+                  className="text-xs h-9 sm:h-8 flex-1 sm:flex-none justify-center border-[#cbd5cb] bg-white text-[#17382f] hover:bg-[#e9efe8]"
                 >
-                  <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                  <RefreshCw className="h-3.5 w-3.5 mr-1 text-[#5c6f66]" />
                   <span>Refresh</span>
                 </Button>
                 <Button
                   size="sm"
                   onClick={handleTriggerOutboxWorker}
                   disabled={isProcessingOutbox}
-                  className="bg-emerald-800 hover:bg-emerald-900 text-white text-xs h-9 sm:h-8 flex-1 sm:flex-none justify-center"
+                  className="bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] font-medium text-xs h-9 sm:h-8 flex-1 sm:flex-none justify-center"
                 >
                   {isProcessingOutbox ? (
                     <>
@@ -480,70 +502,70 @@ export default function PipelineInspectionPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-              <div className="p-2.5 rounded-md bg-muted/40 border border-border">
-                <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+              <div className="p-2.5 rounded-md bg-[#f5f3ed] border border-[#cbd5cb]">
+                <p className="text-[11px] text-[#5c6f66] uppercase tracking-wider font-semibold">
                   Pending
                 </p>
-                <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                <p className="text-lg font-bold text-[#7a540b]">
                   {outboxData?.counts.pending ?? 0}
                 </p>
               </div>
-              <div className="p-2.5 rounded-md bg-muted/40 border border-border">
-                <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+              <div className="p-2.5 rounded-md bg-[#f5f3ed] border border-[#cbd5cb]">
+                <p className="text-[11px] text-[#5c6f66] uppercase tracking-wider font-semibold">
                   Processing
                 </p>
-                <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                <p className="text-lg font-bold text-[#17382f]">
                   {outboxData?.counts.processing ?? 0}
                 </p>
               </div>
-              <div className="p-2.5 rounded-md bg-muted/40 border border-border">
-                <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+              <div className="p-2.5 rounded-md bg-[#f5f3ed] border border-[#cbd5cb]">
+                <p className="text-[11px] text-[#5c6f66] uppercase tracking-wider font-semibold">
                   Completed
                 </p>
-                <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                <p className="text-lg font-bold text-[#234a29]">
                   {outboxData?.counts.completed ?? 0}
                 </p>
               </div>
-              <div className="p-2.5 rounded-md bg-muted/40 border border-border">
-                <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+              <div className="p-2.5 rounded-md bg-[#f5f3ed] border border-[#cbd5cb]">
+                <p className="text-[11px] text-[#5c6f66] uppercase tracking-wider font-semibold">
                   Dead-Letter / Failed
                 </p>
-                <p className="text-lg font-bold text-rose-600 dark:text-rose-400">
-                  {outboxData?.counts.failed ?? 0}
-                </p>
+                <p className="text-lg font-bold text-[#8c2e1b]">{outboxData?.counts.failed ?? 0}</p>
               </div>
             </div>
 
             {outboxWorkerResult && (
-              <div className="p-2.5 rounded bg-muted/60 text-xs font-mono">
-                <span className="font-semibold text-foreground">Worker Dispatch Result: </span>
-                <pre className="text-[11px] text-muted-foreground overflow-x-auto mt-1">
+              <div className="p-2.5 rounded bg-[#f5f3ed] border border-[#cbd5cb] text-xs font-mono">
+                <span className="font-semibold text-[#0e2b24]">Worker Dispatch Result: </span>
+                <pre className="text-[11px] text-[#17382f] overflow-x-auto mt-1">
                   {JSON.stringify(outboxWorkerResult, null, 2)}
                 </pre>
               </div>
             )}
 
             {outboxData?.events && outboxData.events.length > 0 && (
-              <div className="border border-border rounded-md overflow-hidden text-xs">
-                <div className="bg-muted/50 px-3 py-1.5 font-semibold text-muted-foreground border-b border-border flex justify-between">
+              <div className="border border-[#cbd5cb] rounded-md overflow-hidden text-xs bg-white">
+                <div className="bg-[#f5f3ed] px-3 py-1.5 font-semibold text-[#17382f] border-b border-[#cbd5cb] flex justify-between">
                   <span>Recent Outbox Events</span>
-                  <span>{outboxData.events.length} Recorded</span>
+                  <span className="text-[#5c6f66] font-normal">
+                    {outboxData.events.length} Recorded
+                  </span>
                 </div>
-                <div className="max-h-44 overflow-y-auto divide-y divide-border font-mono text-[11px]">
+                <div className="max-h-44 overflow-y-auto divide-y divide-[#cbd5cb] font-mono text-[11px]">
                   {outboxData.events.map((evt) => (
                     <div key={evt.id} className="p-2 flex items-center justify-between gap-2">
                       <div className="truncate">
-                        <span className="font-semibold text-foreground">{evt.eventType}</span>
-                        <span className="text-muted-foreground ml-2">ID: {evt.aggregateId}</span>
+                        <span className="font-semibold text-[#0e2b24]">{evt.eventType}</span>
+                        <span className="text-[#5c6f66] ml-2">ID: {evt.aggregateId}</span>
                       </div>
                       <Badge
                         variant="outline"
-                        className={`text-[10px] shrink-0 ${
+                        className={`text-[10px] shrink-0 font-medium ${
                           evt.status === "completed"
-                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            ? "bg-[#d6e5d2] text-[#234a29] border-[#cbd5cb]"
                             : evt.status === "failed"
-                              ? "bg-rose-50 text-rose-800 border-rose-300"
-                              : "bg-amber-50 text-amber-800 border-amber-300"
+                              ? "bg-[#f3d9cf] text-[#8c2e1b] border-[#e4876f]/50"
+                              : "bg-[#f4e8be] text-[#7a540b] border-[#cbd5cb]"
                         }`}
                       >
                         {evt.status}
@@ -557,10 +579,12 @@ export default function PipelineInspectionPage() {
         </Card>
 
         {/* Simulation Controls */}
-        <Card className="border-border">
+        <Card className="border-[#cbd5cb] bg-[#faf9f5] shadow-xs">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">Simulation Input Parameters</CardTitle>
-            <CardDescription className="text-xs">
+            <CardTitle className="text-base font-semibold text-[#0e2b24]">
+              Simulation Input Parameters
+            </CardTitle>
+            <CardDescription className="text-xs text-[#5c6f66]">
               Configure the test report payload to witness how the PRD pipeline processes evidence,
               detects duplicates, and calculates canonical locations.
             </CardDescription>
@@ -570,7 +594,7 @@ export default function PipelineInspectionPage() {
               <div>
                 <label
                   htmlFor="category-select"
-                  className="text-xs font-medium text-foreground block mb-1"
+                  className="text-xs font-semibold text-[#0e2b24] block mb-1"
                 >
                   Problem Category
                 </label>
@@ -578,7 +602,7 @@ export default function PipelineInspectionPage() {
                   id="category-select"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full text-sm border border-input rounded-md px-3 py-2 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="w-full text-xs border border-[#cbd5cb] rounded-md px-3 py-2 bg-white text-[#0e2b24] focus:outline-hidden focus:border-[#0e2b24]"
                 >
                   <option>Road Surface / Pothole</option>
                   <option>Broken Footpath / Pavement</option>
@@ -588,17 +612,17 @@ export default function PipelineInspectionPage() {
                 </select>
               </div>
               <div>
-                <span className="text-xs font-medium text-foreground block mb-1">
+                <span className="text-xs font-semibold text-[#0e2b24] block mb-1">
                   Pilot Coordinate & In-App Photos
                 </span>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 text-xs border border-border rounded-md px-3 py-2 bg-muted/40">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 text-xs border border-[#cbd5cb] rounded-md px-3 py-2 bg-[#f5f3ed]">
                   <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-emerald-700 shrink-0" />
-                    <span className="font-mono text-foreground break-all">
+                    <MapPin className="h-4 w-4 text-[#234a29] shrink-0" />
+                    <span className="font-mono text-[#0e2b24] font-medium break-all">
                       28.4744° N, 77.5040° E
                     </span>
                   </div>
-                  <span className="sm:ml-auto text-muted-foreground text-[11px]">
+                  <span className="sm:ml-auto text-[#5c6f66] text-[11px]">
                     4 Camera Photos (Pari Chowk)
                   </span>
                 </div>
@@ -608,7 +632,7 @@ export default function PipelineInspectionPage() {
             <div>
               <label
                 htmlFor="desc-input"
-                className="text-xs font-medium text-foreground block mb-1"
+                className="text-xs font-semibold text-[#0e2b24] block mb-1"
               >
                 Citizen Description
               </label>
@@ -617,7 +641,7 @@ export default function PipelineInspectionPage() {
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full text-sm border border-input rounded-md px-3 py-2 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-full text-xs border border-[#cbd5cb] rounded-md px-3 py-2 bg-white text-[#0e2b24] focus:outline-hidden focus:border-[#0e2b24]"
               />
             </div>
           </CardContent>
@@ -626,21 +650,21 @@ export default function PipelineInspectionPage() {
         {/* Execution Results View */}
         {pipelineData ? (
           <div className="space-y-5 animate-in fade-in-50 duration-300">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-[#d6e5d2]/60 border border-[#cbd5cb] gap-2">
               <div className="flex items-center gap-3">
-                <CheckCircle2 className="h-5 w-5 text-emerald-700 dark:text-emerald-400 shrink-0" />
+                <CheckCircle2 className="h-5 w-5 text-[#234a29] shrink-0" />
                 <div>
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="text-sm font-semibold text-[#0e2b24]">
                     Pipeline Completed: {pipelineData.stagesCompleted} Stages Executed in{" "}
                     {pipelineData.durationMs}ms
                   </p>
-                  <p className="text-xs text-muted-foreground font-mono">
+                  <p className="text-xs text-[#5c6f66] font-mono">
                     Report ID: {pipelineData.reportId} | Incident:{" "}
                     {pipelineData.incidentNumber || "Pending"} | Status: {pipelineData.status}
                   </p>
                 </div>
               </div>
-              <Badge className="bg-emerald-800 text-white self-start sm:self-center">
+              <Badge className="bg-[#0e2b24] text-[#f5f3ed] font-medium self-start sm:self-center">
                 {pipelineData.isPublished ? "Publicly Published" : "Ready for Moderation"}
               </Badge>
             </div>
@@ -648,46 +672,47 @@ export default function PipelineInspectionPage() {
             {/* 8-Stage Progress Matrix */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {pipelineData.stageResults.map((st) => (
-                <Card key={st.stage} className="border-border">
+                <Card key={st.stage} className="border-[#cbd5cb] bg-[#faf9f5] shadow-xs">
                   <CardHeader className="p-4 pb-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono font-bold text-muted-foreground">
+                      <span className="text-xs font-mono font-bold text-[#5c6f66]">
                         STAGE {st.stage}
                       </span>
                       {st.success ? (
                         <Badge
                           variant="outline"
-                          className="bg-emerald-50 text-emerald-800 border-emerald-300 text-[10px]"
+                          className="bg-[#d6e5d2] text-[#234a29] border-[#cbd5cb] text-[10px] font-medium"
                         >
                           Passed
                         </Badge>
                       ) : (
-                        <Badge variant="destructive" className="text-[10px]">
+                        <Badge
+                          variant="outline"
+                          className="bg-[#f3d9cf] text-[#8c2e1b] border-[#e4876f]/50 text-[10px] font-medium"
+                        >
                           Failed
                         </Badge>
                       )}
                     </div>
-                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                      {st.stage === 1 && <Camera className="h-4 w-4 text-emerald-600" />}
-                      {st.stage === 2 && <FileCheck className="h-4 w-4 text-emerald-600" />}
-                      {st.stage === 3 && <Cpu className="h-4 w-4 text-emerald-600" />}
-                      {st.stage === 4 && <MapPin className="h-4 w-4 text-emerald-600" />}
-                      {st.stage === 5 && <GitMerge className="h-4 w-4 text-emerald-600" />}
-                      {st.stage === 6 && <Database className="h-4 w-4 text-emerald-600" />}
-                      {st.stage === 7 && <ShieldCheck className="h-4 w-4 text-emerald-600" />}
-                      {st.stage === 8 && <Send className="h-4 w-4 text-emerald-600" />}
-                      {st.stage === 9 && <Mail className="h-4 w-4 text-emerald-600" />}
-                      {st.stage === 10 && <Users className="h-4 w-4 text-emerald-600" />}
+                    <CardTitle className="text-sm font-semibold text-[#0e2b24] flex items-center gap-2">
+                      {st.stage === 1 && <Camera className="h-4 w-4 text-[#234a29]" />}
+                      {st.stage === 2 && <FileCheck className="h-4 w-4 text-[#234a29]" />}
+                      {st.stage === 3 && <Cpu className="h-4 w-4 text-[#234a29]" />}
+                      {st.stage === 4 && <MapPin className="h-4 w-4 text-[#234a29]" />}
+                      {st.stage === 5 && <GitMerge className="h-4 w-4 text-[#234a29]" />}
+                      {st.stage === 6 && <Database className="h-4 w-4 text-[#234a29]" />}
+                      {st.stage === 7 && <ShieldCheck className="h-4 w-4 text-[#234a29]" />}
+                      {st.stage === 8 && <Send className="h-4 w-4 text-[#234a29]" />}
+                      {st.stage === 9 && <Mail className="h-4 w-4 text-[#234a29]" />}
+                      {st.stage === 10 && <Users className="h-4 w-4 text-[#234a29]" />}
                       {st.stageName}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 pt-1">
                     {st.error ? (
-                      <p className="text-xs text-rose-600 dark:text-rose-400 font-mono">
-                        {st.error}
-                      </p>
+                      <p className="text-xs text-[#8c2e1b] font-mono">{st.error}</p>
                     ) : (
-                      <div className="bg-muted/40 rounded p-2.5 text-[11px] font-mono text-muted-foreground overflow-x-auto max-h-40">
+                      <div className="bg-[#f5f3ed] border border-[#cbd5cb] rounded p-2.5 text-[11px] font-mono text-[#17382f] overflow-x-auto max-h-40">
                         <pre>{JSON.stringify(st.data, null, 2)}</pre>
                       </div>
                     )}
@@ -698,17 +723,20 @@ export default function PipelineInspectionPage() {
 
             {/* Moderation & Stage 8 Publication Actions */}
             {pipelineData.incidentId && (
-              <Card className="border-border bg-card">
+              <Card className="border-[#cbd5cb] bg-[#faf9f5] shadow-xs">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base font-semibold">
+                    <CardTitle className="text-base font-semibold text-[#0e2b24]">
                       Stage 7 & 8: Moderator Review Docket
                     </CardTitle>
-                    <Badge variant="outline" className="text-xs">
+                    <Badge
+                      variant="outline"
+                      className="text-xs bg-[#f4e8be] text-[#7a540b] border-[#cbd5cb] font-medium"
+                    >
                       Human-in-the-Loop Gate
                     </Badge>
                   </div>
-                  <CardDescription className="text-xs">
+                  <CardDescription className="text-xs text-[#5c6f66]">
                     Review the candidate incident created in PostgreSQL. Approving evaluates the PRD
                     Stage 8 Publication Eligibility Predicate and publishes the pin atomically.
                   </CardDescription>
@@ -718,7 +746,7 @@ export default function PipelineInspectionPage() {
                     <Button
                       onClick={() => handleModeration("approve")}
                       disabled={isModerating || pipelineData.isPublished}
-                      className="bg-emerald-800 hover:bg-emerald-900 text-white text-xs h-10 sm:h-8 justify-center"
+                      className="bg-[#0e2b24] hover:bg-[#1c4b3e] text-[#f5f3ed] font-medium text-xs h-10 sm:h-8 justify-center"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                       <span>Approve &amp; Publish to Map</span>
@@ -727,7 +755,7 @@ export default function PipelineInspectionPage() {
                       onClick={() => handleModeration("reject")}
                       disabled={isModerating || pipelineData.isPublished}
                       variant="outline"
-                      className="text-rose-700 hover:bg-rose-50 text-xs h-10 sm:h-8 border-rose-200 justify-center"
+                      className="border-[#e4876f]/50 text-[#8c2e1b] hover:bg-[#f3d9cf]/40 font-medium text-xs h-10 sm:h-8 justify-center"
                     >
                       <AlertCircle className="h-3.5 w-3.5 mr-1" />
                       <span>Reject Incident</span>
@@ -736,22 +764,22 @@ export default function PipelineInspectionPage() {
                       onClick={() => handleModeration("request_evidence")}
                       disabled={isModerating || pipelineData.isPublished}
                       variant="outline"
-                      className="text-xs h-10 sm:h-8 justify-center"
+                      className="text-xs h-10 sm:h-8 justify-center border-[#cbd5cb] bg-white text-[#17382f] hover:bg-[#e9efe8]"
                     >
-                      <Clock className="h-3.5 w-3.5 mr-1" />
+                      <Clock className="h-3.5 w-3.5 mr-1 text-[#5c6f66]" />
                       <span>Request Additional Photos</span>
                     </Button>
                   </div>
 
                   {moderationDecision && publicationResult && (
-                    <div className="mt-3 p-3 rounded bg-muted/60 text-xs font-mono space-y-2">
-                      <p className="font-semibold text-foreground">
+                    <div className="mt-3 p-3 rounded bg-[#f5f3ed] border border-[#cbd5cb] text-xs font-mono space-y-2">
+                      <p className="font-semibold text-[#0e2b24]">
                         Decision Recorded: {moderationDecision.toUpperCase()}
                       </p>
                       {(publicationResult.incident as { isPublished?: boolean } | undefined)
                         ?.isPublished && (
-                        <div className="flex items-center gap-2 p-2 rounded bg-blue-50/70 border border-blue-200 text-blue-900 text-xs">
-                          <Mail className="size-3.5 text-blue-700 shrink-0" />
+                        <div className="flex items-center gap-2 p-2 rounded bg-[#d6e5d2]/60 border border-[#cbd5cb] text-[#234a29] text-xs">
+                          <Mail className="size-3.5 text-[#234a29] shrink-0" />
                           <span>
                             Stage 9 Triggered: Municipal Civic Dossier automatically compiled and
                             dispatched to local authority.

@@ -23,14 +23,17 @@ export default function DashboardMapPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="font-heading text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground">
+            <h1 className="font-serif text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-[#0e2b24]">
               Geospatial Operations Map
             </h1>
-            <Badge variant="outline" className="text-[11px] font-mono">
+            <Badge
+              variant="outline"
+              className="bg-[#d6e5d2] text-[#234a29] border-[#cbd5cb] text-[11px] font-mono font-medium"
+            >
               Live Published Incidents
             </Badge>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+          <p className="text-xs sm:text-sm text-[#5c6f66] leading-relaxed">
             Geotagged hazards, pedestrian accident risk hotspots, and repair cluster mapping.
           </p>
         </div>
@@ -39,7 +42,7 @@ export default function DashboardMapPage() {
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5 flex-1 sm:flex-none h-9 sm:h-8 text-xs justify-center"
+            className="gap-1.5 flex-1 sm:flex-none h-9 sm:h-8 text-xs justify-center border-[#cbd5cb] bg-white text-[#17382f] hover:bg-[#e9efe8]"
             render={<Link href="/map" />}
           >
             <span>Full-Screen Map</span>
@@ -58,12 +61,14 @@ export default function DashboardMapPage() {
       </div>
 
       {/* ── Map Container Card ─── */}
-      <Card className="overflow-hidden shadow-xs">
-        <CardHeader className="border-b border-border pb-3 p-4 sm:p-6">
+      <Card className="overflow-hidden shadow-xs border-[#cbd5cb] bg-[#faf9f5]">
+        <CardHeader className="border-b border-[#cbd5cb] pb-3 p-4 sm:p-6 bg-[#faf9f5]">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-base font-semibold">Greater Noida Road Safety Radar</CardTitle>
-              <CardDescription className="text-xs">
+              <CardTitle className="text-base font-semibold text-[#0e2b24]">
+                Greater Noida Road Safety Radar
+              </CardTitle>
+              <CardDescription className="text-xs text-[#5c6f66]">
                 Interactive tiles centered on Pari Chowk and Knowledge Park corridor.
               </CardDescription>
             </div>
@@ -76,21 +81,23 @@ export default function DashboardMapPage() {
           </div>
         </CardContent>
 
-        <CardFooter className="border-t border-border px-4 py-3 sm:px-6 bg-muted/20 text-xs text-muted-foreground">
+        <CardFooter className="border-t border-[#cbd5cb] px-4 py-3 sm:px-6 bg-[#f5f3ed]/60 text-xs text-[#486057]">
           <div className="flex flex-wrap items-center justify-between gap-3 w-full">
-            <span className="text-[11px] sm:text-xs">Click any pin to inspect incident history and authority dispatch status.</span>
+            <span className="text-[11px] sm:text-xs text-[#5c6f66]">
+              Click any pin to inspect incident history and authority dispatch status.
+            </span>
             <div className="flex items-center gap-3 text-[11px] sm:text-xs">
               <span className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-[#e4876f]" />
-                <span>High Urgency</span>
+                <span className="size-2 rounded-full bg-[#8c2e1b]" />
+                <span className="font-medium text-[#8c2e1b]">High Urgency</span>
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-[#e7b64f]" />
-                <span>Medium Urgency</span>
+                <span className="size-2 rounded-full bg-[#7a540b]" />
+                <span className="font-medium text-[#7a540b]">Medium Urgency</span>
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-[#78a37d]" />
-                <span>Resolved</span>
+                <span className="size-2 rounded-full bg-[#234a29]" />
+                <span className="font-medium text-[#234a29]">Resolved</span>
               </span>
             </div>
           </div>
